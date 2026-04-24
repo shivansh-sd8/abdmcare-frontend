@@ -52,12 +52,22 @@ const PaymentManagement: React.FC = () => {
         status: statusFilter || undefined,
       }) as any;
 
-      const data = response.data;
-      setPayments(data.data.payments || []);
-      setTotal(data.data.total || 0);
+      console.log('Payment API Response:', response);
+      
+      // Handle response structure: response.data contains the actual data
+      if (response && response.data) {
+        setPayments(response.data.payments || []);
+        setTotal(response.data.total || 0);
+      } else {
+        setPayments([]);
+        setTotal(0);
+      }
     } catch (error: any) {
-      toast.error('Failed to load payments');
       console.error('Error fetching payments:', error);
+      console.error('Error response:', error.response);
+      toast.error(error.response?.data?.message || 'Failed to load payments');
+      setPayments([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
