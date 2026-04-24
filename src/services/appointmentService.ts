@@ -10,16 +10,30 @@ interface CreateAppointmentData {
   notes?: string;
 }
 
+interface UpdateAppointmentData {
+  status?: string;
+  notes?: string;
+  reason?: string;
+}
+
 class AppointmentService {
   async createAppointment(data: CreateAppointmentData) {
     return api.post('/api/v1/appointments', data);
+  }
+
+  async getAllAppointments(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+  }) {
+    return api.get('/api/v1/appointments/search', { params });
   }
 
   async getAppointmentById(id: string) {
     return api.get(`/api/v1/appointments/${id}`);
   }
 
-  async updateAppointment(id: string, data: Partial<CreateAppointmentData>) {
+  async updateAppointment(id: string, data: UpdateAppointmentData) {
     return api.put(`/api/v1/appointments/${id}`, data);
   }
 

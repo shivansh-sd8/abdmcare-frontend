@@ -5,6 +5,7 @@ interface User {
   email: string;
   role: string;
   name: string;
+  hospitalId?: string;
 }
 
 interface AuthState {

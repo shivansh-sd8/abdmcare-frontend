@@ -35,6 +35,7 @@ import { useNavigate } from 'react-router-dom';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import patientService from '../../services/patientService';
 import { toast } from 'react-toastify';
+import { PermissionGuard } from '../../components/common/PermissionGuard';
 
 const PatientList: React.FC = () => {
   const navigate = useNavigate();
@@ -108,11 +109,11 @@ const PatientList: React.FC = () => {
               height: 40,
             }}
           >
-            {params.row.name.charAt(0)}
+            {params.row.firstName?.charAt(0) || 'P'}
           </Avatar>
           <Box>
             <Typography variant="body2" fontWeight="600">
-              {params.row.name}
+              {params.row.firstName} {params.row.lastName}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {params.row.uhid}
@@ -255,13 +256,15 @@ const PatientList: React.FC = () => {
           <Button variant="outlined" startIcon={<FilterList />}>
             Filters
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => navigate('/patients/new')}
-          >
-            New Patient
-          </Button>
+          <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => navigate('/patients/new')}
+            >
+              New Patient
+            </Button>
+          </PermissionGuard>
         </Box>
       </Box>
 
@@ -369,18 +372,24 @@ const PatientList: React.FC = () => {
           <Visibility fontSize="small" sx={{ mr: 1 }} />
           View Full Profile
         </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <HealthAndSafety fontSize="small" sx={{ mr: 1 }} />
-          {selectedPatient?.abhaNumber ? 'View ABHA Details' : 'Link ABHA'}
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <CalendarToday fontSize="small" sx={{ mr: 1 }} />
-          Book Appointment
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <Edit fontSize="small" sx={{ mr: 1 }} />
-          Edit Patient
-        </MenuItem>
+        <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+          <MenuItem onClick={handleMenuClose}>
+            <HealthAndSafety fontSize="small" sx={{ mr: 1 }} />
+            {selectedPatient?.abhaNumber ? 'View ABHA Details' : 'Link ABHA'}
+          </MenuItem>
+        </PermissionGuard>
+        <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+          <MenuItem onClick={handleMenuClose}>
+            <CalendarToday fontSize="small" sx={{ mr: 1 }} />
+            Book Appointment
+          </MenuItem>
+        </PermissionGuard>
+        <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
+          <MenuItem onClick={handleMenuClose}>
+            <Edit fontSize="small" sx={{ mr: 1 }} />
+            Edit Patient
+          </MenuItem>
+        </PermissionGuard>
       </Menu>
     </Box>
   );

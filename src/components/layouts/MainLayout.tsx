@@ -31,26 +31,52 @@ import {
   Settings,
   AccountCircle,
   Favorite,
+  History,
+  Business,
+  ManageAccounts,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
+import { getMenuItemsForRole, UserRole } from '../../config/rolePermissions';
 
 const drawerWidth = 280;
 
-const menuItems = [
-  { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-  { text: 'ABHA Management', icon: <HealthAndSafety />, path: '/abha', badge: 'New' },
-  { text: 'Patients', icon: <People />, path: '/patients' },
-  { text: 'Doctors', icon: <LocalHospital />, path: '/doctors' },
-  { text: 'Appointments', icon: <CalendarToday />, path: '/appointments' },
-  { text: 'Consent', icon: <Assignment />, path: '/consent' },
-];
+// Icon mapping function
+const getIconComponent = (iconName: string) => {
+  const iconMap: Record<string, React.ReactElement> = {
+    Dashboard: <Dashboard />,
+    Business: <Business />,
+    ManageAccounts: <ManageAccounts />,
+    HealthAndSafety: <HealthAndSafety />,
+    People: <People />,
+    LocalHospital: <LocalHospital />,
+    CalendarToday: <CalendarToday />,
+    Assignment: <Assignment />,
+    History: <History />,
+  };
+  return iconMap[iconName] || <Dashboard />;
+};
 
 const MainLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
+  
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
+  const userRole = (user.role || 'DOCTOR') as UserRole;
+  
+  // Get menu items based on user role
+  const roleBasedMenuItems = getMenuItemsForRole(userRole);
+  
+  // Map menu items to include icons
+  const menuItems = roleBasedMenuItems.map(item => ({
+    text: item.text,
+    icon: getIconComponent(item.icon),
+    path: item.path,
+    badge: item.badge,
+  }));
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -117,14 +143,14 @@ const MainLayout: React.FC = () => {
                 fontWeight: 'bold',
               }}
             >
-              DR
+              {userName.substring(0, 2).toUpperCase()}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="body2" fontWeight="600" noWrap>
-                Dr. Admin
+                {userName}
               </Typography>
               <Typography variant="caption" sx={{ opacity: 0.9 }} noWrap>
-                Super Admin
+                {userRole}
               </Typography>
             </Box>
           </Box>

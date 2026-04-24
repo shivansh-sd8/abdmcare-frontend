@@ -27,10 +27,11 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import appointmentService from '../../services/appointmentService';
-import { toast } from 'react-toastify';
 import { format } from 'date-fns';
+import { useRolePermissions } from '../../hooks/useRolePermissions';
 
 const AppointmentList: React.FC = () => {
+  const permissions = useRolePermissions();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,7 +54,7 @@ const AppointmentList: React.FC = () => {
       const data = response as any;
       setAppointments(data.data || []);
     } catch (error: any) {
-      toast.error('Failed to load appointments');
+      // Silently handle permission errors
       console.error('Error fetching appointments:', error);
     } finally {
       setLoading(false);
@@ -62,15 +63,19 @@ const AppointmentList: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await appointmentService.getAppointmentStats();
-      const data = response as any;
-      setStats({
-        total: data.data?.total || 0,
-        today: data.data?.today || 0,
-        upcoming: data.data?.upcoming || 0,
-        completed: data.data?.completed || 0,
-      });
+      // Only fetch stats if user has permission (SUPER_ADMIN, ADMIN, DOCTOR)
+      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor) {
+        const response = await appointmentService.getAppointmentStats();
+        const data = response as any;
+        setStats({
+          total: data.data?.total || 0,
+          today: data.data?.today || 0,
+          upcoming: data.data?.upcoming || 0,
+          completed: data.data?.completed || 0,
+        });
+      }
     } catch (error: any) {
+      // Silently handle permission errors
       console.error('Error fetching stats:', error);
     }
   };

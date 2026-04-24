@@ -29,10 +29,12 @@ import {
   VerifiedUser,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
+import { useNavigate } from 'react-router-dom';
 import doctorService from '../../services/doctorService';
 import { toast } from 'react-toastify';
 
 const DoctorList: React.FC = () => {
+  const navigate = useNavigate();
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -210,6 +212,7 @@ const DoctorList: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
+          onClick={() => navigate('/doctors/new')}
           sx={{
             background: 'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
             '&:hover': {

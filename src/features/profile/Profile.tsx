@@ -49,18 +49,18 @@ const Profile: React.FC = () => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       setFormData({
-        firstName: user.name || 'Admin User',
+        firstName: user.firstName || '',
         email: user.email || '',
         phone: user.phone || '',
-        role: user.role || 'Admin',
-        department: user.department || 'Administration',
+        role: user.role || '',
+        department: user.department || '',
         registrationNo: user.registrationNo || '',
         address: user.address || '',
       });
       setStats({
         patientsManaged: 0,
         appointments: 0,
-        memberSince: user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Jan 2024',
+        memberSince: user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
       });
     } catch (error) {
       toast.error('Failed to load profile data');
