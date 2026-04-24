@@ -41,7 +41,7 @@ export const menuPermissions: MenuItem[] = [
     text: 'ABHA Management',
     path: '/abha',
     icon: 'HealthAndSafety',
-    badge: 'New',
+    badge: 'ABDM',
     roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST'],
   },
   {
@@ -54,13 +54,43 @@ export const menuPermissions: MenuItem[] = [
     text: 'Doctors',
     path: '/doctors',
     icon: 'LocalHospital',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST'],
   },
   {
     text: 'Appointments',
     path: '/appointments',
     icon: 'CalendarToday',
     roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
+  },
+  {
+    text: 'Encounters',
+    path: '/encounters',
+    icon: 'MedicalInformation',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'],
+  },
+  {
+    text: 'Prescriptions',
+    path: '/prescriptions',
+    icon: 'Medication',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST'],
+  },
+  {
+    text: 'Vitals',
+    path: '/vitals',
+    icon: 'MonitorHeart',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'],
+  },
+  {
+    text: 'Lab Queue',
+    path: '/investigations',
+    icon: 'Science',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'],
+  },
+  {
+    text: 'Pharmacy',
+    path: '/pharmacy',
+    icon: 'LocalPharmacy',
+    roles: ['PHARMACIST'],
   },
   {
     text: 'Payments',
@@ -78,7 +108,7 @@ export const menuPermissions: MenuItem[] = [
     text: 'Audit Logs',
     path: '/audit-logs',
     icon: 'History',
-    roles: ['SUPER_ADMIN'],
+    roles: ['SUPER_ADMIN', 'ADMIN'],
   },
 ];
 

@@ -227,6 +227,8 @@ const Dashboard: React.FC = () => {
     if (permissions.isDoctor) return 'My Practice Dashboard';
     if (permissions.isNurse) return 'Ward Dashboard';
     if (permissions.isReceptionist) return 'Front Desk Dashboard';
+    if (permissions.isLabTechnician) return 'Lab Dashboard';
+    if (permissions.isPharmacist) return 'Pharmacy Dashboard';
     return 'Dashboard';
   };
 
@@ -236,6 +238,8 @@ const Dashboard: React.FC = () => {
     if (permissions.isDoctor) return 'Your patients and appointments overview';
     if (permissions.isNurse) return 'Your assigned patients and ward activities';
     if (permissions.isReceptionist) return 'Appointment queue and patient registration';
+    if (permissions.isLabTechnician) return 'Pending tests and lab orders';
+    if (permissions.isPharmacist) return 'Prescriptions queue for dispensing';
     return 'Welcome back!';
   };
 
@@ -450,6 +454,57 @@ const Dashboard: React.FC = () => {
                   sx={{ justifyContent: 'flex-start', py: 1.5 }}
                 >
                   {permissions.isReceptionist ? 'Appointment Queue' : permissions.isDoctor ? 'My Appointments' : 'View Appointments'}
+                </Button>
+              )}
+
+              {/* Quick Registration - RECEPTIONIST, ADMIN */}
+              {(permissions.isReceptionist || permissions.isAdmin) && (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  startIcon={<PersonAdd />}
+                  onClick={() => navigate('/quick-registration')}
+                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                >
+                  Quick Registration
+                </Button>
+              )}
+
+              {/* Doctor-specific actions */}
+              {permissions.isDoctor && (
+                <>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                    My Encounters
+                  </Button>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/prescriptions')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                    Write Prescription
+                  </Button>
+                </>
+              )}
+
+              {/* Nurse-specific actions */}
+              {permissions.isNurse && (
+                <>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/vitals')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                    Record Vitals
+                  </Button>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                    View Encounters
+                  </Button>
+                </>
+              )}
+
+              {/* Lab Tech actions */}
+              {permissions.isLabTechnician && (
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/investigations')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  Lab Queue
+                </Button>
+              )}
+
+              {/* Pharmacist actions */}
+              {permissions.isPharmacist && (
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/pharmacy')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  Pharmacy Queue
                 </Button>
               )}
             </Box>

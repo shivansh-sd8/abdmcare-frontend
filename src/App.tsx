@@ -19,8 +19,13 @@ import HospitalManagement from './features/hospital/HospitalManagement';
 import UserManagement from './features/user/UserManagement';
 import QuickRegistration from './features/receptionist/QuickRegistration';
 import PaymentManagement from './features/receptionist/PaymentManagement';
+import EncounterList from './features/doctor/EncounterList';
+import PrescriptionList from './features/doctor/PrescriptionList';
+import VitalsManagement from './features/doctor/VitalsManagement';
+import InvestigationQueue from './features/lab/InvestigationQueue';
+import PrescriptionQueue from './features/pharmacy/PrescriptionQueue';
 import Login from './features/auth/Login';
-import Signup from './features/auth/Signup';
+import SuperAdminSignup from './features/auth/SuperAdminSignup';
 import LandingPage from './pages/LandingPage';
 import PrivateRoute from './components/common/PrivateRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
@@ -30,7 +35,8 @@ const App: React.FC = () => {
     <Routes>
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      <Route path="/signup" element={<SuperAdminSignup />} />
+      <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
       
       <Route
         path="/"
@@ -44,16 +50,129 @@ const App: React.FC = () => {
       >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="abha" element={<AbhaManagement />} />
-          <Route path="patients" element={<PatientList />} />
-          <Route path="patients/new" element={<PatientRegistration />} />
-          <Route path="doctors" element={<DoctorList />} />
-          <Route path="doctors/new" element={<DoctorRegistration />} />
-          <Route path="appointments" element={<AppointmentList />} />
-          <Route path="consent" element={<ConsentManagement />} />
+          
+          {/* ABHA - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
+          <Route 
+            path="abha" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                <AbhaManagement />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Patients - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST */}
+          <Route 
+            path="patients" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                <PatientList />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="patients/new" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                <PatientRegistration />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Doctors - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
+          <Route 
+            path="doctors" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                <DoctorList />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="doctors/new" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                <DoctorRegistration />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Appointments - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST */}
+          <Route 
+            path="appointments" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                <AppointmentList />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Consent - SUPER_ADMIN, ADMIN, DOCTOR */}
+          <Route 
+            path="consent" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR']}>
+                <ConsentManagement />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Encounters - SUPER_ADMIN, ADMIN, DOCTOR, NURSE */}
+          <Route 
+            path="encounters" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
+                <EncounterList />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Prescriptions - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, PHARMACIST */}
+          <Route 
+            path="prescriptions" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST']}>
+                <PrescriptionList />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Vitals - SUPER_ADMIN, ADMIN, DOCTOR, NURSE */}
+          <Route 
+            path="vitals" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
+                <VitalsManagement />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Investigations - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN */}
+          <Route 
+            path="investigations" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN']}>
+                <InvestigationQueue />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Pharmacy - PHARMACIST */}
+          <Route 
+            path="pharmacy" 
+            element={
+              <RoleProtectedRoute requiredRoles={['PHARMACIST']}>
+                <PrescriptionQueue />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Profile, Settings, Notifications - All roles */}
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
           <Route path="notifications" element={<Notifications />} />
+          
+          {/* Audit Logs - SUPER_ADMIN, ADMIN */}
           <Route 
             path="audit-logs" 
             element={
@@ -62,6 +181,8 @@ const App: React.FC = () => {
               </RoleProtectedRoute>
             } 
           />
+          
+          {/* Hospitals - SUPER_ADMIN only */}
           <Route 
             path="hospitals" 
             element={
@@ -70,6 +191,8 @@ const App: React.FC = () => {
               </RoleProtectedRoute>
             } 
           />
+          
+          {/* User Management - SUPER_ADMIN, ADMIN */}
           <Route 
             path="users" 
             element={
@@ -78,6 +201,8 @@ const App: React.FC = () => {
               </RoleProtectedRoute>
             } 
           />
+          
+          {/* Quick Registration - RECEPTIONIST, ADMIN */}
           <Route 
             path="quick-registration" 
             element={
@@ -86,6 +211,8 @@ const App: React.FC = () => {
               </RoleProtectedRoute>
             } 
           />
+          
+          {/* Payments - RECEPTIONIST, ADMIN, SUPER_ADMIN */}
           <Route 
             path="payments" 
             element={

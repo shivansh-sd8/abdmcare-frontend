@@ -184,7 +184,6 @@ const Login: React.FC = () => {
             size="large"
             disabled={loading}
             sx={{
-              mb: 2,
               py: 1.5,
               textTransform: 'none',
               fontSize: '1rem',
@@ -197,22 +196,6 @@ const Login: React.FC = () => {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </Button>
-
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                style={{
-                  color: '#1976d2',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                }}
-              >
-                Sign up here
-              </Link>
-            </Typography>
-          </Box>
         </form>
       </Paper>
     </Box>

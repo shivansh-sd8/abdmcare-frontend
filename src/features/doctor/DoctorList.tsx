@@ -32,9 +32,11 @@ import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
 import doctorService from '../../services/doctorService';
 import { toast } from 'react-toastify';
+import { useRolePermissions } from '../../hooks/useRolePermissions';
 
 const DoctorList: React.FC = () => {
   const navigate = useNavigate();
+  const permissions = useRolePermissions();
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,8 +48,11 @@ const DoctorList: React.FC = () => {
 
   useEffect(() => {
     fetchDoctors();
-    fetchStats();
-  }, []);
+    // Only fetch stats for ADMIN and SUPER_ADMIN
+    if (permissions.isAdmin || permissions.isSuperAdmin) {
+      fetchStats();
+    }
+  }, [permissions.isAdmin, permissions.isSuperAdmin]);
 
   const fetchDoctors = async () => {
     try {
@@ -175,11 +180,13 @@ const DoctorList: React.FC = () => {
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" color="primary">
-              <Edit fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {(permissions.isAdmin || permissions.isSuperAdmin) && (
+            <Tooltip title="Edit">
+              <IconButton size="small" color="primary">
+                <Edit fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       ),
     },
@@ -203,33 +210,38 @@ const DoctorList: React.FC = () => {
       }}>
         <Box>
           <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            Doctor Management
+            {permissions.isReceptionist ? 'Doctor Directory' : 'Doctor Management'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage medical professionals and their specializations
+            {permissions.isReceptionist 
+              ? 'Search and view doctors for appointment scheduling' 
+              : 'Manage medical professionals and their specializations'}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => navigate('/doctors/new')}
-          sx={{
-            background: 'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #8E44AD 0%, #7D3C98 100%)',
-            },
-          }}
-        >
-          Add Doctor
-        </Button>
+        {(permissions.isAdmin || permissions.isSuperAdmin) && (
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => navigate('/doctors/new')}
+            sx={{
+              background: 'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #8E44AD 0%, #7D3C98 100%)',
+              },
+            }}
+          >
+            Add Doctor
+          </Button>
+        )}
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {statsCards.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
-            {loading ? (
-              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
-            ) : (
+      {(permissions.isAdmin || permissions.isSuperAdmin) && (
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          {statsCards.map((stat, index) => (
+            <Grid item xs={12} sm={6} md={4} key={index}>
+              {loading ? (
+                <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
+              ) : (
               <Card
                 sx={{
                   background: `linear-gradient(135deg, ${alpha(stat.color, 0.08)} 0%, ${alpha(stat.color, 0.02)} 100%)`,
@@ -270,7 +282,8 @@ const DoctorList: React.FC = () => {
             )}
           </Grid>
         ))}
-      </Grid>
+        </Grid>
+      )}
 
       <Paper sx={{ p: 2, mb: 2, borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
         <TextField

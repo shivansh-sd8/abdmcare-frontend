@@ -34,6 +34,12 @@ import {
   History,
   Business,
   ManageAccounts,
+  MedicalInformation,
+  Medication,
+  MonitorHeart,
+  Science,
+  LocalPharmacy,
+  Payment,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
@@ -53,6 +59,12 @@ const getIconComponent = (iconName: string) => {
     CalendarToday: <CalendarToday />,
     Assignment: <Assignment />,
     History: <History />,
+    MedicalInformation: <MedicalInformation />,
+    Medication: <Medication />,
+    MonitorHeart: <MonitorHeart />,
+    Science: <Science />,
+    LocalPharmacy: <LocalPharmacy />,
+    Payment: <Payment />,
   };
   return iconMap[iconName] || <Dashboard />;
 };
@@ -159,73 +171,75 @@ const MainLayout: React.FC = () => {
 
       <Divider sx={{ borderColor: alpha('#ffffff', 0.2), mx: 2 }} />
 
-      <List sx={{ flex: 1, px: 2, py: 2 }}>
-        {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  borderRadius: 2,
-                  py: 1.5,
-                  px: 2,
-                  color: 'white',
-                  transition: 'all 0.2s',
-                  backgroundColor: isActive ? alpha('#ffffff', 0.2) : 'transparent',
-                  '&:hover': {
-                    backgroundColor: alpha('#ffffff', 0.15),
-                    transform: 'translateX(4px)',
-                  },
-                  '&:before': isActive
-                    ? {
-                        content: '""',
-                        position: 'absolute',
-                        left: 0,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: 4,
-                        height: '60%',
-                        bgcolor: 'white',
-                        borderRadius: '0 4px 4px 0',
-                      }
-                    : {},
-                }}
-              >
-                <ListItemIcon
+      <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        <List sx={{ px: 2, py: 2 }}>
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => navigate(item.path)}
                   sx={{
+                    borderRadius: 2,
+                    py: 1.5,
+                    px: 2,
                     color: 'white',
-                    minWidth: 40,
-                    opacity: isActive ? 1 : 0.8,
+                    transition: 'all 0.2s',
+                    backgroundColor: isActive ? alpha('#ffffff', 0.2) : 'transparent',
+                    '&:hover': {
+                      backgroundColor: alpha('#ffffff', 0.15),
+                      transform: 'translateX(4px)',
+                    },
+                    '&:before': isActive
+                      ? {
+                          content: '""',
+                          position: 'absolute',
+                          left: 0,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 4,
+                          height: '60%',
+                          bgcolor: 'white',
+                          borderRadius: '0 4px 4px 0',
+                        }
+                      : {},
                   }}
                 >
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{
-                    fontWeight: isActive ? 600 : 500,
-                    fontSize: '0.9rem',
-                  }}
-                />
-                {item.badge && (
-                  <Chip
-                    label={item.badge}
-                    size="small"
+                  <ListItemIcon
                     sx={{
-                      height: 20,
-                      fontSize: '0.65rem',
-                      fontWeight: 600,
-                      bgcolor: '#4caf50',
                       color: 'white',
+                      minWidth: 40,
+                      opacity: isActive ? 1 : 0.8,
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                      fontWeight: isActive ? 600 : 500,
+                      fontSize: '0.9rem',
                     }}
                   />
-                )}
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
+                  {item.badge && (
+                    <Chip
+                      label={item.badge}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        bgcolor: '#4caf50',
+                        color: 'white',
+                      }}
+                    />
+                  )}
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
+        </List>
+      </Box>
 
       <Divider sx={{ borderColor: alpha('#ffffff', 0.2), mx: 2 }} />
 
