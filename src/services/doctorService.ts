@@ -44,4 +44,5 @@ class DoctorService {
   }
 }
 
-export default new DoctorService();
+const doctorService = new DoctorService();
+export default doctorService;

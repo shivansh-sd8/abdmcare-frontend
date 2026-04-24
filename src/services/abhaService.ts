@@ -156,4 +156,5 @@ class AbhaService {
   }
 }
 
-export default new AbhaService();
+const abhaService = new AbhaService();
+export default abhaService;

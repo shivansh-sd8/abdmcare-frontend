@@ -53,4 +53,5 @@ class HospitalService {
   }
 }
 
-export default new HospitalService();
+const hospitalService = new HospitalService();
+export default hospitalService;

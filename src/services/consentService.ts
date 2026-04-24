@@ -36,4 +36,5 @@ class ConsentService {
   }
 }
 
-export default new ConsentService();
+const consentService = new ConsentService();
+export default consentService;
