@@ -35,20 +35,25 @@ import {
   LocalHospital,
   Assignment,
   Schedule,
+  Description as OPDCardIcon,
 } from '@mui/icons-material';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import encounterService from '../../services/encounterService';
 import patientService from '../../services/patientService';
+import OPDCardDialog from '../../components/OPDCardDialog';
+import CompleteConsultationDialog from './CompleteConsultationDialog';
 
 interface Encounter {
   id: string;
   patient?: { id: string; firstName: string; lastName: string; uhid?: string };
   doctor?: { firstName: string; lastName: string; specialization?: string };
+  appointment?: any;
   type: string;
   status: string;
   chiefComplaint: string;
   diagnosis?: string;
   notes?: string;
+  visitDate?: string;
   createdAt: string;
 }
 
@@ -71,7 +76,9 @@ const EncounterList: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [opdCardOpen, setOpdCardOpen] = useState(false);
   const [selectedEncounter, setSelectedEncounter] = useState<Encounter | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
 
   const [patients, setPatients] = useState<Array<{ id: string; firstName: string; lastName: string }>>([]);
   const [formData, setFormData] = useState({
@@ -80,7 +87,6 @@ const EncounterList: React.FC = () => {
     chiefComplaint: '',
     notes: '',
   });
-  const [completeData, setCompleteData] = useState({ diagnosis: '', notes: '' });
 
   const fetchEncounters = useCallback(async () => {
     try {
@@ -131,18 +137,6 @@ const EncounterList: React.FC = () => {
     }
   };
 
-  const handleComplete = async () => {
-    if (!selectedEncounter) return;
-    try {
-      await encounterService.completeEncounter(selectedEncounter.id, completeData);
-      setCompleteOpen(false);
-      setCompleteData({ diagnosis: '', notes: '' });
-      setSelectedEncounter(null);
-      fetchEncounters();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to complete encounter');
-    }
-  };
 
   const openCreateDialog = () => {
     fetchPatients();
@@ -244,14 +238,19 @@ const EncounterList: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title="View OPD Card">
+                            <IconButton size="small" color="primary" onClick={() => { setSelectedEncounter(encounter); setSelectedAppointment(encounter.appointment); setOpdCardOpen(true); }}>
+                              <OPDCardIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="View Details">
                             <IconButton size="small" onClick={() => { setSelectedEncounter(encounter); setViewOpen(true); }}>
                               <Visibility fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          {permissions.isDoctor && (encounter.status === 'ACTIVE' || encounter.status === 'IN_PROGRESS') && (
-                            <Tooltip title="Complete Encounter">
-                              <IconButton size="small" color="success" onClick={() => { setSelectedEncounter(encounter); setCompleteData({ diagnosis: '', notes: '' }); setCompleteOpen(true); }}>
+                          {permissions.isDoctor && (encounter.status === 'ACTIVE' || encounter.status === 'IN_PROGRESS' || encounter.status === 'CHECKED_IN' || encounter.status === 'CONSULTING') && (
+                            <Tooltip title="Complete Consultation">
+                              <IconButton size="small" color="success" onClick={() => { setSelectedEncounter(encounter); setCompleteOpen(true); }}>
                                 <CheckCircle fontSize="small" />
                               </IconButton>
                             </Tooltip>
@@ -317,18 +316,35 @@ const EncounterList: React.FC = () => {
         <DialogActions><Button onClick={() => setViewOpen(false)}>Close</Button></DialogActions>
       </Dialog>
 
-      {/* Complete Dialog */}
-      <Dialog open={completeOpen} onClose={() => setCompleteOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Complete Encounter</DialogTitle>
-        <DialogContent>
-          <TextField label="Diagnosis" fullWidth margin="normal" multiline rows={3} required value={completeData.diagnosis} onChange={(e) => setCompleteData({ ...completeData, diagnosis: e.target.value })} />
-          <TextField label="Closing Notes" fullWidth margin="normal" multiline rows={2} value={completeData.notes} onChange={(e) => setCompleteData({ ...completeData, notes: e.target.value })} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCompleteOpen(false)}>Cancel</Button>
-          <Button variant="contained" color="success" onClick={handleComplete} disabled={!completeData.diagnosis}>Complete</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Complete Consultation Dialog */}
+      {selectedEncounter && (
+        <CompleteConsultationDialog
+          open={completeOpen}
+          onClose={() => setCompleteOpen(false)}
+          encounter={selectedEncounter}
+          onSubmit={async (data) => {
+            await encounterService.completeEncounter(selectedEncounter.id, data);
+            fetchEncounters();
+            setCompleteOpen(false);
+          }}
+        />
+      )}
+
+      {/* OPD Card Dialog */}
+      {selectedAppointment && (
+        <OPDCardDialog
+          open={opdCardOpen}
+          onClose={() => setOpdCardOpen(false)}
+          appointment={selectedAppointment}
+          encounter={selectedEncounter}
+          onUpdate={async (data) => {
+            if (selectedEncounter) {
+              await encounterService.completeEncounter(selectedEncounter.id, data);
+              fetchEncounters();
+            }
+          }}
+        />
+      )}
     </Box>
   );
 };

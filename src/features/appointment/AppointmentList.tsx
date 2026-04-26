@@ -25,6 +25,7 @@ import {
   Person,
   LocalHospital,
   Print as PrintIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +33,9 @@ import appointmentService from '../../services/appointmentService';
 import { format } from 'date-fns';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import { toast } from 'react-toastify';
-import { IconButton } from '@mui/material';
+import { IconButton, Tooltip } from '@mui/material';
+import { generateOPDCardPDF } from '../../utils/pdfGenerator';
+import OPDCardDialog from '../../components/OPDCardDialog';
 
 const AppointmentList: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +43,8 @@ const AppointmentList: React.FC = () => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [opdCardOpen, setOpdCardOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
   const [stats, setStats] = useState({
     total: 0,
     today: 0,
@@ -73,7 +78,7 @@ const AppointmentList: React.FC = () => {
   const handleDownloadOPDCard = async (appointment: any) => {
     try {
       // Fetch encounter details if available
-      let encounterDetails = '';
+      let consultation = undefined;
       if (appointment.encounterId) {
         try {
           const encounterResponse = await fetch(`http://localhost:8080/api/v1/encounters/${appointment.encounterId}`, {
@@ -85,90 +90,57 @@ const AppointmentList: React.FC = () => {
           const encounter = encounterData.data;
           
           if (encounter) {
-            encounterDetails = `
-CONSULTATION DETAILS:
------------------------------------------------------------
-Chief Complaint: ${encounter.chiefComplaint || 'N/A'}
-Diagnosis: ${encounter.diagnosis || encounter.finalDiagnosis || 'Pending'}
-Notes: ${encounter.notes || 'N/A'}
-Status: ${encounter.status}
-Visit Date: ${format(new Date(encounter.visitDate), 'PPpp')}
-`;
+            consultation = {
+              chiefComplaint: encounter.chiefComplaint || undefined,
+              diagnosis: encounter.diagnosis || encounter.finalDiagnosis || undefined,
+              notes: encounter.notes || undefined,
+              visitDate: encounter.visitDate ? format(new Date(encounter.visitDate), 'PPpp') : undefined,
+            };
           }
         } catch (err) {
           console.error('Failed to fetch encounter details', err);
         }
       }
 
-      const opdCardContent = `
-╔═══════════════════════════════════════════════════════════════╗
-║                         OPD CARD                              ║
-║                    HOSPITAL MANAGEMENT SYSTEM                 ║
-╚═══════════════════════════════════════════════════════════════╝
+      // Calculate age
+      const age = appointment.patient?.dob 
+        ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear()
+        : 0;
 
-OPD Card Number: ${appointment.opdCardNumber}
-Issue Date: ${format(new Date(appointment.checkedInAt), 'PPpp')}
+      // Prepare PDF data
+      const pdfData = {
+        opdCardNumber: appointment.opdCardNumber,
+        issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'PPpp'),
+        patient: {
+          name: `${appointment.patient?.firstName} ${appointment.patient?.lastName}`,
+          uhid: appointment.patient?.uhid || 'N/A',
+          age: age,
+          gender: appointment.patient?.gender || 'N/A',
+          bloodGroup: appointment.patient?.bloodGroup,
+          mobile: appointment.patient?.mobile || 'N/A',
+          email: appointment.patient?.email,
+          address: `${appointment.patient?.address?.line1 || ''}, ${appointment.patient?.address?.city || ''}, ${appointment.patient?.address?.state || ''} - ${appointment.patient?.address?.pincode || ''}`,
+        },
+        appointment: {
+          doctor: `Dr. ${appointment.doctor?.firstName} ${appointment.doctor?.lastName}`,
+          specialization: appointment.doctor?.specialization || 'N/A',
+          department: appointment.doctor?.department?.name,
+          scheduledTime: format(new Date(appointment.scheduledAt), 'PPpp'),
+          type: appointment.type,
+          status: appointment.status,
+        },
+        emergencyContact: appointment.patient?.emergencyContact ? {
+          name: appointment.patient.emergencyContact.name,
+          relationship: appointment.patient.emergencyContact.relationship,
+          mobile: appointment.patient.emergencyContact.mobile,
+        } : undefined,
+        consultation: consultation,
+      };
 
-═══════════════════════════════════════════════════════════════
-
-PATIENT INFORMATION:
--------------------------------------------------------------------
-Name            : ${appointment.patient?.firstName} ${appointment.patient?.lastName}
-UHID            : ${appointment.patient?.uhid}
-Age             : ${appointment.patient?.dob ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear() : 'N/A'} years
-Gender          : ${appointment.patient?.gender}
-Blood Group     : ${appointment.patient?.bloodGroup || 'N/A'}
-Mobile          : ${appointment.patient?.mobile}
-Email           : ${appointment.patient?.email || 'N/A'}
-Address         : ${appointment.patient?.address?.line1 || ''}, ${appointment.patient?.address?.city || ''}, ${appointment.patient?.address?.state || ''} - ${appointment.patient?.address?.pincode || ''}
-
-═══════════════════════════════════════════════════════════════
-
-APPOINTMENT DETAILS:
--------------------------------------------------------------------
-Doctor          : Dr. ${appointment.doctor?.firstName} ${appointment.doctor?.lastName}
-Specialization  : ${appointment.doctor?.specialization}
-Department      : ${appointment.doctor?.department?.name || 'N/A'}
-Scheduled Time  : ${format(new Date(appointment.scheduledAt), 'PPpp')}
-Appointment Type: ${appointment.type}
-Status          : ${appointment.status}
-${encounterDetails}
-═══════════════════════════════════════════════════════════════
-
-EMERGENCY CONTACT:
--------------------------------------------------------------------
-Name            : ${appointment.patient?.emergencyContact?.name || 'N/A'}
-Relationship    : ${appointment.patient?.emergencyContact?.relationship || 'N/A'}
-Mobile          : ${appointment.patient?.emergencyContact?.mobile || 'N/A'}
-
-═══════════════════════════════════════════════════════════════
-
-                    ** IMPORTANT INSTRUCTIONS **
-
-1. Please carry this OPD card for all future visits
-2. Arrive 15 minutes before your scheduled appointment
-3. Bring all previous medical records and prescriptions
-4. Follow doctor's advice and prescribed medications
-5. For emergencies, contact: [Hospital Emergency Number]
-
-═══════════════════════════════════════════════════════════════
-
-Generated on: ${format(new Date(), 'PPpp')}
-System: ABDM Care - Hospital Management System
-
-    `.trim();
-
-      const blob = new Blob([opdCardContent], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `OPD-Card-${appointment.opdCardNumber}-${appointment.patient?.firstName}-${appointment.patient?.lastName}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Generate PDF
+      generateOPDCardPDF(pdfData);
       
-      toast.success('OPD Card downloaded successfully');
+      toast.success('OPD Card PDF downloaded successfully');
     } catch (error) {
       console.error('Error downloading OPD card:', error);
       toast.error('Failed to download OPD card');
@@ -361,14 +333,29 @@ System: ABDM Care - Hospital Management System
               </IconButton>
             )}
             {params.row.opdCardNumber && (
-              <IconButton
-                size="small"
-                color="success"
-                onClick={() => handleDownloadOPDCard(params.row)}
-                title="Download OPD Card"
-              >
-                <PrintIcon fontSize="small" />
-              </IconButton>
+              <>
+                <Tooltip title="View OPD Card">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => {
+                      setSelectedAppointment(params.row);
+                      setOpdCardOpen(true);
+                    }}
+                  >
+                    <ViewIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Download PDF">
+                  <IconButton
+                    size="small"
+                    color="success"
+                    onClick={() => handleDownloadOPDCard(params.row)}
+                  >
+                    <PrintIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </>
             )}
           </Box>
         );
@@ -509,6 +496,17 @@ System: ABDM Care - Hospital Management System
           }}
         />
       </Paper>
+
+      {/* OPD Card Dialog */}
+      {selectedAppointment && (
+        <OPDCardDialog
+          open={opdCardOpen}
+          onClose={() => setOpdCardOpen(false)}
+          appointment={selectedAppointment}
+          encounter={selectedAppointment.encounter}
+          readOnly={false}
+        />
+      )}
     </Box>
   );
 };

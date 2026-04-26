@@ -7,7 +7,9 @@ export type UserRole =
   | 'NURSE'
   | 'RECEPTIONIST'
   | 'LAB_TECHNICIAN'
-  | 'PHARMACIST';
+  | 'PHARMACIST'
+  | 'BILLING_STAFF'
+  | 'RADIOLOGIST';
 
 export interface MenuItem {
   text: string;

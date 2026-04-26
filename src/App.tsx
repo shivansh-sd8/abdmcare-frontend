@@ -25,6 +25,7 @@ import PrescriptionList from './features/doctor/PrescriptionList';
 import VitalsManagement from './features/doctor/VitalsManagement';
 import InvestigationQueue from './features/lab/InvestigationQueue';
 import PrescriptionQueue from './features/pharmacy/PrescriptionQueue';
+import BillingDashboard from './features/billing/BillingDashboard';
 import Login from './features/auth/Login';
 import SuperAdminSignup from './features/auth/SuperAdminSignup';
 import LandingPage from './pages/LandingPage';
@@ -156,7 +157,7 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Investigations - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN */}
+          {/* Investigations/Lab - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN */}
           <Route 
             path="investigations" 
             element={
@@ -170,8 +171,18 @@ const App: React.FC = () => {
           <Route 
             path="pharmacy" 
             element={
-              <RoleProtectedRoute requiredRoles={['PHARMACIST']}>
+              <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
                 <PrescriptionQueue />
+              </RoleProtectedRoute>
+            } 
+          />
+          
+          {/* Billing Dashboard - BILLING_STAFF */}
+          <Route 
+            path="billing" 
+            element={
+              <RoleProtectedRoute requiredRoles={['BILLING_STAFF', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
+                <BillingDashboard />
               </RoleProtectedRoute>
             } 
           />
