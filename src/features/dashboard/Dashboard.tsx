@@ -27,12 +27,18 @@ import doctorService from '../../services/doctorService';
 import appointmentService from '../../services/appointmentService';
 import hospitalService from '../../services/hospitalService';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
+import api from '../../services/api';
 import {
   PieChart,
   Pie,
   Cell,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
 } from 'recharts';
 
 interface StatCardProps {
@@ -108,6 +114,7 @@ const Dashboard: React.FC = () => {
   const permissions = useRolePermissions();
   
   const [loading, setLoading] = useState(true);
+  const [hospitalName, setHospitalName] = useState<string>('');
   const [stats, setStats] = useState({
     totalPatients: 0,
     totalDoctors: 0,
@@ -125,6 +132,8 @@ const Dashboard: React.FC = () => {
     appointmentTrend: '',
   });
   const [departmentData, setDepartmentData] = useState<any[]>([]);
+  const [appointmentStatusData, setAppointmentStatusData] = useState<any[]>([]);
+  const [genderData, setGenderData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -137,8 +146,8 @@ const Dashboard: React.FC = () => {
       // Fetch data based on user permissions
       const promises: Promise<any>[] = [];
       
-      // Patient stats - Only SUPER_ADMIN, ADMIN, DOCTOR
-      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor) {
+      // Patient stats - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST
+      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor || permissions.isNurse || permissions.isReceptionist) {
         promises.push(
           patientService.getPatientStats().catch(() => ({ data: { total: 0, abhaLinked: 0 } }))
         );
@@ -155,8 +164,8 @@ const Dashboard: React.FC = () => {
         promises.push(Promise.resolve({ data: { total: 0 } }));
       }
       
-      // Appointment stats - Only SUPER_ADMIN, ADMIN, and DOCTOR
-      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor) {
+      // Appointment stats - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST
+      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor || permissions.isNurse || permissions.isReceptionist) {
         promises.push(
           appointmentService.getAppointmentStats().catch(() => ({ data: { today: 0 } }))
         );
@@ -167,10 +176,13 @@ const Dashboard: React.FC = () => {
       // Hospital stats - Only SUPER_ADMIN
       if (permissions.isSuperAdmin) {
         promises.push(
-          hospitalService.getAllHospitals().catch(() => ({ data: { total: 0 } }))
+          hospitalService.getAllHospitalStats().catch((err) => {
+            console.error('Hospital stats error:', err);
+            return { data: { data: { total: 0 } } };
+          })
         );
       } else {
-        promises.push(Promise.resolve({ data: { total: 0 } }));
+        promises.push(Promise.resolve({ data: { data: { total: 0 } } }));
       }
 
       const [patientStats, doctorStats, appointmentStats, hospitalStats] = await Promise.all(promises);
@@ -180,9 +192,11 @@ const Dashboard: React.FC = () => {
       const aStats = appointmentStats as any;
       const hStats = hospitalStats as any;
 
+      console.log('Hospital stats response:', hStats);
+
       const totalPatients = pStats.data?.total || 0;
       const totalDoctors = dStats.data?.total || 0;
-      const totalHospitals = hStats.data?.total || 0;
+      const totalHospitals = hStats.data?.data?.total || hStats.data?.total || 0;
       const todayAppointments = aStats.data?.today || 0;
       const abhaLinked = pStats.data?.abhaLinked || 0;
 
@@ -203,6 +217,26 @@ const Dashboard: React.FC = () => {
         appointmentTrend: '',
       });
 
+      // Get hospital name for non-super-admin users
+      if (permissions.isAdmin || permissions.isDoctor || permissions.isNurse || permissions.isReceptionist || permissions.isLabTechnician || permissions.isPharmacist) {
+        try {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user.hospitalId) {
+              try {
+                const hospitalResp: any = await api.get(`/api/v1/hospitals/${user.hospitalId}`);
+                setHospitalName(hospitalResp.data?.name || '');
+              } catch (err) {
+                console.error('Error fetching hospital:', err);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing user:', err);
+        }
+      }
+
       if (dStats.data?.specializations) {
         const peacefulColors = ['#4A90E2', '#50C878', '#9B59B6', '#F39C12', '#E74C3C'];
         const deptData = dStats.data.specializations.map((spec: any, index: number) => ({
@@ -211,6 +245,24 @@ const Dashboard: React.FC = () => {
           color: peacefulColors[index % peacefulColors.length],
         }));
         setDepartmentData(deptData);
+      }
+
+      // Appointment status data
+      if (aStats.data?.scheduled || aStats.data?.completed || aStats.data?.cancelled) {
+        setAppointmentStatusData([
+          { name: 'Scheduled', value: aStats.data?.scheduled || 0, fill: '#4A90E2' },
+          { name: 'Completed', value: aStats.data?.completed || 0, fill: '#50C878' },
+          { name: 'Cancelled', value: aStats.data?.cancelled || 0, fill: '#E74C3C' },
+        ]);
+      }
+
+      // Gender distribution data
+      if (pStats.data?.male || pStats.data?.female || pStats.data?.other) {
+        setGenderData([
+          { name: 'Male', value: pStats.data?.male || 0, fill: '#4A90E2' },
+          { name: 'Female', value: pStats.data?.female || 0, fill: '#FF69B4' },
+          { name: 'Other', value: pStats.data?.other || 0, fill: '#9B59B6' },
+        ]);
       }
     } catch (error: any) {
       // Silently handle errors - permission errors are already caught above
@@ -223,12 +275,16 @@ const Dashboard: React.FC = () => {
   // Role-specific dashboard titles
   const getDashboardTitle = () => {
     if (permissions.isSuperAdmin) return 'System Dashboard';
-    if (permissions.isAdmin) return 'Hospital Dashboard';
-    if (permissions.isDoctor) return 'My Practice Dashboard';
-    if (permissions.isNurse) return 'Ward Dashboard';
-    if (permissions.isReceptionist) return 'Front Desk Dashboard';
-    if (permissions.isLabTechnician) return 'Lab Dashboard';
-    if (permissions.isPharmacist) return 'Pharmacy Dashboard';
+    
+    // For non-super-admin users, include hospital name if available
+    const hospitalPrefix = hospitalName ? `${hospitalName} - ` : '';
+    
+    if (permissions.isAdmin) return `${hospitalPrefix}Hospital Dashboard`;
+    if (permissions.isDoctor) return `${hospitalPrefix}My Practice Dashboard`;
+    if (permissions.isNurse) return `${hospitalPrefix}Ward Dashboard`;
+    if (permissions.isReceptionist) return `${hospitalPrefix}Front Desk Dashboard`;
+    if (permissions.isLabTechnician) return `${hospitalPrefix}Lab Dashboard`;
+    if (permissions.isPharmacist) return `${hospitalPrefix}Pharmacy Dashboard`;
     return 'Dashboard';
   };
 
@@ -358,11 +414,11 @@ const Dashboard: React.FC = () => {
       <Grid container spacing={3} sx={{ mt: 2 }}>
         {/* Department Distribution - Only for ADMIN and SUPER_ADMIN */}
         {(permissions.isAdmin || permissions.isSuperAdmin) && departmentData.length > 0 && (
-          <Grid item xs={12} lg={8}>
+          <Grid item xs={12} lg={6}>
             <Paper sx={{ p: 3, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Typography variant="h6" fontWeight="600">
-                  Department Distribution
+                  📊 Department Distribution
                 </Typography>
               </Box>
               <ResponsiveContainer width="100%" height={300}>
@@ -388,12 +444,66 @@ const Dashboard: React.FC = () => {
           </Grid>
         )}
 
-        <Grid item xs={12} lg={(permissions.isAdmin || permissions.isSuperAdmin) && departmentData.length > 0 ? 4 : 12}>
+        {/* Appointment Status - Only for ADMIN and SUPER_ADMIN */}
+        {(permissions.isAdmin || permissions.isSuperAdmin) && appointmentStatusData.length > 0 && (
+          <Grid item xs={12} lg={6}>
+            <Paper sx={{ p: 3, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" fontWeight="600">
+                  📅 Appointment Status
+                </Typography>
+              </Box>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={appointmentStatusData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#4A90E2" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Paper>
+          </Grid>
+        )}
+
+        {/* Gender Distribution - Only for ADMIN and SUPER_ADMIN */}
+        {(permissions.isAdmin || permissions.isSuperAdmin) && genderData.length > 0 && (
+          <Grid item xs={12} lg={6}>
+            <Paper sx={{ p: 3, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" fontWeight="600">
+                  👥 Patient Gender Distribution
+                </Typography>
+              </Box>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={genderData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {genderData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </Paper>
+          </Grid>
+        )}
+
+        <Grid item xs={12} lg={(permissions.isAdmin || permissions.isSuperAdmin) && (departmentData.length > 0 || appointmentStatusData.length > 0 || genderData.length > 0) ? 4 : 12}>
           <Paper sx={{ p: 3, height: '100%', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             <Typography variant="h6" fontWeight="600" sx={{ mb: 3 }}>
-              Quick Actions
+              ⚡ Quick Actions
             </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {/* Register Patient - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
               {permissions.canCreatePatient && (
                 <Button
@@ -401,7 +511,7 @@ const Dashboard: React.FC = () => {
                   fullWidth
                   startIcon={<PersonAdd />}
                   onClick={() => navigate('/patients/new')}
-                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                  sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Register New Patient
                 </Button>
@@ -414,7 +524,7 @@ const Dashboard: React.FC = () => {
                   fullWidth
                   startIcon={<EventAvailable />}
                   onClick={() => navigate('/appointments')}
-                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                  sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Schedule Appointment
                 </Button>
@@ -427,7 +537,7 @@ const Dashboard: React.FC = () => {
                   fullWidth
                   startIcon={<MedicalServices />}
                   onClick={() => navigate('/abha')}
-                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                  sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Create ABHA
                 </Button>
@@ -439,7 +549,7 @@ const Dashboard: React.FC = () => {
                 fullWidth
                 startIcon={<People />}
                 onClick={() => navigate('/patients')}
-                sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                sx={{ justifyContent: 'flex-start', py: 1.2 }}
               >
                 {permissions.isDoctor ? 'My Patients' : permissions.isNurse ? 'Assigned Patients' : 'View Patients'}
               </Button>
@@ -451,7 +561,7 @@ const Dashboard: React.FC = () => {
                   fullWidth
                   startIcon={<CalendarToday />}
                   onClick={() => navigate('/appointments')}
-                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                  sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   {permissions.isReceptionist ? 'Appointment Queue' : permissions.isDoctor ? 'My Appointments' : 'View Appointments'}
                 </Button>
@@ -464,7 +574,7 @@ const Dashboard: React.FC = () => {
                   fullWidth
                   startIcon={<PersonAdd />}
                   onClick={() => navigate('/quick-registration')}
-                  sx={{ justifyContent: 'flex-start', py: 1.5 }}
+                  sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Quick Registration
                 </Button>
@@ -473,10 +583,10 @@ const Dashboard: React.FC = () => {
               {/* Doctor-specific actions */}
               {permissions.isDoctor && (
                 <>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     My Encounters
                   </Button>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/prescriptions')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/prescriptions')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     Write Prescription
                   </Button>
                 </>
@@ -485,10 +595,10 @@ const Dashboard: React.FC = () => {
               {/* Nurse-specific actions */}
               {permissions.isNurse && (
                 <>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/vitals')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/vitals')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     Record Vitals
                   </Button>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     View Encounters
                   </Button>
                 </>
@@ -496,14 +606,14 @@ const Dashboard: React.FC = () => {
 
               {/* Lab Tech actions */}
               {permissions.isLabTechnician && (
-                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/investigations')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/investigations')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                   Lab Queue
                 </Button>
               )}
 
               {/* Pharmacist actions */}
               {permissions.isPharmacist && (
-                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/pharmacy')} sx={{ justifyContent: 'flex-start', py: 1.5 }}>
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/pharmacy')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                   Pharmacy Queue
                 </Button>
               )}

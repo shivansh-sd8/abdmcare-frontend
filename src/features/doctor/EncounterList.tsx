@@ -93,8 +93,10 @@ const EncounterList: React.FC = () => {
         params.doctorId = permissions.userId;
       }
       const response = await encounterService.getAllEncounters(params as any) as any;
-      setEncounters(response.data?.encounters || response.data?.data || []);
-      setTotalCount(response.data?.total || 0);
+      // API returns { success, message, data: [...] }
+      const encountersData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setEncounters(encountersData);
+      setTotalCount(encountersData.length);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch encounters');
     } finally {

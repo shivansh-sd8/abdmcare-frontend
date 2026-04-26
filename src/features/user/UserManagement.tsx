@@ -67,8 +67,15 @@ const UserManagement: React.FC = () => {
     phone: '',
     role: 'RECEPTIONIST',
     hospitalId: '',
+    // Doctor-specific fields
+    specialization: '',
+    qualification: '',
+    registrationNo: '',
+    hprId: '',
   });
 
+  // Only SUPER_ADMIN can create SUPER_ADMIN role
+  // ADMIN can only create staff roles
   const roles = permissions.isSuperAdmin
     ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST']
     : ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST'];
@@ -131,6 +138,10 @@ const UserManagement: React.FC = () => {
         phone: '',
         role: user.role,
         hospitalId: user.hospitalId || '',
+        specialization: '',
+        qualification: '',
+        registrationNo: '',
+        hprId: '',
       });
     } else {
       setEditingUser(null);
@@ -143,6 +154,10 @@ const UserManagement: React.FC = () => {
         phone: '',
         role: 'RECEPTIONIST',
         hospitalId: '',
+        specialization: '',
+        qualification: '',
+        registrationNo: '',
+        hprId: '',
       });
     }
     setOpenDialog(true);
@@ -315,6 +330,25 @@ const UserManagement: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Role Selection - Show First */}
+            <Grid item xs={12}>
+              <FormControl fullWidth required>
+                <InputLabel>Role</InputLabel>
+                <Select
+                  value={formData.role}
+                  label="Role"
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                >
+                  {roles.map((role) => (
+                    <MenuItem key={role} value={role}>
+                      {role}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* Basic Information */}
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
@@ -364,7 +398,7 @@ const UserManagement: React.FC = () => {
               />
             </Grid>
             {!editingUser && (
-              <Grid item xs={12}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   label="Password"
@@ -375,24 +409,66 @@ const UserManagement: React.FC = () => {
                 />
               </Grid>
             )}
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Role</InputLabel>
-                <Select
-                  value={formData.role}
-                  label="Role"
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                >
-                  {roles.map((role) => (
-                    <MenuItem key={role} value={role}>
-                      {role}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+
+            {/* Doctor-Specific Fields */}
+            {formData.role === 'DOCTOR' && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="primary" sx={{ mt: 1, mb: 1 }}>
+                    Professional Details
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Specialization"
+                    required
+                    value={formData.specialization}
+                    onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  >
+                    {['Cardiology', 'Dermatology', 'Endocrinology', 'Gastroenterology', 'General Medicine', 'Neurology', 'Oncology', 'Orthopedics', 'Pediatrics', 'Psychiatry', 'Radiology', 'Surgery', 'Urology'].map((spec) => (
+                      <MenuItem key={spec} value={spec}>
+                        {spec}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Qualification"
+                    required
+                    value={formData.qualification}
+                    onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                    placeholder="e.g., MBBS, MD"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Registration Number"
+                    required
+                    value={formData.registrationNo}
+                    onChange={(e) => setFormData({ ...formData, registrationNo: e.target.value })}
+                    placeholder="e.g., MCI-12345"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="HPR ID (Optional)"
+                    value={formData.hprId}
+                    onChange={(e) => setFormData({ ...formData, hprId: e.target.value })}
+                    placeholder="Health Professional Registry ID"
+                  />
+                </Grid>
+              </>
+            )}
+
+            {/* Hospital Selection for Super Admin */}
             {permissions.isSuperAdmin && (
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
                 <FormControl fullWidth required>
                   <InputLabel>Hospital</InputLabel>
                   <Select

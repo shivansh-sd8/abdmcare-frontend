@@ -52,6 +52,10 @@ class AppointmentService {
     return api.get('/api/v1/appointments/search', { params });
   }
 
+  async checkInAppointment(id: string) {
+    return api.post(`/api/v1/appointments/${id}/check-in`);
+  }
+
   async getAppointmentStats() {
     return api.get('/api/v1/appointments/stats');
   }

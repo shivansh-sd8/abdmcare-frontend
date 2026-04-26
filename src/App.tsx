@@ -10,6 +10,7 @@ import PatientRegistration from './features/patient/PatientRegistration';
 import DoctorList from './features/doctor/DoctorList';
 import DoctorRegistration from './features/doctor/DoctorRegistration';
 import AppointmentList from './features/appointment/AppointmentList';
+import ScheduleAppointment from './features/appointment/ScheduleAppointment';
 import ConsentManagement from './features/consent/ConsentManagement';
 import Profile from './features/profile/Profile';
 import Settings from './features/settings/Settings';
@@ -103,6 +104,14 @@ const App: React.FC = () => {
             element={
               <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
                 <AppointmentList />
+              </RoleProtectedRoute>
+            } 
+          />
+          <Route 
+            path="appointments/schedule" 
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                <ScheduleAppointment />
               </RoleProtectedRoute>
             } 
           />

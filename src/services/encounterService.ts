@@ -44,6 +44,18 @@ class EncounterService {
     return api.post(`/api/v1/encounters/${id}/complete`, data);
   }
 
+  async getDoctorEncounters(doctorId: string, status?: string) {
+    return api.get(`/api/v1/encounters/doctor/${doctorId}`, { params: { status } });
+  }
+
+  async updateConsultation(id: string, data: any) {
+    return api.put(`/api/v1/encounters/${id}/consultation`, data);
+  }
+
+  async completeConsultation(id: string) {
+    return api.post(`/api/v1/encounters/${id}/complete`);
+  }
+
   async getEncounterStats() {
     return api.get('/api/v1/encounters/stats');
   }

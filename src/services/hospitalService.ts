@@ -2,24 +2,61 @@ import api from './api';
 
 interface CreateHospitalDTO {
   name: string;
-  code: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-  phone?: string;
-  email?: string;
+  code?: string;
+  type?: string;
+  email: string;
+  phone: string;
+  alternatePhone?: string;
+  website?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  country?: string;
+  pincode: string;
+  landmark?: string;
+  registrationNumber?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  licenseNumber?: string;
+  establishedYear?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  totalBeds?: string;
+  icuBeds?: string;
+  emergencyBeds?: string;
+  operationTheaters?: string;
+  plan?: string;
 }
 
 interface UpdateHospitalDTO {
   name?: string;
-  address?: string;
+  type?: string;
+  email?: string;
+  phone?: string;
+  alternatePhone?: string;
+  website?: string;
+  addressLine1?: string;
+  addressLine2?: string;
   city?: string;
   state?: string;
   pincode?: string;
-  phone?: string;
-  email?: string;
+  landmark?: string;
+  registrationNumber?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  licenseNumber?: string;
+  establishedYear?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  totalBeds?: string;
+  icuBeds?: string;
+  emergencyBeds?: string;
+  operationTheaters?: string;
   isActive?: boolean;
+  plan?: string;
 }
 
 class HospitalService {
@@ -50,6 +87,10 @@ class HospitalService {
 
   async getHospitalStats(id: string) {
     return api.get(`/api/v1/hospitals/${id}/stats`);
+  }
+
+  async getAllHospitalStats() {
+    return api.get('/api/v1/hospitals/stats');
   }
 }
 

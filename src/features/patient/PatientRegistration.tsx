@@ -32,6 +32,16 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import patientService from '../../services/patientService';
 import abhaService from '../../services/abhaService';
+import {
+  validate,
+  validationPatterns,
+  validationMessages,
+  validateMobile,
+  validateEmail,
+  validatePincode,
+  validateAge,
+  validateABHANumber,
+} from '../../utils/validation';
 
 const steps = ['Basic Information', 'Contact & Address', 'ABHA Linking'];
 
@@ -64,6 +74,7 @@ const PatientRegistration: React.FC = () => {
     abhaNumber: '',
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [abhaLinked, setAbhaLinked] = useState(false);
 
   const handleChange = (field: string, value: any) => {
@@ -81,6 +92,87 @@ const PatientRegistration: React.FC = () => {
         ...prev,
         [field]: value,
       }));
+    }
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleBlur = (field: string) => {
+    validateField(field);
+  };
+
+  const validateField = (field: string) => {
+    const value = field.includes('.')
+      ? field.split('.').reduce((obj: any, key) => obj?.[key], formData)
+      : (formData as any)[field];
+
+    let error: string | undefined;
+
+    switch (field) {
+      case 'firstName':
+      case 'lastName':
+        const nameResult = validate(value, {
+          required: true,
+          pattern: validationPatterns.name,
+          message: field === 'firstName' ? 'First name is required' : 'Last name is required',
+        });
+        if (!nameResult.isValid) {
+          error = nameResult.error;
+        } else if (value && !validationPatterns.name.test(value)) {
+          error = validationMessages.name;
+        }
+        break;
+      case 'mobile':
+        const mobileResult = validateMobile(value);
+        if (!mobileResult.isValid) error = mobileResult.error;
+        break;
+      case 'email':
+        const emailResult = validateEmail(value);
+        if (!emailResult.isValid) error = emailResult.error;
+        break;
+      case 'dob':
+        const dobResult = validateAge(value);
+        if (!dobResult.isValid) error = dobResult.error;
+        break;
+      case 'gender':
+        const genderResult = validate(value, { required: true, message: 'Gender is required' });
+        if (!genderResult.isValid) error = genderResult.error;
+        break;
+      case 'address.pincode':
+        if (value) {
+          const pincodeResult = validatePincode(value);
+          if (!pincodeResult.isValid) error = pincodeResult.error;
+        }
+        break;
+      case 'emergencyContact.mobile':
+        if (value) {
+          const emergencyMobileResult = validateMobile(value);
+          if (!emergencyMobileResult.isValid) error = emergencyMobileResult.error;
+        }
+        break;
+      case 'abhaNumber':
+        if (value) {
+          const abhaResult = validateABHANumber(value);
+          if (!abhaResult.isValid) error = abhaResult.error;
+        }
+        break;
+    }
+
+    if (error) {
+      setErrors((prev) => ({ ...prev, [field]: error! }));
+    } else {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
     }
   };
 
@@ -214,6 +306,9 @@ const PatientRegistration: React.FC = () => {
                   required
                   value={formData.firstName}
                   onChange={(e) => handleChange('firstName', e.target.value)}
+                  onBlur={() => handleBlur('firstName')}
+                  error={!!errors.firstName}
+                  helperText={errors.firstName || ''}
                   variant="outlined"
                 />
               </Grid>
@@ -233,6 +328,9 @@ const PatientRegistration: React.FC = () => {
                   required
                   value={formData.lastName}
                   onChange={(e) => handleChange('lastName', e.target.value)}
+                  onBlur={() => handleBlur('lastName')}
+                  error={!!errors.lastName}
+                  helperText={errors.lastName || ''}
                   variant="outlined"
                 />
               </Grid>
@@ -244,6 +342,9 @@ const PatientRegistration: React.FC = () => {
                   required
                   value={formData.gender}
                   onChange={(e) => handleChange('gender', e.target.value)}
+                  onBlur={() => handleBlur('gender')}
+                  error={!!errors.gender}
+                  helperText={errors.gender || ''}
                   variant="outlined"
                 >
                   <MenuItem value="MALE">Male</MenuItem>
@@ -260,7 +361,11 @@ const PatientRegistration: React.FC = () => {
                   required
                   value={formData.dob}
                   onChange={(e) => handleChange('dob', e.target.value)}
+                  onBlur={() => handleBlur('dob')}
+                  error={!!errors.dob}
+                  helperText={errors.dob || ''}
                   variant="outlined"
+                  inputProps={{ max: new Date().toISOString().split('T')[0] }}
                 />
               </Grid>
               <Grid item xs={12} md={4}>
@@ -300,6 +405,9 @@ const PatientRegistration: React.FC = () => {
                   required
                   value={formData.mobile}
                   onChange={(e) => handleChange('mobile', e.target.value)}
+                  onBlur={() => handleBlur('mobile')}
+                  error={!!errors.mobile}
+                  helperText={errors.mobile || 'Enter 10-digit mobile (e.g., 9876543210)'}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -308,6 +416,7 @@ const PatientRegistration: React.FC = () => {
                     ),
                   }}
                   variant="outlined"
+                  inputProps={{ maxLength: 10 }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -317,6 +426,9 @@ const PatientRegistration: React.FC = () => {
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
+                  onBlur={() => handleBlur('email')}
+                  error={!!errors.email}
+                  helperText={errors.email || 'Optional (e.g., user@example.com)'}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">

@@ -24,13 +24,18 @@ import {
   AccessTime,
   Person,
   LocalHospital,
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
+import { useNavigate } from 'react-router-dom';
 import appointmentService from '../../services/appointmentService';
 import { format } from 'date-fns';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
+import { toast } from 'react-toastify';
+import { IconButton } from '@mui/material';
 
 const AppointmentList: React.FC = () => {
+  const navigate = useNavigate();
   const permissions = useRolePermissions();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,12 +52,138 @@ const AppointmentList: React.FC = () => {
     fetchStats();
   }, []);
 
+  const handleCheckIn = async (appointment: any) => {
+    try {
+      setLoading(true);
+      const response = await appointmentService.checkInAppointment(appointment.id) as any;
+      const data = response.data?.data || response.data;
+      
+      toast.success(`✅ Patient checked in! OPD Card: ${data.opdCardNumber}`);
+      
+      // Refresh list
+      fetchAppointments();
+      fetchStats();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to check in patient');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadOPDCard = async (appointment: any) => {
+    try {
+      // Fetch encounter details if available
+      let encounterDetails = '';
+      if (appointment.encounterId) {
+        try {
+          const encounterResponse = await fetch(`http://localhost:8080/api/v1/encounters/${appointment.encounterId}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          const encounterData = await encounterResponse.json();
+          const encounter = encounterData.data;
+          
+          if (encounter) {
+            encounterDetails = `
+CONSULTATION DETAILS:
+-----------------------------------------------------------
+Chief Complaint: ${encounter.chiefComplaint || 'N/A'}
+Diagnosis: ${encounter.diagnosis || encounter.finalDiagnosis || 'Pending'}
+Notes: ${encounter.notes || 'N/A'}
+Status: ${encounter.status}
+Visit Date: ${format(new Date(encounter.visitDate), 'PPpp')}
+`;
+          }
+        } catch (err) {
+          console.error('Failed to fetch encounter details', err);
+        }
+      }
+
+      const opdCardContent = `
+╔═══════════════════════════════════════════════════════════════╗
+║                         OPD CARD                              ║
+║                    HOSPITAL MANAGEMENT SYSTEM                 ║
+╚═══════════════════════════════════════════════════════════════╝
+
+OPD Card Number: ${appointment.opdCardNumber}
+Issue Date: ${format(new Date(appointment.checkedInAt), 'PPpp')}
+
+═══════════════════════════════════════════════════════════════
+
+PATIENT INFORMATION:
+-------------------------------------------------------------------
+Name            : ${appointment.patient?.firstName} ${appointment.patient?.lastName}
+UHID            : ${appointment.patient?.uhid}
+Age             : ${appointment.patient?.dob ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear() : 'N/A'} years
+Gender          : ${appointment.patient?.gender}
+Blood Group     : ${appointment.patient?.bloodGroup || 'N/A'}
+Mobile          : ${appointment.patient?.mobile}
+Email           : ${appointment.patient?.email || 'N/A'}
+Address         : ${appointment.patient?.address?.line1 || ''}, ${appointment.patient?.address?.city || ''}, ${appointment.patient?.address?.state || ''} - ${appointment.patient?.address?.pincode || ''}
+
+═══════════════════════════════════════════════════════════════
+
+APPOINTMENT DETAILS:
+-------------------------------------------------------------------
+Doctor          : Dr. ${appointment.doctor?.firstName} ${appointment.doctor?.lastName}
+Specialization  : ${appointment.doctor?.specialization}
+Department      : ${appointment.doctor?.department?.name || 'N/A'}
+Scheduled Time  : ${format(new Date(appointment.scheduledAt), 'PPpp')}
+Appointment Type: ${appointment.type}
+Status          : ${appointment.status}
+${encounterDetails}
+═══════════════════════════════════════════════════════════════
+
+EMERGENCY CONTACT:
+-------------------------------------------------------------------
+Name            : ${appointment.patient?.emergencyContact?.name || 'N/A'}
+Relationship    : ${appointment.patient?.emergencyContact?.relationship || 'N/A'}
+Mobile          : ${appointment.patient?.emergencyContact?.mobile || 'N/A'}
+
+═══════════════════════════════════════════════════════════════
+
+                    ** IMPORTANT INSTRUCTIONS **
+
+1. Please carry this OPD card for all future visits
+2. Arrive 15 minutes before your scheduled appointment
+3. Bring all previous medical records and prescriptions
+4. Follow doctor's advice and prescribed medications
+5. For emergencies, contact: [Hospital Emergency Number]
+
+═══════════════════════════════════════════════════════════════
+
+Generated on: ${format(new Date(), 'PPpp')}
+System: ABDM Care - Hospital Management System
+
+    `.trim();
+
+      const blob = new Blob([opdCardContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `OPD-Card-${appointment.opdCardNumber}-${appointment.patient?.firstName}-${appointment.patient?.lastName}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('OPD Card downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading OPD card:', error);
+      toast.error('Failed to download OPD card');
+    }
+  };  
+
   const fetchAppointments = async () => {
     try {
       setLoading(true);
       const response = await appointmentService.searchAppointments({});
       const data = response as any;
-      setAppointments(data.data || []);
+      console.log('Appointments API Response:', data);
+      const appointmentList = data.data?.data?.data || data.data?.data || data.data || [];
+      console.log('Parsed appointments:', appointmentList);
+      setAppointments(appointmentList);
     } catch (error: any) {
       // Silently handle permission errors
       console.error('Error fetching appointments:', error);
@@ -63,15 +194,16 @@ const AppointmentList: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      // Only fetch stats if user has permission (SUPER_ADMIN, ADMIN, DOCTOR)
-      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor) {
+      // Only fetch stats if user has permission (SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST)
+      if (permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor || permissions.isNurse || permissions.isReceptionist) {
         const response = await appointmentService.getAppointmentStats();
         const data = response as any;
+        const statsData = data.data?.data || data.data || {};
         setStats({
-          total: data.data?.total || 0,
-          today: data.data?.today || 0,
-          upcoming: data.data?.upcoming || 0,
-          completed: data.data?.completed || 0,
+          total: statsData.total || 0,
+          today: statsData.today || 0,
+          upcoming: statsData.upcoming || 0,
+          completed: statsData.completed || 0,
         });
       }
     } catch (error: any) {
@@ -112,7 +244,7 @@ const AppointmentList: React.FC = () => {
     {
       field: 'patient',
       headerName: 'Patient',
-      width: 200,
+      width: 180,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Avatar sx={{ bgcolor: '#4A90E2', width: 36, height: 36 }}>
@@ -127,7 +259,7 @@ const AppointmentList: React.FC = () => {
     {
       field: 'doctor',
       headerName: 'Doctor',
-      width: 200,
+      width: 180,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Avatar sx={{ bgcolor: '#9B59B6', width: 36, height: 36 }}>
@@ -201,12 +333,46 @@ const AppointmentList: React.FC = () => {
     {
       field: 'notes',
       headerName: 'Notes',
-      width: 200,
+      width: 150,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="caption" color="text.secondary" noWrap>
           {params.row.notes || '-'}
         </Typography>
       ),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams) => {
+        const canCheckIn = params.row.status === 'SCHEDULED' && !params.row.checkedInAt && !params.row.opdCardNumber;
+        
+        return (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {canCheckIn && (permissions.isReceptionist || permissions.isAdmin) && (
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleCheckIn(params.row)}
+                title="Check-In Patient"
+              >
+                <CheckCircle fontSize="small" />
+              </IconButton>
+            )}
+            {params.row.opdCardNumber && (
+              <IconButton
+                size="small"
+                color="success"
+                onClick={() => handleDownloadOPDCard(params.row)}
+                title="Download OPD Card"
+              >
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
+        );
+      },
     },
   ];
 
@@ -238,6 +404,7 @@ const AppointmentList: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
+          onClick={() => navigate('/appointments/schedule')}
           sx={{
             background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
             '&:hover': {
@@ -245,7 +412,7 @@ const AppointmentList: React.FC = () => {
             },
           }}
         >
-          New Appointment
+          Schedule Appointment
         </Button>
       </Box>
 
@@ -318,7 +485,6 @@ const AppointmentList: React.FC = () => {
         width: '100%', 
         borderRadius: 3, 
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'auto',
       }}>
         <DataGrid
           rows={appointments}

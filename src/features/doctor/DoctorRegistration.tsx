@@ -21,6 +21,7 @@ import {
   CheckCircle,
   School,
   Badge,
+  Lock,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -39,6 +40,7 @@ const DoctorRegistration: React.FC = () => {
     registrationNo: '',
     mobile: '',
     email: '',
+    password: '',
     hprId: '',
     departmentId: '',
   });
@@ -63,8 +65,21 @@ const DoctorRegistration: React.FC = () => {
 
     // Validation
     if (!formData.firstName || !formData.lastName || !formData.specialization || 
-        !formData.qualification || !formData.registrationNo || !formData.mobile) {
+        !formData.qualification || !formData.registrationNo || !formData.mobile || 
+        !formData.email || !formData.password) {
       toast.error('Please fill all required fields');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
       return;
     }
 
@@ -276,13 +291,35 @@ const DoctorRegistration: React.FC = () => {
                   fullWidth
                   label="Email"
                   type="email"
+                  required
                   value={formData.email}
                   onChange={(e) => handleChange('email', e.target.value)}
                   variant="outlined"
+                  helperText="Required for login credentials"
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
                         <Email />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Password"
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  variant="outlined"
+                  helperText="Minimum 6 characters. Admin will share this with the doctor."
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Lock />
                       </InputAdornment>
                     ),
                   }}

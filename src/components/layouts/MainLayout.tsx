@@ -30,7 +30,6 @@ import {
   Notifications,
   Settings,
   AccountCircle,
-  Favorite,
   History,
   Business,
   ManageAccounts,
@@ -44,6 +43,7 @@ import {
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
 import { getMenuItemsForRole, UserRole } from '../../config/rolePermissions';
+import api from '../../services/api';
 
 const drawerWidth = 280;
 
@@ -71,6 +71,7 @@ const getIconComponent = (iconName: string) => {
 
 const MainLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hospitalName, setHospitalName] = React.useState<string>('');
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
@@ -78,6 +79,21 @@ const MainLayout: React.FC = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
   const userRole = (user.role || 'DOCTOR') as UserRole;
+
+  // Fetch hospital name for non-super-admin users
+  React.useEffect(() => {
+    if (user.hospitalId && userRole !== 'SUPER_ADMIN') {
+      const fetchHospitalName = async () => {
+        try {
+          const response: any = await api.get(`/api/v1/hospitals/${user.hospitalId}`);
+          setHospitalName(response.data?.name || '');
+        } catch (err) {
+          console.error('Error fetching hospital:', err);
+        }
+      };
+      fetchHospitalName();
+    }
+  }, [user.hospitalId, userRole]);
   
   // Get menu items based on user role
   const roleBasedMenuItems = getMenuItemsForRole(userRole);
@@ -89,6 +105,33 @@ const MainLayout: React.FC = () => {
     path: item.path,
     badge: item.badge,
   }));
+
+  // Get role-specific colors
+  const getRoleColor = (role: string) => {
+    const roleColors: { [key: string]: string } = {
+      SUPER_ADMIN: 'linear-gradient(135deg, #FF6B6B 0%, #FF5252 100%)',
+      ADMIN: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      DOCTOR: 'linear-gradient(135deg, #50C878 0%, #2ecc71 100%)',
+      NURSE: 'linear-gradient(135deg, #9B59B6 0%, #8e44ad 100%)',
+      RECEPTIONIST: 'linear-gradient(135deg, #F39C12 0%, #e67e22 100%)',
+      LAB_TECHNICIAN: 'linear-gradient(135deg, #E74C3C 0%, #c0392b 100%)',
+      PHARMACIST: 'linear-gradient(135deg, #3498DB 0%, #2980b9 100%)',
+    };
+    return roleColors[role] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+  };
+
+  const getRoleLabel = (role: string) => {
+    const roleLabels: { [key: string]: string } = {
+      SUPER_ADMIN: 'Super Admin',
+      ADMIN: 'Hospital Admin',
+      DOCTOR: 'Doctor',
+      NURSE: 'Nurse',
+      RECEPTIONIST: 'Receptionist',
+      LAB_TECHNICIAN: 'Lab Technician',
+      PHARMACIST: 'Pharmacist',
+    };
+    return roleLabels[role] || role;
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -105,32 +148,33 @@ const MainLayout: React.FC = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: 'linear-gradient(180deg, #1976d2 0%, #1565c0 100%)',
+        background: getRoleColor(userRole),
         color: 'white',
       }}
     >
       <Box sx={{ p: 3, pb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
           <Box
             sx={{
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               borderRadius: 2,
-              background: 'white',
+              background: 'rgba(255,255,255,0.2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#1976d2',
+              color: 'white',
+              fontSize: 24,
             }}
           >
-            <Favorite sx={{ fontSize: 28 }} />
+            🏥
           </Box>
           <Box>
             <Typography variant="h6" fontWeight="700" sx={{ lineHeight: 1.2 }}>
-              ABDM Care
+              AbhaAyushman
             </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.75rem' }}>
-              ABDM Integrated
+            <Typography variant="caption" sx={{ opacity: 0.85, fontSize: '0.7rem' }}>
+              ABDM Integrated HIMS
             </Typography>
           </Box>
         </Box>
@@ -143,6 +187,8 @@ const MainLayout: React.FC = () => {
             borderRadius: 2,
             p: 2,
             backdropFilter: 'blur(10px)',
+            border: '1px solid',
+            borderColor: alpha('#ffffff', 0.2),
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -150,9 +196,10 @@ const MainLayout: React.FC = () => {
               sx={{
                 width: 48,
                 height: 48,
-                bgcolor: 'white',
-                color: '#1976d2',
+                bgcolor: 'rgba(255,255,255,0.3)',
+                color: 'white',
                 fontWeight: 'bold',
+                fontSize: '1.1rem',
               }}
             >
               {userName.substring(0, 2).toUpperCase()}
@@ -161,9 +208,19 @@ const MainLayout: React.FC = () => {
               <Typography variant="body2" fontWeight="600" noWrap>
                 {userName}
               </Typography>
-              <Typography variant="caption" sx={{ opacity: 0.9 }} noWrap>
-                {userRole}
-              </Typography>
+              <Chip
+                label={getRoleLabel(userRole)}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  bgcolor: 'rgba(255,255,255,0.25)',
+                  color: 'white',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  mt: 0.5,
+                }}
+              />
             </Box>
           </Box>
         </Box>
@@ -272,40 +329,66 @@ const MainLayout: React.FC = () => {
       </List>
 
       <Box sx={{ p: 2, pt: 0 }}>
-        <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', textAlign: 'center' }}>
-          v1.0.0 • ABDM Certified
+        <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', textAlign: 'center', mb: 0.5 }}>
+          AbhaAyushman v1.0.0
+        </Typography>
+        <Typography variant="caption" sx={{ opacity: 0.6, display: 'block', textAlign: 'center', fontSize: '0.65rem' }}>
+          ABDM Certified Healthcare
         </Typography>
       </Box>
     </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh', bgcolor: '#f8f9fa' }}>
+    <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh', bgcolor: '#f5f7fa' }}>
       <AppBar
         position="fixed"
-        elevation={0}
+        elevation={1}
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
           bgcolor: 'white',
           color: 'text.primary',
-          borderBottom: '1px solid',
+          borderBottom: '2px solid',
           borderColor: 'divider',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         }}
       >
-        <Toolbar sx={{ justifyContent: 'flex-end' }}>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ display: { sm: 'none' }, mr: 'auto' }}
-          >
-            <MenuIcon />
-          </IconButton>
+        <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ display: { sm: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+            {hospitalName && userRole !== 'SUPER_ADMIN' && (
+              <Box 
+                sx={{ 
+                  display: { xs: 'none', md: 'flex' }, 
+                  alignItems: 'center', 
+                  gap: 1,
+                  px: 2,
+                  py: 0.75,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: 'white',
+                }}
+              >
+                <Box sx={{ fontSize: 18 }}>🏥</Box>
+                <Typography variant="body2" fontWeight="600">
+                  {hospitalName}
+                </Typography>
+              </Box>
+            )}
+          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <IconButton 
               size="large"
               onClick={() => navigate('/notifications')}
+              title="Notifications"
             >
               <Badge badgeContent={3} color="error">
                 <Notifications />
@@ -314,12 +397,14 @@ const MainLayout: React.FC = () => {
             <IconButton 
               size="large"
               onClick={() => navigate('/settings')}
+              title="Settings"
             >
               <Settings />
             </IconButton>
             <IconButton 
               size="large"
               onClick={() => navigate('/profile')}
+              title="Profile"
             >
               <AccountCircle />
             </IconButton>
@@ -356,7 +441,7 @@ const MainLayout: React.FC = () => {
               boxSizing: 'border-box',
               width: drawerWidth,
               border: 'none',
-              boxShadow: '4px 0 24px rgba(0,0,0,0.08)',
+              boxShadow: '4px 0 24px rgba(0,0,0,0.12)',
             },
           }}
           open
@@ -368,15 +453,15 @@ const MainLayout: React.FC = () => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, sm: 3, md: 4 },
           pt: 0,
           minHeight: '100vh',
-          bgcolor: '#f8f9fa',
+          bgcolor: '#f5f7fa',
           width: '100%',
         }}
       >
         <Toolbar />
-        <Box sx={{ mt: 2, width: '100%' }}>
+        <Box sx={{ mt: 2, width: '100%', maxWidth: '1400px', mx: 'auto' }}>
           <Outlet />
         </Box>
       </Box>
