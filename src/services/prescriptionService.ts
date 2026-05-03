@@ -48,6 +48,13 @@ class PrescriptionService {
   async deletePrescription(id: string) {
     return api.delete(`/api/v1/prescriptions/${id}`);
   }
+
+  async dispensePrescription(id: string, data: {
+    medicines: Array<{ name: string; price: number; quantity: number }>;
+    notes?: string;
+  }) {
+    return api.patch(`/api/v1/prescriptions/${id}/dispense`, data);
+  }
 }
 
 const prescriptionService = new PrescriptionService();

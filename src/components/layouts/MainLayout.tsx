@@ -39,6 +39,9 @@ import {
   Science,
   LocalPharmacy,
   Payment,
+  PersonAdd,
+  MeetingRoom,
+  Receipt,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
@@ -65,6 +68,9 @@ const getIconComponent = (iconName: string) => {
     Science: <Science />,
     LocalPharmacy: <LocalPharmacy />,
     Payment: <Payment />,
+    PersonAdd: <PersonAdd />,
+    MeetingRoom: <MeetingRoom />,
+    Receipt: <Receipt />,
   };
   return iconMap[iconName] || <Dashboard />;
 };

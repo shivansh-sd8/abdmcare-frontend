@@ -85,6 +85,7 @@ const HospitalManagement: React.FC = () => {
     emergencyBeds: '',
     operationTheaters: '',
     plan: 'FREE',
+    defaultOpdCharge: '',
   });
 
   useEffect(() => {
@@ -172,6 +173,7 @@ const HospitalManagement: React.FC = () => {
         emergencyBeds: (hospital as any).emergencyBeds || '',
         operationTheaters: (hospital as any).operationTheaters || '',
         plan: hospital.plan || 'FREE',
+        defaultOpdCharge: (hospital as any).defaultOpdCharge ? String((hospital as any).defaultOpdCharge) : '',
       });
     } else {
       setEditingHospital(null);
@@ -202,6 +204,7 @@ const HospitalManagement: React.FC = () => {
         emergencyBeds: '',
         operationTheaters: '',
         plan: 'FREE',
+        defaultOpdCharge: '',
       });
     }
     setOpenDialog(true);
@@ -215,7 +218,10 @@ const HospitalManagement: React.FC = () => {
   const handleSubmit = async () => {
     try {
       if (editingHospital) {
-        await hospitalService.updateHospital(editingHospital.id, formData);
+        await hospitalService.updateHospital(editingHospital.id, {
+          ...formData,
+          defaultOpdCharge: formData.defaultOpdCharge ? parseFloat(formData.defaultOpdCharge) : undefined,
+        });
         toast.success('Hospital updated successfully');
       } else {
         await hospitalService.createHospital(formData);
@@ -758,6 +764,23 @@ const HospitalManagement: React.FC = () => {
                 <option value="PROFESSIONAL">Professional - ₹9,999/month</option>
                 <option value="ENTERPRISE">Enterprise - Custom pricing</option>
               </TextField>
+            </Grid>
+
+            {/* Pricing Defaults */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 1 }}>Pricing Defaults</Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Default OPD Consultation Fee (₹)"
+                type="number"
+                placeholder="e.g. 300"
+                helperText="Applies when a doctor has no individual fee set"
+                value={formData.defaultOpdCharge}
+                onChange={(e) => setFormData({ ...formData, defaultOpdCharge: e.target.value })}
+                InputProps={{ startAdornment: <span style={{ marginRight: 4 }}>₹</span> }}
+              />
             </Grid>
           </Grid>
         </DialogContent>

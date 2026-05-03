@@ -52,16 +52,25 @@ const PatientList: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchPatients();
     fetchStats();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchPatients = async () => {
+  // Debounced search: re-fetch whenever searchQuery changes (also fires on mount)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchPatients(searchQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchPatients = async (search?: string) => {
     try {
       setLoading(true);
-      const response = await patientService.searchPatients({});
+      const response = await patientService.searchPatients(search ? { search } : {});
       const data = response as any;
-      setPatients(data.data || []);
+      // Handle both wrapped and unwrapped responses
+      const list = data.data?.patients || data.data?.data || data.data || [];
+      setPatients(Array.isArray(list) ? list : []);
     } catch (error: any) {
       toast.error('Failed to load patients');
       console.error('Error fetching patients:', error);

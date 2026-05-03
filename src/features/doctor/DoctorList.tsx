@@ -15,6 +15,10 @@ import {
   InputAdornment,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Add,
@@ -40,11 +44,9 @@ const DoctorList: React.FC = () => {
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState({
-    total: 0,
-    active: 0,
-    specializations: 0,
-  });
+  const [stats, setStats] = useState({ total: 0, active: 0, specializations: 0 });
+  const [editFeeDoctor, setEditFeeDoctor] = useState<any>(null);
+  const [editFeeValue, setEditFeeValue] = useState('');
 
   useEffect(() => {
     fetchDoctors();
@@ -173,7 +175,7 @@ const DoctorList: React.FC = () => {
       headerName: 'Actions',
       width: 120,
       sortable: false,
-      renderCell: () => (
+      renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Tooltip title="View Details">
             <IconButton size="small" color="primary">
@@ -181,8 +183,9 @@ const DoctorList: React.FC = () => {
             </IconButton>
           </Tooltip>
           {(permissions.isAdmin || permissions.isSuperAdmin) && (
-            <Tooltip title="Edit">
-              <IconButton size="small" color="primary">
+            <Tooltip title="Set Consultation Fee">
+              <IconButton size="small" color="primary"
+                onClick={() => { setEditFeeDoctor(params.row); setEditFeeValue(String(params.row.consultationFee ?? '')); }}>
                 <Edit fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -331,6 +334,36 @@ const DoctorList: React.FC = () => {
           }}
         />
       </Paper>
+
+      {/* Edit Consultation Fee Dialog */}
+      <Dialog open={!!editFeeDoctor} onClose={() => setEditFeeDoctor(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Set Consultation Fee</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Dr. {editFeeDoctor?.firstName} {editFeeDoctor?.lastName} — {editFeeDoctor?.specialization}
+          </Typography>
+          <TextField
+            fullWidth autoFocus type="number" label="OPD Consultation Fee (₹)"
+            value={editFeeValue}
+            onChange={e => setEditFeeValue(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
+            helperText="Leave blank to use hospital-level default fee"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditFeeDoctor(null)}>Cancel</Button>
+          <Button variant="contained" onClick={async () => {
+            try {
+              await doctorService.updateDoctor(editFeeDoctor.id, {
+                consultationFee: editFeeValue ? parseFloat(editFeeValue) : null,
+              } as any);
+              toast.success('Consultation fee updated');
+              setEditFeeDoctor(null);
+              fetchDoctors();
+            } catch { toast.error('Failed to update fee'); }
+          }}>Save</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

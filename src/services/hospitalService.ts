@@ -57,6 +57,7 @@ interface UpdateHospitalDTO {
   operationTheaters?: string;
   isActive?: boolean;
   plan?: string;
+  defaultOpdCharge?: number;
 }
 
 class HospitalService {

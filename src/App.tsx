@@ -23,6 +23,9 @@ import PaymentManagement from './features/receptionist/PaymentManagement';
 import EncounterList from './features/doctor/EncounterList';
 import PrescriptionList from './features/doctor/PrescriptionList';
 import VitalsManagement from './features/doctor/VitalsManagement';
+import EHRList from './features/ehr/EHRList';
+import AdmissionList from './features/ipd/AdmissionList';
+import WardManager from './features/ipd/WardManager';
 import InvestigationQueue from './features/lab/InvestigationQueue';
 import PrescriptionQueue from './features/pharmacy/PrescriptionQueue';
 import BillingDashboard from './features/billing/BillingDashboard';
@@ -75,7 +78,7 @@ const App: React.FC = () => {
           <Route 
             path="patients/new" 
             element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
                 <PatientRegistration />
               </RoleProtectedRoute>
             } 
@@ -136,6 +139,16 @@ const App: React.FC = () => {
               </RoleProtectedRoute>
             } 
           />
+
+          {/* EHR - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST, RADIOLOGIST */}
+          <Route
+            path="ehr"
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                <EHRList />
+              </RoleProtectedRoute>
+            }
+          />
           
           {/* Prescriptions - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, PHARMACIST */}
           <Route 
@@ -157,11 +170,11 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Investigations/Lab - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN */}
+          {/* Investigations/Lab - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN, RADIOLOGIST */}
           <Route 
             path="investigations" 
             element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN']}>
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST']}>
                 <InvestigationQueue />
               </RoleProtectedRoute>
             } 
@@ -222,24 +235,44 @@ const App: React.FC = () => {
             } 
           />
           
-          {/* Quick Registration - RECEPTIONIST, ADMIN */}
+          {/* Quick Registration - RECEPTIONIST, ADMIN, SUPER_ADMIN */}
           <Route 
             path="quick-registration" 
             element={
-              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN']}>
+              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN']}>
                 <QuickRegistration />
               </RoleProtectedRoute>
             } 
           />
           
-          {/* Payments - RECEPTIONIST, ADMIN, SUPER_ADMIN */}
+          {/* Payments - RECEPTIONIST, ADMIN, SUPER_ADMIN, BILLING_STAFF */}
           <Route 
             path="payments" 
             element={
-              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN']}>
+              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF']}>
                 <PaymentManagement />
               </RoleProtectedRoute>
             } 
+          />
+
+          {/* IPD Admissions - multi-role */}
+          <Route
+            path="ipd"
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                <AdmissionList />
+              </RoleProtectedRoute>
+            }
+          />
+
+          {/* Ward Manager */}
+          <Route
+            path="ward-manager"
+            element={
+              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'NURSE']}>
+                <WardManager />
+              </RoleProtectedRoute>
+            }
           />
         </Route>
 

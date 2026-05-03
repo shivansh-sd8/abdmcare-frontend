@@ -1,428 +1,894 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  Box,
-  Typography,
-  Tabs,
-  Tab,
-  IconButton,
-  Chip,
-  Grid,
-  Autocomplete,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  Button, TextField, Box, Typography, IconButton, Grid,
+  Divider, Chip, Autocomplete, CircularProgress, Tooltip,
+  Paper, Alert, Tabs, Tab, Badge,
 } from '@mui/material';
 import {
-  Close as CloseIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Medication as MedicationIcon,
-  Science as LabIcon,
-  CameraAlt as ScanIcon,
+  Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon,
+  Save as SaveIcon, CheckCircle as CompleteIcon,
+  Medication as MedIcon, Science as LabIcon,
+  Person as PersonIcon, MonitorHeart as VitalsIcon,
+  Notes as NotesIcon, Vaccines as RxIcon,
 } from '@mui/icons-material';
+import { toast } from 'react-toastify';
+import encounterService from '../../services/encounterService';
+import vitalsService from '../../services/vitalsService';
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
-    </div>
-  );
-};
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Medicine {
-  name: string;
+  medicineName: string;
   dosage: string;
   frequency: string;
   duration: string;
   instructions: string;
 }
 
-interface LabTest {
-  name: string;
-  instructions: string;
-}
-
-interface Scan {
-  name: string;
-  type: string;
-  instructions: string;
+interface LabOrder {
+  testName: string;
+  testType?: string;
+  priority?: string;
 }
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => Promise<void>;
   encounter: any;
+  onSaved: () => void;
 }
 
+// ─── Quick-pick data ──────────────────────────────────────────────────────────
+
 const COMMON_MEDICINES = [
-  'Paracetamol 500mg',
-  'Ibuprofen 400mg',
-  'Amoxicillin 500mg',
-  'Azithromycin 500mg',
-  'Cetirizine 10mg',
-  'Omeprazole 20mg',
-  'Metformin 500mg',
-  'Aspirin 75mg',
+  'Paracetamol 500mg', 'Paracetamol 650mg', 'Ibuprofen 400mg', 'Ibuprofen 600mg',
+  'Amoxicillin 500mg', 'Amoxicillin 250mg', 'Azithromycin 500mg', 'Azithromycin 250mg',
+  'Cetirizine 10mg', 'Levocetirizine 5mg', 'Montelukast 10mg',
+  'Omeprazole 20mg', 'Pantoprazole 40mg', 'Rabeprazole 20mg',
+  'Metformin 500mg', 'Metformin 1000mg', 'Glimepiride 1mg', 'Glimepiride 2mg',
+  'Aspirin 75mg', 'Clopidogrel 75mg',
+  'Atorvastatin 10mg', 'Atorvastatin 20mg', 'Rosuvastatin 10mg',
+  'Amlodipine 5mg', 'Amlodipine 10mg', 'Telmisartan 40mg', 'Telmisartan 80mg',
+  'Metoprolol 25mg', 'Metoprolol 50mg', 'Atenolol 50mg',
+  'Doxycycline 100mg', 'Ciprofloxacin 500mg', 'Norfloxacin 400mg',
+  'Prednisolone 10mg', 'Prednisolone 20mg', 'Methylprednisolone 4mg',
+  'Vitamin D3 60000IU', 'Vitamin B12 500mcg', 'Calcium + Vitamin D',
+  'Iron + Folic Acid', 'Multivitamin', 'Zinc 50mg',
 ];
 
-const COMMON_LAB_TESTS = [
-  'Complete Blood Count (CBC)',
-  'Blood Sugar (Fasting)',
-  'Blood Sugar (Random)',
-  'Lipid Profile',
-  'Liver Function Test (LFT)',
-  'Kidney Function Test (KFT)',
-  'Thyroid Profile',
-  'Urine Routine',
-  'HbA1c',
-  'Vitamin D',
-  'Vitamin B12',
+const FREQUENCIES = ['OD', 'BD', 'TDS', 'QID', 'SOS', 'PRN', 'HS', 'Stat', 'OD AM', 'OD PM'];
+const DURATIONS   = ['3 days', '5 days', '7 days', '10 days', '14 days', '1 month', '2 months', '3 months', 'Ongoing'];
+const INSTRUCTIONS = ['After food', 'Before food', 'With food', 'Empty stomach', 'At bedtime', 'With warm water', 'Sublingual', 'As needed'];
+const DOSAGES     = ['100mg', '250mg', '500mg', '1g', '5mg', '10mg', '20mg', '40mg', '80mg',
+                     '1 tablet', '2 tablets', '½ tablet', '5ml', '10ml', '15ml'];
+
+const COMMON_TESTS = [
+  { name: 'Complete Blood Count (CBC)',   type: 'HAEMATOLOGY' },
+  { name: 'Blood Sugar Fasting',          type: 'BIOCHEMISTRY' },
+  { name: 'Blood Sugar Random',           type: 'BIOCHEMISTRY' },
+  { name: 'HbA1c',                        type: 'BIOCHEMISTRY' },
+  { name: 'Lipid Profile',                type: 'BIOCHEMISTRY' },
+  { name: 'Liver Function Test (LFT)',    type: 'BIOCHEMISTRY' },
+  { name: 'Kidney Function Test (KFT)',   type: 'BIOCHEMISTRY' },
+  { name: 'Serum Creatinine',             type: 'BIOCHEMISTRY' },
+  { name: 'Uric Acid',                    type: 'BIOCHEMISTRY' },
+  { name: 'Thyroid Profile (T3/T4/TSH)', type: 'BIOCHEMISTRY' },
+  { name: 'Vitamin D',                    type: 'BIOCHEMISTRY' },
+  { name: 'Vitamin B12',                  type: 'BIOCHEMISTRY' },
+  { name: 'Urine Routine & Microscopy',   type: 'MICROBIOLOGY' },
+  { name: 'Stool Routine',                type: 'MICROBIOLOGY' },
+  { name: 'Electrolytes (Na/K/Cl)',       type: 'BIOCHEMISTRY' },
+  { name: 'ECG',                          type: 'CARDIOLOGY'  },
+  { name: 'Chest X-Ray PA View',          type: 'RADIOLOGY'   },
+  { name: 'Ultrasound Abdomen',           type: 'RADIOLOGY'   },
+  { name: 'Blood Culture & Sensitivity',  type: 'MICROBIOLOGY' },
+  { name: 'Urine Culture & Sensitivity',  type: 'MICROBIOLOGY' },
 ];
 
-const COMMON_SCANS = [
-  { name: 'X-Ray Chest', type: 'X-RAY' },
-  { name: 'X-Ray Abdomen', type: 'X-RAY' },
-  { name: 'Ultrasound Abdomen', type: 'ULTRASOUND' },
-  { name: 'CT Scan Head', type: 'CT_SCAN' },
-  { name: 'MRI Brain', type: 'MRI' },
-  { name: 'ECG', type: 'ECG' },
-  { name: 'Echo', type: 'ECHO' },
-];
+const EMPTY_MED: Medicine = { medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' };
 
-const CompleteConsultationDialog: React.FC<Props> = ({ open, onClose, onSubmit }) => {
-  const [tabValue, setTabValue] = useState(0);
-  const [saving, setSaving] = useState(false);
-  
-  const [diagnosis, setDiagnosis] = useState('');
-  const [notes, setNotes] = useState('');
-  const [followUpDays, setFollowUpDays] = useState('');
-  
+// ─── QuickPill: small click-to-fill button ────────────────────────────────────
+
+const QuickPill: React.FC<{ label: string; active?: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
+  <Chip
+    label={label}
+    size="small"
+    onClick={onClick}
+    sx={{
+      height: 22, fontSize: 11, cursor: 'pointer',
+      bgcolor: active ? '#1a3c6e' : '#f0f4f8',
+      color: active ? 'white' : '#555',
+      border: active ? 'none' : '1px solid #dde3ea',
+      fontWeight: active ? 700 : 400,
+      '&:hover': { bgcolor: active ? '#163260' : '#dde3ea' },
+    }}
+  />
+);
+
+// ─── Section label ─────────────────────────────────────────────────────────────
+
+const SLabel: React.FC<{ text: string }> = ({ text }) => (
+  <Typography variant="caption" fontWeight={700} color="#1a3c6e" letterSpacing={0.8}
+    sx={{ display: 'block', mb: 0.75, textTransform: 'uppercase' }}>
+    {text}
+  </Typography>
+);
+
+// ─── Vitals banner ────────────────────────────────────────────────────────────
+
+const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
+  const [vitals, setVitals] = useState<any>(null);
+
+  useEffect(() => {
+    if (!patientId) return;
+    vitalsService.getLatestVitals(patientId)
+      .then((res: any) => {
+        const v = res.data?.data || res.data;
+        if (v) setVitals(v);
+      })
+      .catch(() => {/* no vitals yet */});
+  }, [patientId]);
+
+  if (!vitals) return null;
+
+  const items = [
+    vitals.bloodPressureSystolic && vitals.bloodPressureDiastolic
+      ? `BP: ${vitals.bloodPressureSystolic}/${vitals.bloodPressureDiastolic}` : null,
+    vitals.heartRate    ? `Pulse: ${vitals.heartRate} bpm`  : null,
+    vitals.temperature  ? `Temp: ${vitals.temperature}°F`   : null,
+    vitals.oxygenSaturation ? `SpO₂: ${vitals.oxygenSaturation}%` : null,
+    vitals.weight       ? `Wt: ${vitals.weight} kg`         : null,
+    vitals.height       ? `Ht: ${vitals.height} cm`         : null,
+    vitals.bmi          ? `BMI: ${vitals.bmi}`              : null,
+  ].filter(Boolean);
+
+  return (
+    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', px: 2, py: 0.75,
+      bgcolor: '#eaf4fb', borderBottom: '1px solid #bee3f8' }}>
+      <VitalsIcon sx={{ fontSize: 16, color: '#2980b9', alignSelf: 'center' }} />
+      {items.map((item) => (
+        <Typography key={item as string} variant="caption" fontWeight={600} color="#1a5276">
+          {item}
+        </Typography>
+      ))}
+    </Box>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved }) => {
+  const [tab, setTab] = useState(0);
+  const [saving,     setSaving]     = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [loadingEnc, setLoadingEnc] = useState(false);
+  const [autoSaved,  setAutoSaved]  = useState<Date | null>(null);
+
+  // Clinical fields
+  const [chiefComplaint,          setChiefComplaint]          = useState('');
+  const [historyOfPresentIllness, setHistoryOfPresentIllness] = useState('');
+  const [physicalExamination,     setPhysicalExamination]     = useState('');
+  const [provisionalDiagnosis,    setProvisionalDiagnosis]    = useState('');
+  const [finalDiagnosis,          setFinalDiagnosis]          = useState('');
+  const [notes,                   setNotes]                   = useState('');
+  const [followUpDays,            setFollowUpDays]            = useState('');
+
+  // Rx + investigations
   const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [labTests, setLabTests] = useState<LabTest[]>([]);
-  const [scans, setScans] = useState<Scan[]>([]);
+  const [labOrders, setLabOrders] = useState<LabOrder[]>([]);
+
+  // Focused medicine row for quick-picks
+  const [focusedMedIdx, setFocusedMedIdx] = useState<number | null>(null);
+  const [focusedMedField, setFocusedMedField] = useState<keyof Medicine | null>(null);
+
+  // Auto-save timer
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Load encounter ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!open || !encounter?.id) return;
+    setLoadingEnc(true);
+    setTab(0);
+    encounterService.getEncounterById(encounter.id)
+      .then((res: any) => {
+        const e = res.data?.data || res.data || encounter;
+        setChiefComplaint(e.chiefComplaint || '');
+        setHistoryOfPresentIllness(e.historyOfPresentIllness || '');
+        setPhysicalExamination(e.physicalExamination || '');
+        setProvisionalDiagnosis(e.provisionalDiagnosis || '');
+        setFinalDiagnosis(e.finalDiagnosis || e.diagnosis || '');
+        setNotes(e.notes || '');
+        setFollowUpDays('');
+        setMedicines(
+          (e.prescriptions || []).map((rx: any) => ({
+            medicineName: rx.medicineName || '',
+            dosage:       rx.dosage       || '',
+            frequency:    rx.frequency    || '',
+            duration:     rx.duration     || '',
+            instructions: rx.instructions || '',
+          }))
+        );
+        setLabOrders(
+          (e.labOrders || []).map((o: any) => ({
+            testName: o.testName || '',
+            testType: o.testType,
+            priority: o.priority || 'ROUTINE',
+          }))
+        );
+      })
+      .catch(() => {
+        setChiefComplaint(encounter.chiefComplaint || '');
+        setFinalDiagnosis(encounter.diagnosis      || '');
+        setNotes(encounter.notes                   || '');
+      })
+      .finally(() => setLoadingEnc(false));
+  }, [open, encounter?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Build payload ───────────────────────────────────────────────────────────
+
+  const buildPayload = useCallback(() => ({
+    chiefComplaint,
+    historyOfPresentIllness,
+    physicalExamination,
+    provisionalDiagnosis,
+    finalDiagnosis,
+    notes,
+    followUpDate: followUpDays
+      ? new Date(Date.now() + parseInt(followUpDays) * 86400000).toISOString()
+      : undefined,
+    prescriptions: medicines.filter((m) => m.medicineName.trim()),
+    labOrders:     labOrders.filter((l) => l.testName.trim()),
+  }), [chiefComplaint, historyOfPresentIllness, physicalExamination,
+       provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders]);
+
+  // ── Auto-save ───────────────────────────────────────────────────────────────
+
+  const triggerAutoSave = useCallback(() => {
+    if (!encounter?.id) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await encounterService.updateConsultation(encounter.id, buildPayload());
+        setAutoSaved(new Date());
+      } catch (_) { /* silent */ }
+    }, 4000);
+  }, [encounter?.id, buildPayload]);
+
+  useEffect(() => { triggerAutoSave(); }, [
+    chiefComplaint, historyOfPresentIllness, physicalExamination,
+    provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders,
+    triggerAutoSave,
+  ]);
+
+  useEffect(() => () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+  }, []);
+
+  // ── Medicine helpers ────────────────────────────────────────────────────────
 
   const addMedicine = () => {
-    setMedicines([...medicines, { name: '', dosage: '', frequency: '', duration: '', instructions: '' }]);
+    setMedicines((prev) => [...prev, { ...EMPTY_MED }]);
+    setTimeout(() => setFocusedMedIdx(medicines.length), 50);
   };
 
-  const removeMedicine = (index: number) => {
-    setMedicines(medicines.filter((_, i) => i !== index));
+  const removeMedicine = (i: number) => {
+    setMedicines((prev) => prev.filter((_, idx) => idx !== i));
+    if (focusedMedIdx === i) setFocusedMedIdx(null);
   };
 
-  const updateMedicine = (index: number, field: keyof Medicine, value: string) => {
-    const updated = [...medicines];
-    updated[index][field] = value;
-    setMedicines(updated);
-  };
+  const updateMedicine = (i: number, field: keyof Medicine, value: string) =>
+    setMedicines((prev) => {
+      const updated = [...prev];
+      updated[i] = { ...updated[i], [field]: value };
+      return updated;
+    });
 
-  const addLabTest = () => {
-    setLabTests([...labTests, { name: '', instructions: '' }]);
-  };
-
-  const removeLabTest = (index: number) => {
-    setLabTests(labTests.filter((_, i) => i !== index));
-  };
-
-  const updateLabTest = (index: number, field: keyof LabTest, value: string) => {
-    const updated = [...labTests];
-    updated[index][field] = value;
-    setLabTests(updated);
-  };
-
-  const addScan = () => {
-    setScans([...scans, { name: '', type: '', instructions: '' }]);
-  };
-
-  const removeScan = (index: number) => {
-    setScans(scans.filter((_, i) => i !== index));
-  };
-
-  const updateScan = (index: number, field: keyof Scan, value: string) => {
-    const updated = [...scans];
-    updated[index][field] = value;
-    setScans(updated);
-  };
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    try {
-      const followUpDate = followUpDays ? new Date(Date.now() + parseInt(followUpDays) * 24 * 60 * 60 * 1000) : null;
-      
-      await onSubmit({
-        diagnosis,
-        notes,
-        followUpDate,
-        prescription: medicines.length > 0 ? medicines : null,
-        labTestsOrdered: labTests.length > 0 ? labTests : null,
-        scansOrdered: scans.length > 0 ? scans : null,
-      });
-      onClose();
-    } catch (error) {
-      console.error('Error completing consultation:', error);
-    } finally {
-      setSaving(false);
+  // Apply quick-pick to the focused field of the focused row
+  const applyQuickPick = (value: string) => {
+    if (focusedMedIdx !== null && focusedMedField !== null) {
+      updateMedicine(focusedMedIdx, focusedMedField, value);
     }
   };
 
+  // ── Lab order helpers ───────────────────────────────────────────────────────
+
+  const toggleTest = (test: { name: string; type: string }) => {
+    const exists = labOrders.findIndex((l) => l.testName === test.name);
+    if (exists >= 0) {
+      setLabOrders((prev) => prev.filter((_, i) => i !== exists));
+    } else {
+      setLabOrders((prev) => [...prev, { testName: test.name, testType: test.type, priority: 'ROUTINE' }]);
+    }
+  };
+
+  const isTestSelected = (name: string) => labOrders.some((l) => l.testName === name);
+
+  const addCustomTest = () =>
+    setLabOrders((prev) => [...prev, { testName: '', testType: '', priority: 'ROUTINE' }]);
+
+  const removeLabOrder = (i: number) =>
+    setLabOrders((prev) => prev.filter((_, idx) => idx !== i));
+
+  // ── Save / Complete ─────────────────────────────────────────────────────────
+
+  const handleSave = async () => {
+    setSaving(true);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    try {
+      await encounterService.updateConsultation(encounter.id, buildPayload());
+      setAutoSaved(new Date());
+      toast.success('Consultation saved');
+      onSaved();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save');
+    } finally { setSaving(false); }
+  };
+
+  const handleComplete = async () => {
+    if (!finalDiagnosis.trim()) {
+      toast.warning('Enter the final diagnosis before completing');
+      setTab(0);
+      return;
+    }
+    setCompleting(true);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    try {
+      await encounterService.updateConsultation(encounter.id, buildPayload());
+      await encounterService.completeEncounter(encounter.id, {
+        diagnosis: finalDiagnosis,
+        notes,
+        prescription:     medicines.filter((m) => m.medicineName.trim()),
+        labTestsOrdered:  labOrders.filter((l) => l.testName.trim()),
+        followUpDate: followUpDays
+          ? new Date(Date.now() + parseInt(followUpDays) * 86400000)
+          : undefined,
+      } as any);
+      toast.success('Consultation completed!');
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to complete');
+    } finally { setCompleting(false); }
+  };
+
+  // ── Quick-pick panel (shown when a medicine row is focused) ─────────────────
+
+  const QuickPickPanel = () => {
+    if (focusedMedIdx === null) return null;
+    const field = focusedMedField;
+    return (
+      <Box sx={{ p: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2, mb: 1.5 }}>
+        {(field === null || field === 'frequency') && (
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mr: 1 }}>
+              Frequency:
+            </Typography>
+            {FREQUENCIES.map((f) => (
+              <QuickPill key={f} label={f}
+                active={field === 'frequency' && medicines[focusedMedIdx]?.frequency === f}
+                onClick={() => { updateMedicine(focusedMedIdx, 'frequency', f); setFocusedMedField('frequency'); }}
+              />
+            ))}
+          </Box>
+        )}
+        {(field === null || field === 'duration') && (
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mr: 1 }}>
+              Duration:
+            </Typography>
+            {DURATIONS.map((d) => (
+              <QuickPill key={d} label={d}
+                active={field === 'duration' && medicines[focusedMedIdx]?.duration === d}
+                onClick={() => { updateMedicine(focusedMedIdx, 'duration', d); setFocusedMedField('duration'); }}
+              />
+            ))}
+          </Box>
+        )}
+        {(field === null || field === 'instructions') && (
+          <Box sx={{ mb: 0 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mr: 1 }}>
+              Instructions:
+            </Typography>
+            {INSTRUCTIONS.map((ins) => (
+              <QuickPill key={ins} label={ins}
+                active={field === 'instructions' && medicines[focusedMedIdx]?.instructions === ins}
+                onClick={() => { updateMedicine(focusedMedIdx, 'instructions', ins); setFocusedMedField('instructions'); }}
+              />
+            ))}
+          </Box>
+        )}
+        {field === 'dosage' && (
+          <Box>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mr: 1 }}>
+              Dosage:
+            </Typography>
+            {DOSAGES.map((d) => (
+              <QuickPill key={d} label={d}
+                active={medicines[focusedMedIdx]?.dosage === d}
+                onClick={() => applyQuickPick(d)}
+              />
+            ))}
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  if (loadingEnc) {
+    return (
+      <Dialog open={open} maxWidth="lg" fullWidth>
+        <DialogContent>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress />
+          </Box>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  const patientName = `${encounter?.patient?.firstName || ''} ${encounter?.patient?.lastName || ''}`.trim();
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Complete Consultation</Typography>
-        <IconButton onClick={onClose} size="small">
+    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth
+      PaperProps={{ sx: { maxHeight: '95vh', height: '95vh' } }}>
+
+      {/* ── Title bar ── */}
+      <DialogTitle sx={{ bgcolor: '#1a3c6e', color: 'white', py: 1.25, px: 2.5, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+              {patientName || 'Patient Consultation'}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.25 }}>
+              {encounter?.patient?.uhid && (
+                <Typography variant="caption" sx={{ opacity: 0.85 }}>
+                  {encounter.patient.uhid}
+                </Typography>
+              )}
+              <Chip label={encounter?.status?.replace(/_/g, ' ')} size="small"
+                sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: 'white', height: 18, fontSize: 10 }} />
+              {encounter?.type && (
+                <Chip label={encounter.type} size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', height: 18, fontSize: 10 }} />
+              )}
+              {autoSaved && (
+                <Typography variant="caption" sx={{ opacity: 0.7, fontStyle: 'italic' }}>
+                  Auto-saved {autoSaved.toLocaleTimeString()}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+          <IconButton onClick={onClose} size="small" sx={{ color: 'white' }}>
           <CloseIcon />
         </IconButton>
+        </Box>
       </DialogTitle>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>
-        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
-          <Tab label="Diagnosis & Notes" />
-          <Tab icon={<MedicationIcon />} label="Prescription" iconPosition="start" />
-          <Tab icon={<LabIcon />} label="Lab Tests" iconPosition="start" />
-          <Tab icon={<ScanIcon />} label="Scans/Imaging" iconPosition="start" />
+      {/* ── Vitals banner ── */}
+      <VitalsBanner patientId={encounter?.patient?.id || encounter?.patientId} />
+
+      {/* ── Tab bar ── */}
+      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 40 }}>
+          <Tab icon={<NotesIcon sx={{ fontSize: 16 }} />} iconPosition="start"
+            label="Clinical Notes" sx={{ minHeight: 40, fontSize: 12, textTransform: 'none' }} />
+          <Tab
+            icon={<RxIcon sx={{ fontSize: 16 }} />} iconPosition="start"
+            label={
+              <Badge badgeContent={medicines.length || null} color="primary" sx={{ mr: 1 }}>
+                Prescription
+              </Badge>
+            }
+            sx={{ minHeight: 40, fontSize: 12, textTransform: 'none' }}
+          />
+          <Tab
+            icon={<LabIcon sx={{ fontSize: 16 }} />} iconPosition="start"
+            label={
+              <Badge badgeContent={labOrders.length || null} color="warning" sx={{ mr: 1 }}>
+                Investigations
+              </Badge>
+            }
+            sx={{ minHeight: 40, fontSize: 12, textTransform: 'none' }}
+          />
         </Tabs>
       </Box>
 
-      <DialogContent>
-        {/* Diagnosis Tab */}
-        <TabPanel value={tabValue} index={0}>
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Diagnosis *"
-                multiline
-                rows={3}
-                value={diagnosis}
-                onChange={(e) => setDiagnosis(e.target.value)}
-                placeholder="Enter diagnosis..."
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Notes / Instructions"
-                multiline
-                rows={4}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Additional notes, instructions for patient..."
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Follow-up After (days)"
-                type="number"
-                value={followUpDays}
-                onChange={(e) => setFollowUpDays(e.target.value)}
-                placeholder="e.g., 7 for 1 week"
-              />
-            </Grid>
-          </Grid>
-        </TabPanel>
+      {/* ── Content ── */}
+      <DialogContent sx={{ p: 0, overflow: 'hidden', flex: 1, display: 'flex' }}>
 
-        {/* Prescription Tab */}
-        <TabPanel value={tabValue} index={1}>
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600}>Medicines</Typography>
-              <Button startIcon={<AddIcon />} onClick={addMedicine} size="small" variant="outlined">
+        {/* ═══ TAB 0: CLINICAL NOTES ══════════════════════════════════════════ */}
+        {tab === 0 && (
+          <Box sx={{ p: 2.5, overflowY: 'auto', width: '100%' }}>
+          <Grid container spacing={2}>
+              {/* Chief Complaint */}
+            <Grid item xs={12}>
+                <SLabel text="Chief Complaint" />
+                <TextField fullWidth multiline rows={2} size="small"
+                  placeholder="Primary reason for visit — what is the patient complaining of?"
+                  value={chiefComplaint}
+                  onChange={(e) => setChiefComplaint(e.target.value)} />
+              </Grid>
+
+              {/* HPI + Examination side by side */}
+              <Grid item xs={12} md={6}>
+                <SLabel text="History of Present Illness" />
+                <TextField fullWidth multiline rows={4} size="small"
+                  placeholder="Duration, onset, progression, associated symptoms, aggravating/relieving factors..."
+                  value={historyOfPresentIllness}
+                  onChange={(e) => setHistoryOfPresentIllness(e.target.value)} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <SLabel text="Physical Examination" />
+                <TextField fullWidth multiline rows={4} size="small"
+                  placeholder="General examination, systemic examination findings..."
+                  value={physicalExamination}
+                  onChange={(e) => setPhysicalExamination(e.target.value)} />
+              </Grid>
+
+              <Grid item xs={12}><Divider /></Grid>
+
+              {/* Diagnosis */}
+              <Grid item xs={12} md={6}>
+                <SLabel text="Provisional Diagnosis" />
+                <TextField fullWidth size="small"
+                  placeholder="Initial working diagnosis..."
+                  value={provisionalDiagnosis}
+                  onChange={(e) => setProvisionalDiagnosis(e.target.value)} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <SLabel text="Final Diagnosis ✱" />
+                <TextField fullWidth size="small"
+                  placeholder="Confirmed diagnosis (required to complete)"
+                  value={finalDiagnosis}
+                  onChange={(e) => setFinalDiagnosis(e.target.value)}
+                  error={!finalDiagnosis.trim()}
+                  helperText={!finalDiagnosis.trim() ? 'Required before finalising' : ''}
+              />
+            </Grid>
+
+              <Grid item xs={12}><Divider /></Grid>
+
+              {/* Notes + follow-up */}
+              <Grid item xs={12} md={8}>
+                <SLabel text="Notes / Instructions for Patient" />
+                <TextField fullWidth multiline rows={3} size="small"
+                  placeholder="Lifestyle advice, diet modifications, activity restrictions..."
+                value={notes}
+                  onChange={(e) => setNotes(e.target.value)} />
+            </Grid>
+              <Grid item xs={12} md={4}>
+                <SLabel text="Follow-up After (days)" />
+                <TextField fullWidth type="number" size="small"
+                  placeholder="e.g. 7"
+                value={followUpDays}
+                  onChange={(e) => setFollowUpDays(e.target.value)} />
+                {followUpDays && (
+                  <Typography variant="caption" color="text.secondary">
+                    Follow-up on:{' '}
+                    {new Date(Date.now() + parseInt(followUpDays) * 86400000)
+                      .toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Typography>
+                )}
+              </Grid>
+            </Grid>
+
+            {encounter?.status !== 'IN_PROGRESS' && encounter?.status !== 'ACTIVE' && (
+              <Alert severity="info" sx={{ mt: 2 }} icon={<PersonIcon />}>
+                Encounter status is <strong>{encounter?.status}</strong>. You can still edit and save.
+              </Alert>
+            )}
+          </Box>
+        )}
+
+        {/* ═══ TAB 1: PRESCRIPTION ════════════════════════════════════════════ */}
+        {tab === 1 && (
+          <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            {/* Left: medicine rows */}
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 2 }}>
+              {/* Quick-pick panel */}
+              <QuickPickPanel />
+
+              {/* Medicine table header */}
+              {medicines.length > 0 && (
+                <Box sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1.2fr 34px',
+                  gap: 0.5, px: 1, py: 0.5,
+                  bgcolor: '#f0f4f8', borderRadius: 1, mb: 0.5,
+                }}>
+                  {['Medicine', 'Dosage', 'Freq', 'Duration', 'Instructions', ''].map((h) => (
+                    <Typography key={h} variant="caption" fontWeight={700} color="text.secondary">{h}</Typography>
+                  ))}
+                </Box>
+              )}
+
+              {/* Medicine rows */}
+              {medicines.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+                  <MedIcon sx={{ fontSize: 44, mb: 1, opacity: 0.3 }} />
+                  <Typography variant="body2">No medicines prescribed yet</Typography>
+                  <Typography variant="caption">Click "Add Medicine" or press the button below</Typography>
+                </Box>
+              ) : (
+                medicines.map((med, idx) => (
+                  <Paper
+                    key={idx}
+                    elevation={0}
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1.2fr 34px',
+                      gap: 0.5, px: 1, py: 0.75, mb: 0.5,
+                      borderRadius: 1.5,
+                      border: '1.5px solid',
+                      borderColor: focusedMedIdx === idx ? '#1a3c6e' : '#e2e8f0',
+                      bgcolor: focusedMedIdx === idx ? '#f0f4fa' : (idx % 2 ? '#fafbfc' : 'white'),
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setFocusedMedIdx(idx)}
+                  >
+                    {/* Medicine name */}
+                    <Autocomplete freeSolo options={COMMON_MEDICINES}
+                      value={med.medicineName}
+                      onChange={(_, v) => updateMedicine(idx, 'medicineName', v || '')}
+                      onInputChange={(_, v) => updateMedicine(idx, 'medicineName', v)}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="Medicine name" size="small"
+                          onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('medicineName'); }}
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                      )}
+                    />
+
+                    {/* Dosage */}
+                    <Autocomplete freeSolo options={DOSAGES}
+                      value={med.dosage}
+                      onChange={(_, v) => updateMedicine(idx, 'dosage', v || '')}
+                      onInputChange={(_, v) => updateMedicine(idx, 'dosage', v)}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="Dosage" size="small"
+                          onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('dosage'); }}
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                      )}
+                    />
+
+                    {/* Frequency */}
+                    <Autocomplete freeSolo options={FREQUENCIES}
+                      value={med.frequency}
+                      onChange={(_, v) => updateMedicine(idx, 'frequency', v || '')}
+                      onInputChange={(_, v) => updateMedicine(idx, 'frequency', v)}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="e.g. OD" size="small"
+                          onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('frequency'); }}
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                      )}
+                    />
+
+                    {/* Duration */}
+                    <Autocomplete freeSolo options={DURATIONS}
+                      value={med.duration}
+                      onChange={(_, v) => updateMedicine(idx, 'duration', v || '')}
+                      onInputChange={(_, v) => updateMedicine(idx, 'duration', v)}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="e.g. 5 days" size="small"
+                          onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('duration'); }}
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                      )}
+                    />
+
+                    {/* Instructions */}
+                    <Autocomplete freeSolo options={INSTRUCTIONS}
+                      value={med.instructions}
+                      onChange={(_, v) => updateMedicine(idx, 'instructions', v || '')}
+                      onInputChange={(_, v) => updateMedicine(idx, 'instructions', v)}
+                      renderInput={(params) => (
+                        <TextField {...params} placeholder="e.g. After food" size="small"
+                          onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('instructions'); }}
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                      )}
+                    />
+
+                    <Tooltip title="Remove">
+                      <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); removeMedicine(idx); }}>
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Paper>
+                ))
+              )}
+
+              <Button startIcon={<AddIcon />} onClick={addMedicine} fullWidth
+                variant="outlined" size="small"
+                sx={{
+                  mt: 1, borderStyle: 'dashed', border: '1.5px dashed #b0bec5',
+                  color: 'text.secondary', borderRadius: 1.5, py: 1,
+                  '&:hover': { borderColor: '#1a3c6e', color: '#1a3c6e', bgcolor: '#f0f4fa' },
+                }}>
                 Add Medicine
               </Button>
             </Box>
             
-            {medicines.length === 0 ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-                No medicines prescribed. Click "Add Medicine" to prescribe.
+            {/* Right: quick-pick sidebar (always visible on desktop) */}
+            <Box sx={{
+              width: 200, flexShrink: 0, borderLeft: '1px solid', borderColor: 'divider',
+              overflowY: 'auto', p: 1.5, bgcolor: '#f8fafc', display: { xs: 'none', md: 'block' },
+            }}>
+              <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={1}>
+                QUICK FREQUENCY
               </Typography>
-            ) : (
-              medicines.map((medicine, index) => (
-                <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Chip label={`Medicine ${index + 1}`} size="small" color="primary" />
-                    <IconButton size="small" color="error" onClick={() => removeMedicine(index)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Autocomplete
-                        freeSolo
-                        options={COMMON_MEDICINES}
-                        value={medicine.name}
-                        onChange={(_, value) => updateMedicine(index, 'name', value || '')}
-                        renderInput={(params) => <TextField {...params} label="Medicine Name *" required />}
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="Dosage"
-                        value={medicine.dosage}
-                        onChange={(e) => updateMedicine(index, 'dosage', e.target.value)}
-                        placeholder="e.g., 1 tablet"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="Frequency"
-                        value={medicine.frequency}
-                        onChange={(e) => updateMedicine(index, 'frequency', e.target.value)}
-                        placeholder="e.g., Twice daily"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="Duration"
-                        value={medicine.duration}
-                        onChange={(e) => updateMedicine(index, 'duration', e.target.value)}
-                        placeholder="e.g., 5 days"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="Instructions"
-                        value={medicine.instructions}
-                        onChange={(e) => updateMedicine(index, 'instructions', e.target.value)}
-                        placeholder="e.g., After meals"
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              ))
-            )}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                {FREQUENCIES.map((f) => (
+                  <QuickPill key={f} label={f}
+                    active={focusedMedIdx !== null && medicines[focusedMedIdx]?.frequency === f}
+                    onClick={() => { if (focusedMedIdx !== null) updateMedicine(focusedMedIdx, 'frequency', f); }}
+                  />
+                ))}
           </Box>
-        </TabPanel>
 
-        {/* Lab Tests Tab */}
-        <TabPanel value={tabValue} index={2}>
+              <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={1}>
+                QUICK DURATION
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
+                {DURATIONS.map((d) => (
+                  <QuickPill key={d} label={d}
+                    active={focusedMedIdx !== null && medicines[focusedMedIdx]?.duration === d}
+                    onClick={() => { if (focusedMedIdx !== null) updateMedicine(focusedMedIdx, 'duration', d); }}
+                  />
+                ))}
+            </Box>
+            
+              <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={1}>
+                INSTRUCTIONS
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {INSTRUCTIONS.map((ins) => (
+                  <QuickPill key={ins} label={ins}
+                    active={focusedMedIdx !== null && medicines[focusedMedIdx]?.instructions === ins}
+                    onClick={() => { if (focusedMedIdx !== null) updateMedicine(focusedMedIdx, 'instructions', ins); }}
+                  />
+                ))}
+                  </Box>
+                </Box>
+          </Box>
+        )}
+
+        {/* ═══ TAB 2: INVESTIGATIONS ══════════════════════════════════════════ */}
+        {tab === 2 && (
+          <Box sx={{ p: 2, overflowY: 'auto', width: '100%' }}>
+            {/* Common tests checkbox grid */}
+            <SLabel text="Common Tests — click to add/remove" />
+            <Grid container spacing={0.75} sx={{ mb: 2 }}>
+              {COMMON_TESTS.map((test) => {
+                const selected = isTestSelected(test.name);
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={test.name}>
+                    <Paper
+                      elevation={0}
+                      onClick={() => toggleTest(test)}
+                      sx={{
+                        p: 1, cursor: 'pointer', borderRadius: 1.5,
+                        border: '1.5px solid',
+                        borderColor: selected ? '#1a3c6e' : '#e2e8f0',
+                        bgcolor: selected ? '#eef2f9' : 'white',
+                        display: 'flex', alignItems: 'center', gap: 1,
+                        '&:hover': { borderColor: '#1a3c6e', bgcolor: '#f0f4fa' },
+                      }}
+                    >
+                      <Box sx={{
+                        width: 16, height: 16, borderRadius: 0.5,
+                        border: '2px solid', borderColor: selected ? '#1a3c6e' : '#b0bec5',
+                        bgcolor: selected ? '#1a3c6e' : 'white',
+                        flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {selected && <Typography sx={{ color: 'white', fontSize: 10, lineHeight: 1 }}>✓</Typography>}
+                      </Box>
           <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600}>Lab Tests</Typography>
-              <Button startIcon={<AddIcon />} onClick={addLabTest} size="small" variant="outlined">
-                Add Lab Test
+                        <Typography variant="body2" fontSize={12} lineHeight={1.2}>{test.name}</Typography>
+                        <Typography variant="caption" color="text.disabled" fontSize={10}>{test.type}</Typography>
+                      </Box>
+                    </Paper>
+                  </Grid>
+                );
+              })}
+            </Grid>
+
+            {/* Custom / other tests */}
+            <Divider sx={{ mb: 2 }} />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <SLabel text="Custom / Other Tests" />
+              <Button size="small" startIcon={<AddIcon />} onClick={addCustomTest}
+                variant="outlined" sx={{ fontSize: 11, py: 0.25 }}>
+                Add
               </Button>
             </Box>
             
-            {labTests.length === 0 ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-                No lab tests ordered. Click "Add Lab Test" to order tests.
-              </Typography>
-            ) : (
-              labTests.map((test, index) => (
-                <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Chip label={`Test ${index + 1}`} size="small" color="info" />
-                    <IconButton size="small" color="error" onClick={() => removeLabTest(index)}>
-                      <DeleteIcon fontSize="small" />
+            {labOrders.filter((l) => !COMMON_TESTS.find((t) => t.name === l.testName)).map((lab, idx) => {
+              const realIdx = labOrders.indexOf(lab);
+              return (
+                <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+                  <Autocomplete freeSolo options={[]}
+                    value={lab.testName}
+                    onInputChange={(_, v) => {
+                      setLabOrders((prev) => {
+                        const u = [...prev]; u[realIdx] = { ...u[realIdx], testName: v }; return u;
+                      });
+                    }}
+                    sx={{ flex: 1 }}
+                    renderInput={(params) => (
+                      <TextField {...params} placeholder="Test name" size="small"
+                        sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
+                    )}
+                  />
+                  <IconButton size="small" color="error" onClick={() => removeLabOrder(realIdx)}>
+                    <DeleteIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </Box>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Autocomplete
-                        freeSolo
-                        options={COMMON_LAB_TESTS}
-                        value={test.name}
-                        onChange={(_, value) => updateLabTest(index, 'name', value || '')}
-                        renderInput={(params) => <TextField {...params} label="Test Name *" required />}
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Special Instructions"
-                        value={test.instructions}
-                        onChange={(e) => updateLabTest(index, 'instructions', e.target.value)}
-                        placeholder="e.g., Fasting required"
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              ))
-            )}
-          </Box>
-        </TabPanel>
+              );
+            })}
 
-        {/* Scans Tab */}
-        <TabPanel value={tabValue} index={3}>
-          <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600}>Scans / Imaging</Typography>
-              <Button startIcon={<AddIcon />} onClick={addScan} size="small" variant="outlined">
-                Add Scan
-              </Button>
-            </Box>
-            
-            {scans.length === 0 ? (
-              <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-                No scans ordered. Click "Add Scan" to order imaging.
-              </Typography>
-            ) : (
-              scans.map((scan, index) => (
-                <Box key={index} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                    <Chip label={`Scan ${index + 1}`} size="small" color="warning" />
-                    <IconButton size="small" color="error" onClick={() => removeScan(index)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Autocomplete
-                        freeSolo
-                        options={COMMON_SCANS.map(s => s.name)}
-                        value={scan.name}
-                        onChange={(_, value) => {
-                          updateScan(index, 'name', value || '');
-                          const found = COMMON_SCANS.find(s => s.name === value);
-                          if (found) updateScan(index, 'type', found.type);
-                        }}
-                        renderInput={(params) => <TextField {...params} label="Scan Name *" required />}
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Special Instructions"
-                        value={scan.instructions}
-                        onChange={(e) => updateScan(index, 'instructions', e.target.value)}
-                        placeholder="e.g., With contrast"
-                      />
-                    </Grid>
-                  </Grid>
+            {/* Summary of all ordered */}
+            {labOrders.length > 0 && (
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: '#f0f4fa', borderRadius: 2, border: '1px solid #bee0f0' }}>
+                <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={0.75}>
+                  ORDERED ({labOrders.length} test{labOrders.length !== 1 ? 's' : ''})
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                  {labOrders.map((l, i) => (
+                    <Chip key={i} label={l.testName} size="small"
+                      onDelete={() => removeLabOrder(i)}
+                      sx={{ height: 22, fontSize: 11 }} />
+                  ))}
                 </Box>
-              ))
+              </Box>
             )}
           </Box>
-        </TabPanel>
+        )}
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          disabled={saving || !diagnosis}
+      {/* ── Action bar ── */}
+      <DialogActions sx={{ px: 2.5, py: 1.25, gap: 1, borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+          {tab !== 1 && (
+            <Button size="small" startIcon={<RxIcon />} onClick={() => setTab(1)}
+              sx={{ fontSize: 11 }} color="primary" variant="outlined">
+              {medicines.length > 0 ? `Rx (${medicines.length})` : 'Add Rx'}
+            </Button>
+          )}
+          {tab !== 2 && (
+            <Button size="small" startIcon={<LabIcon />} onClick={() => setTab(2)}
+              sx={{ fontSize: 11 }} color="warning" variant="outlined">
+              {labOrders.length > 0 ? `Labs (${labOrders.length})` : 'Add Labs'}
+            </Button>
+          )}
+        </Box>
+
+        <Button onClick={onClose} disabled={saving || completing} size="small" color="inherit">
+          Close
+        </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={saving ? <CircularProgress size={13} /> : <SaveIcon />}
+          onClick={handleSave}
+          disabled={saving || completing}
         >
-          {saving ? 'Saving...' : 'Complete Consultation'}
+          {saving ? 'Saving…' : 'Save Progress'}
+        </Button>
+        <Button 
+          variant="contained" 
+          size="small"
+          color="success"
+          startIcon={completing ? <CircularProgress size={13} color="inherit" /> : <CompleteIcon />}
+          onClick={handleComplete}
+          disabled={saving || completing}
+        >
+          {completing ? 'Completing…' : 'Complete & Finalise'}
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
 
-export default CompleteConsultationDialog;
+export default ConsultationDialog;

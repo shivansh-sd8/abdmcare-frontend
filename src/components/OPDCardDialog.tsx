@@ -26,7 +26,11 @@ import {
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import { generateOPDCardPDF } from '../utils/pdfGenerator';
+import { useSelector } from 'react-redux';
+import { generateOPDCardPDF, HospitalInfo, ConsultationInfo } from '../utils/pdfGenerator';
+import hospitalService from '../services/hospitalService';
+import vitalsService from '../services/vitalsService';
+import encounterService from '../services/encounterService';
 
 interface OPDCardDialogProps {
   open: boolean;
@@ -63,6 +67,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
   const [editMode, setEditMode] = useState(false);
   const [editPatientMode, setEditPatientMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const authUser = useSelector((state: any) => state.auth?.user);
   
   const [formData, setFormData] = useState({
     chiefComplaint: '',
@@ -130,24 +135,6 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
     setTabValue(newValue);
   };
 
-  const handleChange = (field: string, value: any) => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      setFormData((prev) => ({
-        ...prev,
-        [parent]: {
-          ...(prev as any)[parent],
-          [child]: value,
-        },
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    }
-  };
-
   const handleSave = async () => {
     if (!onUpdate) return;
     
@@ -164,47 +151,116 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
     }
   };
 
-  const handleDownloadPDF = () => {
-    const age = appointment.patient?.dob 
-      ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear()
-      : 0;
+  const handleDownloadPDF = async () => {
+    try {
+      // Fetch hospital info
+      const hospitalId = appointment.hospitalId || authUser?.hospitalId;
+      let hospitalInfo: HospitalInfo = { name: 'Hospital' };
+      if (hospitalId) {
+        try {
+          const hRes = await hospitalService.getHospitalById(hospitalId) as any;
+          const h = hRes.data?.data || hRes.data || {};
+          hospitalInfo = {
+            name: h.name || 'Hospital',
+            addressLine1: h.addressLine1,
+            city: h.city,
+            state: h.state,
+            country: h.country,
+            phone: h.phone,
+            email: h.email,
+            website: h.website,
+            gstNumber: h.gstNumber,
+          };
+        } catch (_) {}
+      }
 
-    const pdfData = {
-      opdCardNumber: appointment.opdCardNumber,
-      issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'PPpp'),
-      patient: {
-        name: `${appointment.patient?.firstName} ${appointment.patient?.lastName}`,
-        uhid: appointment.patient?.uhid || 'N/A',
-        age: age,
-        gender: appointment.patient?.gender || 'N/A',
-        bloodGroup: appointment.patient?.bloodGroup,
-        mobile: appointment.patient?.mobile || 'N/A',
-        email: appointment.patient?.email,
-        address: `${appointment.patient?.address?.line1 || ''}, ${appointment.patient?.address?.city || ''}, ${appointment.patient?.address?.state || ''} - ${appointment.patient?.address?.pincode || ''}`,
-      },
-      appointment: {
-        doctor: `Dr. ${appointment.doctor?.firstName} ${appointment.doctor?.lastName}`,
-        specialization: appointment.doctor?.specialization || 'N/A',
-        department: appointment.doctor?.department?.name,
-        scheduledTime: format(new Date(appointment.scheduledAt), 'PPpp'),
-        type: appointment.type,
-        status: appointment.status,
-      },
-      emergencyContact: appointment.patient?.emergencyContact ? {
-        name: appointment.patient.emergencyContact.name,
-        relationship: appointment.patient.emergencyContact.relationship,
-        mobile: appointment.patient.emergencyContact.mobile,
-      } : undefined,
-      consultation: encounter ? {
-        chiefComplaint: formData.chiefComplaint || undefined,
-        diagnosis: formData.diagnosis || undefined,
-        notes: formData.notes || undefined,
-        visitDate: encounter.visitDate ? format(new Date(encounter.visitDate), 'PPpp') : undefined,
-      } : undefined,
-    };
+      // Fetch latest vitals for the patient
+      let vitalsInfo = undefined;
+      if (appointment.patient?.id) {
+        try {
+          const vRes = await vitalsService.getLatestVitals(appointment.patient.id) as any;
+          const v = vRes.data?.data || vRes.data || null;
+          if (v) {
+            vitalsInfo = {
+              recordedAt: v.createdAt ? format(new Date(v.createdAt), 'dd-MM-yyyy h:mm a') : undefined,
+              height: v.height,
+              weight: v.weight,
+              bloodPressureSystolic: v.bloodPressureSystolic,
+              bloodPressureDiastolic: v.bloodPressureDiastolic,
+              heartRate: v.heartRate,
+              temperature: v.temperature,
+              bmi: v.bmi,
+              oxygenSaturation: v.oxygenSaturation,
+              respiratoryRate: v.respiratoryRate,
+            };
+          }
+        } catch (_) {}
+      }
 
-    generateOPDCardPDF(pdfData);
-    toast.success('OPD Card PDF downloaded');
+      const age = appointment.patient?.dob
+        ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear()
+        : 'NA';
+
+      // Fetch encounter data for prescription/diagnosis
+      let consultationInfo: ConsultationInfo | undefined;
+      const encounterId = appointment.encounterId || appointment.encounter?.id || encounter?.id;
+      if (encounterId) {
+        try {
+          const encRes = await encounterService.getEncounterById(encounterId) as any;
+          const enc = encRes.data?.data || encRes.data;
+          if (enc) {
+            consultationInfo = {
+              chiefComplaint: enc.chiefComplaint,
+              provisionalDiagnosis: enc.provisionalDiagnosis,
+              finalDiagnosis: enc.finalDiagnosis || enc.diagnosis,
+              notes: enc.notes,
+              followUpDate: enc.followUpDate,
+              prescriptions: Array.isArray(enc.prescriptions) ? enc.prescriptions.map((rx: any) => ({
+                medicineName: rx.medicineName || '',
+                dosage: rx.dosage || '',
+                frequency: rx.frequency || '',
+                duration: rx.duration || '',
+                instructions: rx.instructions || '',
+              })) : [],
+              labOrders: Array.isArray(enc.labOrders) ? enc.labOrders.map((o: any) => ({
+                testName: o.testName || '',
+              })) : [],
+            };
+          }
+        } catch (_) {}
+      }
+
+      generateOPDCardPDF({
+        opdCardNumber: appointment.opdCardNumber,
+        issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'dd-MM-yyyy h:mm a'),
+        hospital: hospitalInfo,
+        patient: {
+          name: `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim(),
+          uhid: appointment.patient?.uhid || 'NA',
+          age,
+          gender: appointment.patient?.gender || 'NA',
+          mobile: appointment.patient?.mobile || 'NA',
+          address: appointment.patient?.address || '',
+          relationName: appointment.patient?.emergencyContact?.relationship || 'NA',
+        },
+        appointment: {
+          doctor: `Dr. ${appointment.doctor?.firstName || ''} ${appointment.doctor?.lastName || ''}`.trim(),
+          doctorRegistrationNo: appointment.doctor?.registrationNo,
+          doctorSignatureBase64: appointment.doctor?.signatureBase64,
+          department: appointment.doctor?.department?.name || 'Not Specified',
+          fees: '₹0',
+          paymentMode: 'Not Paid',
+        },
+        generatedBy: authUser?.name || 'System',
+        vitals: vitalsInfo,
+        consultation: consultationInfo,
+      });
+
+      toast.success('OPD Card PDF downloaded');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
+    }
   };
 
   const calculateAge = () => {
@@ -509,53 +565,55 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
                 )}
               </Box>
               <Divider sx={{ mb: 2 }} />
-              {!editMode && !readOnly && (
-                <Box sx={{ mb: 2, p: 1.5, bgcolor: 'info.lighter', borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <EditIcon fontSize="small" color="info" />
-                  <Typography variant="body2" color="info.main">
-                    Click the <strong>Edit icon</strong> in the header to update consultation details
-                  </Typography>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" fontWeight={700}>CHIEF COMPLAINT</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{formData.chiefComplaint || '—'}</Typography>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" fontWeight={700}>DIAGNOSIS</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{formData.diagnosis || '—'}</Typography>
+            </Grid>
+
+            {encounter?.provisionalDiagnosis && (
+              <Grid item xs={12}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>PROVISIONAL DIAGNOSIS</Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>{encounter.provisionalDiagnosis}</Typography>
+              </Grid>
+            )}
+
+            {Array.isArray(encounter?.prescriptions) && encounter.prescriptions.length > 0 && (
+              <Grid item xs={12}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>PRESCRIPTION</Typography>
+                <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                  {encounter.prescriptions.map((rx: any, i: number) => (
+                    <Box key={i} sx={{ px: 1.5, py: 1, bgcolor: i % 2 === 0 ? '#f5f7fa' : 'white', borderBottom: '1px solid', borderColor: 'divider' }}>
+                      <Typography variant="body2" fontWeight={600}>{rx.medicineName}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {[rx.dosage, rx.frequency, rx.duration, rx.instructions].filter(Boolean).join('  ·  ')}
+                      </Typography>
+                    </Box>
+                  ))}
                 </Box>
-              )}
-            </Grid>
+              </Grid>
+            )}
+
+            {Array.isArray(encounter?.labOrders) && encounter.labOrders.length > 0 && (
+              <Grid item xs={12}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>INVESTIGATIONS</Typography>
+                <Box sx={{ mt: 0.5 }}>
+                  {encounter.labOrders.map((o: any, i: number) => (
+                    <Typography key={i} variant="body2">• {o.testName}</Typography>
+                  ))}
+                </Box>
+              </Grid>
+            )}
             
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Chief Complaint"
-                multiline
-                rows={2}
-                value={formData.chiefComplaint}
-                onChange={(e) => handleChange('chiefComplaint', e.target.value)}
-                disabled={!editMode}
-                variant={editMode ? 'outlined' : 'filled'}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Diagnosis"
-                multiline
-                rows={3}
-                value={formData.diagnosis}
-                onChange={(e) => handleChange('diagnosis', e.target.value)}
-                disabled={!editMode}
-                variant={editMode ? 'outlined' : 'filled'}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Notes / Instructions"
-                multiline
-                rows={3}
-                value={formData.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-                disabled={!editMode}
-                variant={editMode ? 'outlined' : 'filled'}
-              />
+              <Typography variant="caption" color="text.secondary" fontWeight={700}>NOTES</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>{formData.notes || '—'}</Typography>
             </Grid>
 
             {encounter?.visitDate && (

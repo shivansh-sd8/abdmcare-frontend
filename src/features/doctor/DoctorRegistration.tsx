@@ -36,6 +36,7 @@ const DoctorRegistration: React.FC = () => {
     firstName: '',
     lastName: '',
     specialization: '',
+    subspecialty: '',
     qualification: '',
     registrationNo: '',
     mobile: '',
@@ -43,6 +44,7 @@ const DoctorRegistration: React.FC = () => {
     password: '',
     hprId: '',
     departmentId: '',
+    consultationFee: '',
   });
 
   useEffect(() => {
@@ -88,8 +90,8 @@ const DoctorRegistration: React.FC = () => {
 
       const doctorData = {
         ...formData,
-        // If no department selected, we'll let the backend create a default one
         departmentId: formData.departmentId || undefined,
+        consultationFee: formData.consultationFee ? parseFloat(formData.consultationFee) : undefined,
       };
 
       await doctorService.createDoctor(doctorData);
@@ -111,13 +113,36 @@ const DoctorRegistration: React.FC = () => {
     'General Medicine',
     'Neurology',
     'Oncology',
+    'Ophthalmology',
     'Orthopedics',
+    'ENT (Ear, Nose & Throat)',
     'Pediatrics',
     'Psychiatry',
+    'Pulmonology',
     'Radiology',
     'Surgery',
     'Urology',
+    'Obstetrics & Gynaecology',
+    'Nephrology',
+    'Rheumatology',
+    'Haematology',
   ];
+
+  // Standard subspecialties keyed by specialization
+  const subspecialtiesMap: Record<string, string[]> = {
+    Ophthalmology:   ['Retina', 'Cataract', 'Squint', 'Glaucoma', 'Cornea', 'Oculoplasty', 'Neuro-Ophthalmology'],
+    Cardiology:      ['Interventional Cardiology', 'Cardiac Electrophysiology', 'Heart Failure', 'Paediatric Cardiology'],
+    Neurology:       ['Epilepsy', 'Stroke', 'Movement Disorders', 'Neuro-Oncology', 'Headache & Migraine'],
+    Oncology:        ['Medical Oncology', 'Surgical Oncology', 'Radiation Oncology', 'Haemato-Oncology'],
+    Surgery:         ['Laparoscopic Surgery', 'Vascular Surgery', 'Bariatric Surgery', 'Thoracic Surgery'],
+    Orthopedics:     ['Joint Replacement', 'Spine Surgery', 'Sports Medicine', 'Paediatric Orthopaedics'],
+    'ENT (Ear, Nose & Throat)': ['Rhinology', 'Otology', 'Head & Neck Surgery', 'Paediatric ENT'],
+    Gastroenterology: ['Hepatology', 'Inflammatory Bowel Disease', 'Motility Disorders', 'Endoscopy'],
+  };
+
+  const selectedSpecSubspecialties = formData.specialization
+    ? subspecialtiesMap[formData.specialization] ?? []
+    : [];
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
@@ -193,7 +218,10 @@ const DoctorRegistration: React.FC = () => {
                   label="Specialization"
                   required
                   value={formData.specialization}
-                  onChange={(e) => handleChange('specialization', e.target.value)}
+                  onChange={(e) => {
+                    handleChange('specialization', e.target.value);
+                    handleChange('subspecialty', ''); // reset subspecialty on spec change
+                  }}
                   variant="outlined"
                 >
                   {specializations.map((spec) => (
@@ -203,6 +231,26 @@ const DoctorRegistration: React.FC = () => {
                   ))}
                 </TextField>
               </Grid>
+
+              {/* Subspecialty — only shown when there are subspecialties for chosen specialization */}
+              {selectedSpecSubspecialties.length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    select
+                    label="Subspecialty (Optional)"
+                    value={formData.subspecialty}
+                    onChange={(e) => handleChange('subspecialty', e.target.value)}
+                    variant="outlined"
+                    helperText={`Specific area within ${formData.specialization}`}
+                  >
+                    <MenuItem value="">— None —</MenuItem>
+                    {selectedSpecSubspecialties.map((sub) => (
+                      <MenuItem key={sub} value={sub}>{sub}</MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+              )}
 
               <Grid item xs={12} md={6}>
                 <TextField
@@ -256,6 +304,22 @@ const DoctorRegistration: React.FC = () => {
                         <Badge />
                       </InputAdornment>
                     ),
+                  }}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="OPD Consultation Fee (₹)"
+                  placeholder="e.g. 500"
+                  type="number"
+                  value={formData.consultationFee}
+                  onChange={(e) => handleChange('consultationFee', e.target.value)}
+                  variant="outlined"
+                  helperText="Admin can set/update this later. Falls back to hospital default if empty."
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">₹</InputAdornment>,
                   }}
                 />
               </Grid>

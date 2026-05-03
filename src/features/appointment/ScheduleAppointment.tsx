@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -55,6 +55,8 @@ const ScheduleAppointment: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [searchingDoctors, setSearchingDoctors] = useState(false);
+  const [specializationFilter, setSpecializationFilter] = useState('');
+  const [allDoctors, setAllDoctors] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     patientId: '',
@@ -114,6 +116,7 @@ const ScheduleAppointment: React.FC = () => {
       setSearchingDoctors(true);
       const response: any = await doctorService.searchDoctors({});
       const doctorList = response.data?.data || response.data || [];
+      setAllDoctors(doctorList);
       setDoctors(doctorList);
     } catch (error) {
       console.error('Error fetching doctors:', error);
@@ -123,8 +126,24 @@ const ScheduleAppointment: React.FC = () => {
     }
   };
 
-  const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  // Derive unique specializations from loaded doctors
+  const specializations = useMemo(() => {
+    const set = new Set<string>(allDoctors.map((d) => d.specialization).filter(Boolean));
+    return Array.from(set).sort();
+  }, [allDoctors]);
+
+  // Filter doctors by selected specialization
+  useEffect(() => {
+    if (!specializationFilter) {
+      setDoctors(allDoctors);
+    } else {
+      setDoctors(allDoctors.filter((d) => d.specialization === specializationFilter));
+    }
+    setSelectedDoctor(null);
+    handleChange('doctorId', '');
+  }, [specializationFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleChange = (field: string, value: any) => {    setFormData((prev) => ({ ...prev, [field]: value }));
     
     // Clear error when user starts typing
     if (errors[field]) {
@@ -366,7 +385,20 @@ const ScheduleAppointment: React.FC = () => {
               <Divider sx={{ mb: 3 }} />
             </Grid>
 
-            <Grid item xs={12}>
+            {/* Specialization filter */}
+            <Grid item xs={12} sm={4}>
+              <Autocomplete
+                options={specializations}
+                value={specializationFilter}
+                onChange={(_, v) => setSpecializationFilter(v || '')}
+                freeSolo
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter by Specialization (Optional)"
+                    placeholder="e.g. Cardiology, Orthopaedics" />
+                )}
+              />
+            </Grid>
+            <Grid item xs={12} sm={8}>
               <Autocomplete
                 options={doctors}
                 loading={searchingDoctors}

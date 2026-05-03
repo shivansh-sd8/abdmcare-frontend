@@ -13,7 +13,23 @@ interface CreateInvestigationData {
 
 interface UpdateInvestigationStatusData {
   status: 'ORDERED' | 'SAMPLE_COLLECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-  results?: Record<string, unknown>;
+  results?: {
+    parameters?: Array<{
+      name: string;
+      value: string;
+      unit: string;
+      referenceRange: string;
+      flag: 'H' | 'L' | 'N' | 'C' | '';
+      subGroup?: string;
+      method?: string;
+    }>;
+    sampleType?: string;
+    sampleCollectedAt?: string;
+    labTechnicianName?: string;
+    validatedBy?: string;
+    notes?: string;
+  };
+  reportUrl?: string;
   notes?: string;
 }
 

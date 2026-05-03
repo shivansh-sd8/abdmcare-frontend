@@ -26,20 +26,26 @@ import {
   LocalHospital,
   Print as PrintIcon,
   Visibility as ViewIcon,
+  Hotel as AdmitIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import appointmentService from '../../services/appointmentService';
+import hospitalService from '../../services/hospitalService';
+import vitalsService from '../../services/vitalsService';
 import { format } from 'date-fns';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import { toast } from 'react-toastify';
 import { IconButton, Tooltip } from '@mui/material';
-import { generateOPDCardPDF } from '../../utils/pdfGenerator';
+import { generateOPDCardPDF, HospitalInfo, ConsultationInfo } from '../../utils/pdfGenerator';
+import encounterService from '../../services/encounterService';
 import OPDCardDialog from '../../components/OPDCardDialog';
 
 const AppointmentList: React.FC = () => {
   const navigate = useNavigate();
   const permissions = useRolePermissions();
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,69 +83,112 @@ const AppointmentList: React.FC = () => {
 
   const handleDownloadOPDCard = async (appointment: any) => {
     try {
-      // Fetch encounter details if available
-      let consultation = undefined;
-      if (appointment.encounterId) {
+      // Fetch hospital info
+      const hospitalId = appointment.hospitalId || authUser?.hospitalId;
+      let hospitalInfo: HospitalInfo = { name: 'Hospital' };
+      if (hospitalId) {
         try {
-          const encounterResponse = await fetch(`http://localhost:8080/api/v1/encounters/${appointment.encounterId}`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          const encounterData = await encounterResponse.json();
-          const encounter = encounterData.data;
-          
-          if (encounter) {
-            consultation = {
-              chiefComplaint: encounter.chiefComplaint || undefined,
-              diagnosis: encounter.diagnosis || encounter.finalDiagnosis || undefined,
-              notes: encounter.notes || undefined,
-              visitDate: encounter.visitDate ? format(new Date(encounter.visitDate), 'PPpp') : undefined,
+          const hRes = await hospitalService.getHospitalById(hospitalId) as any;
+          const h = hRes.data?.data || hRes.data || {};
+          hospitalInfo = {
+            name: h.name || 'Hospital',
+            addressLine1: h.addressLine1,
+            city: h.city,
+            state: h.state,
+            country: h.country,
+            phone: h.phone,
+            email: h.email,
+            website: h.website,
+            gstNumber: h.gstNumber,
+          };
+        } catch (_) {}
+      }
+
+      // Fetch latest vitals for the patient
+      let vitalsInfo = undefined;
+      if (appointment.patient?.id) {
+        try {
+          const vRes = await vitalsService.getLatestVitals(appointment.patient.id) as any;
+          const v = vRes.data?.data || vRes.data || null;
+          if (v) {
+            vitalsInfo = {
+              recordedAt: v.createdAt ? format(new Date(v.createdAt), 'dd-MM-yyyy h:mm a') : undefined,
+              height: v.height,
+              weight: v.weight,
+              bloodPressureSystolic: v.bloodPressureSystolic,
+              bloodPressureDiastolic: v.bloodPressureDiastolic,
+              heartRate: v.heartRate,
+              temperature: v.temperature,
+              bmi: v.bmi,
+              oxygenSaturation: v.oxygenSaturation,
+              respiratoryRate: v.respiratoryRate,
             };
           }
-        } catch (err) {
-          console.error('Failed to fetch encounter details', err);
-        }
+        } catch (_) {}
       }
 
       // Calculate age
-      const age = appointment.patient?.dob 
+      const age = appointment.patient?.dob
         ? new Date().getFullYear() - new Date(appointment.patient.dob).getFullYear()
-        : 0;
+        : 'NA';
 
-      // Prepare PDF data
-      const pdfData = {
+      // Fetch encounter data (prescription/diagnosis) if available
+      let consultationInfo: ConsultationInfo | undefined;
+      const encounterId = appointment.encounterId || appointment.encounter?.id;
+      if (encounterId) {
+        try {
+          const encRes = await encounterService.getEncounterById(encounterId) as any;
+          const enc = encRes.data?.data || encRes.data;
+          if (enc) {
+            consultationInfo = {
+              chiefComplaint: enc.chiefComplaint,
+              provisionalDiagnosis: enc.provisionalDiagnosis,
+              finalDiagnosis: enc.finalDiagnosis || enc.diagnosis,
+              notes: enc.notes,
+              followUpDate: enc.followUpDate,
+              prescriptions: Array.isArray(enc.prescriptions) ? enc.prescriptions.map((rx: any) => ({
+                medicineName: rx.medicineName || '',
+                dosage: rx.dosage || '',
+                frequency: rx.frequency || '',
+                duration: rx.duration || '',
+                instructions: rx.instructions || '',
+              })) : [],
+              labOrders: Array.isArray(enc.labOrders) ? enc.labOrders.map((o: any) => ({
+                testName: o.testName || '',
+                testType: o.testType,
+                priority: o.priority,
+              })) : [],
+            };
+          }
+        } catch (_) {}
+      }
+
+      generateOPDCardPDF({
         opdCardNumber: appointment.opdCardNumber,
-        issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'PPpp'),
+        issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'dd-MM-yyyy h:mm a'),
+        hospital: hospitalInfo,
         patient: {
-          name: `${appointment.patient?.firstName} ${appointment.patient?.lastName}`,
-          uhid: appointment.patient?.uhid || 'N/A',
-          age: age,
-          gender: appointment.patient?.gender || 'N/A',
-          bloodGroup: appointment.patient?.bloodGroup,
-          mobile: appointment.patient?.mobile || 'N/A',
-          email: appointment.patient?.email,
-          address: `${appointment.patient?.address?.line1 || ''}, ${appointment.patient?.address?.city || ''}, ${appointment.patient?.address?.state || ''} - ${appointment.patient?.address?.pincode || ''}`,
+          name: `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim(),
+          uhid: appointment.patient?.uhid || 'NA',
+          age,
+          gender: appointment.patient?.gender || 'NA',
+          mobile: appointment.patient?.mobile || 'NA',
+          address: appointment.patient?.address || '',
+          relationName: appointment.patient?.emergencyContact?.relationship || 'NA',
         },
         appointment: {
-          doctor: `Dr. ${appointment.doctor?.firstName} ${appointment.doctor?.lastName}`,
-          specialization: appointment.doctor?.specialization || 'N/A',
-          department: appointment.doctor?.department?.name,
-          scheduledTime: format(new Date(appointment.scheduledAt), 'PPpp'),
-          type: appointment.type,
-          status: appointment.status,
+          doctor: `Dr. ${appointment.doctor?.firstName || ''} ${appointment.doctor?.lastName || ''}`.trim(),
+          doctorRegistrationNo: appointment.doctor?.registrationNo,
+          doctorSignatureBase64: appointment.doctor?.signatureBase64,
+          department: appointment.doctor?.department?.name || 'Not Specified',
+          fees: '₹0',
+          paymentMode: 'Not Paid',
         },
-        emergencyContact: appointment.patient?.emergencyContact ? {
-          name: appointment.patient.emergencyContact.name,
-          relationship: appointment.patient.emergencyContact.relationship,
-          mobile: appointment.patient.emergencyContact.mobile,
-        } : undefined,
-        consultation: consultation,
-      };
+        generatedBy: authUser?.name || 'System',
+        vitals: vitalsInfo,
+        consultation: consultationInfo,
+      });
 
-      // Generate PDF
-      generateOPDCardPDF(pdfData);
-      
       toast.success('OPD Card PDF downloaded successfully');
     } catch (error) {
       console.error('Error downloading OPD card:', error);
@@ -315,10 +364,12 @@ const AppointmentList: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 160,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => {
         const canCheckIn = params.row.status === 'SCHEDULED' && !params.row.checkedInAt && !params.row.opdCardNumber;
+        const canAdmit   = ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED'].includes(params.row.status) ||
+                           !!params.row.opdCardNumber;
         
         return (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -331,6 +382,28 @@ const AppointmentList: React.FC = () => {
               >
                 <CheckCircle fontSize="small" />
               </IconButton>
+            )}
+            {canAdmit && (permissions.isReceptionist || permissions.isAdmin || permissions.isDoctor) && (
+              <Tooltip title="Admit to IPD">
+                <IconButton
+                  size="small"
+                  color="warning"
+                  onClick={() => {
+                    const p = params.row;
+                    const qs = new URLSearchParams({
+                      admit:       '1',
+                      patientId:   p.patientId   || '',
+                      encounterId: p.encounterId || '',
+                      patientName: `${p.patient?.firstName || ''} ${p.patient?.lastName || ''} (${p.patient?.uhid || ''})`.trim(),
+                      diagnosis:   p.encounter?.diagnosis || p.encounter?.provisionalDiagnosis || '',
+                      reason:      p.notes || p.reason || '',
+                    }).toString();
+                    navigate(`/ipd?${qs}`);
+                  }}
+                >
+                  <AdmitIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
             {params.row.opdCardNumber && (
               <>

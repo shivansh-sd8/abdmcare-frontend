@@ -80,8 +80,13 @@ const QuickRegistration: React.FC = () => {
   const handleNext = () => {
     if (activeStep === 0) {
       // Validate patient details
-      if (!patientData.firstName || !patientData.lastName || !patientData.mobile || !patientData.gender || !patientData.dob) {
-        toast.error('Please fill all required fields');
+      if (!patientData.firstName || !patientData.lastName || !patientData.mobile || !patientData.gender) {
+        toast.error('Please fill all required fields (First Name, Last Name, Mobile, Gender)');
+        return;
+      }
+      // Validate mobile format
+      if (!/^\d{10}$/.test(patientData.mobile)) {
+        toast.error('Mobile number must be 10 digits');
         return;
       }
     }
@@ -112,9 +117,7 @@ const QuickRegistration: React.FC = () => {
   const handleRegister = async () => {
     try {
       setLoading(true);
-      
       await patientService.createPatient(patientData);
-      
       toast.success('Patient registered successfully!');
       
       // Reset form
@@ -136,7 +139,12 @@ const QuickRegistration: React.FC = () => {
       setActiveStep(0);
       setHasAbha(null);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to register patient');
+      const msg = error.response?.data?.message || 'Failed to register patient';
+      if (msg.toLowerCase().includes('unique') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('already')) {
+        toast.error('A patient with this mobile number or details already exists. Please search before registering.');
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -207,12 +215,12 @@ const QuickRegistration: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  required
                   type="date"
-                  label="Date of Birth"
+                  label="Date of Birth (Optional)"
                   value={patientData.dob}
                   onChange={(e) => handlePatientChange('dob', e.target.value)}
                   InputLabelProps={{ shrink: true }}
+                  helperText="Leave blank if unknown"
                 />
               </Grid>
               <Grid item xs={12} md={6}>

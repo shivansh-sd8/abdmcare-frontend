@@ -1,238 +1,197 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Button,
-  Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Card,
-  CardContent,
-  IconButton,
-  Tooltip,
-  Divider,
-  TextField,
+  Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Button, Chip, Dialog, DialogTitle, DialogContent,
+  DialogActions, Grid, Card, CardContent, IconButton, Tooltip, Divider,
+  TextField, CircularProgress, Alert, ToggleButtonGroup, ToggleButton,
 } from '@mui/material';
 import {
   Receipt as BillingIcon,
-  Payment as PaymentIcon,
+  CurrencyRupee,
+  CheckCircle,
+  Visibility,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
+import api from '../../services/api';
+
+const PAYMENT_METHODS = ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER'] as const;
 
 const BillingDashboard: React.FC = () => {
-  const [encounters, setEncounters] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [encounters, setEncounters]           = useState<any[]>([]);
+  const [loading, setLoading]                 = useState(true);
   const [selectedEncounter, setSelectedEncounter] = useState<any>(null);
-  const [billDialog, setBillDialog] = useState(false);
-  const [billDetails, setBillDetails] = useState({
-    consultationFee: 500,
-    labCharges: 0,
-    medicineCharges: 0,
-    scanCharges: 0,
-    discount: 0,
-  });
+  const [billDialog, setBillDialog]           = useState(false);
+  const [paymentMethod, setPaymentMethod]     = useState<string>('CASH');
+  const [transactionRef, setTransactionRef]   = useState('');
+  const [collecting, setCollecting]           = useState(false);
 
-  useEffect(() => {
-    fetchPendingBills();
-  }, []);
-
-  const fetchPendingBills = async () => {
+  const fetchPendingBills = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8080/api/v1/encounters?status=BILLING_PENDING', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      setEncounters(data.data || []);
-    } catch (error) {
-      console.error('Error fetching pending bills:', error);
+      const res = await api.get('/api/v1/encounters?status=BILLING_PENDING') as any;
+      setEncounters(res.data?.data ?? res.data ?? []);
+    } catch {
       toast.error('Failed to fetch pending bills');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleViewBill = (encounter: any) => {
-    setSelectedEncounter(encounter);
-    
-    // Calculate charges
-    const labCharges = (encounter.labTestsOrdered || []).length * 200; // ₹200 per test
-    const medicineCharges = (encounter.prescription || []).length * 150; // ₹150 per medicine (avg)
-    const scanCharges = (encounter.scansOrdered || []).length * 800; // ₹800 per scan
-    
-    setBillDetails({
-      consultationFee: encounter.consultationFee || 500,
-      labCharges,
-      medicineCharges,
-      scanCharges,
-      discount: 0,
-    });
-    
+  useEffect(() => { fetchPendingBills(); }, [fetchPendingBills]);
+
+  const handleOpenBill = (enc: any) => {
+    setSelectedEncounter(enc);
+    setPaymentMethod('CASH');
+    setTransactionRef('');
     setBillDialog(true);
   };
 
-  const calculateTotal = () => {
-    const { consultationFee, labCharges, medicineCharges, scanCharges, discount } = billDetails;
-    const subtotal = consultationFee + labCharges + medicineCharges + scanCharges;
-    return subtotal - discount;
-  };
+  const consultationFee  = Number(selectedEncounter?.consultationFee  ?? 0);
+  const labCharges        = Number(selectedEncounter?.labCharges       ?? 0);
+  const medicineCharges   = Number(selectedEncounter?.medicineCharges  ?? 0);
+  const totalAmount       = Number(selectedEncounter?.totalAmount      ?? (consultationFee + labCharges + medicineCharges));
 
-  const handleGenerateBill = async () => {
+  const handleCollectPayment = async () => {
+    if (!selectedEncounter) return;
+    if (!paymentMethod) { toast.warning('Select a payment method'); return; }
+    setCollecting(true);
     try {
-      const totalAmount = calculateTotal();
-      
-      await fetch(`http://localhost:8080/api/v1/encounters/${selectedEncounter.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          billGenerated: true,
-          consultationFee: billDetails.consultationFee,
-          labCharges: billDetails.labCharges,
-          medicineCharges: billDetails.medicineCharges,
-          scanCharges: billDetails.scanCharges,
-          totalAmount,
-          paymentStatus: 'PAID',
-          status: 'COMPLETED',
-        }),
+      await api.patch(`/api/v1/encounters/${selectedEncounter.id}/collect-payment`, {
+        paymentMethod,
+        paymentCollected: totalAmount,
+        transactionRef:   transactionRef || undefined,
       });
-      
-      toast.success('Bill generated and payment recorded');
+      toast.success('Payment collected successfully');
       setBillDialog(false);
       fetchPendingBills();
-    } catch (error) {
-      console.error('Error generating bill:', error);
-      toast.error('Failed to generate bill');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Failed to record payment');
+    } finally {
+      setCollecting(false);
     }
   };
 
-  const stats = {
-    pending: encounters.length,
-    today: encounters.filter(e => {
-      const today = new Date();
-      const encounterDate = new Date(e.createdAt);
-      return encounterDate.toDateString() === today.toDateString();
-    }).length,
-  };
+  const todayCount = encounters.filter(e => {
+    return new Date(e.visitDate).toDateString() === new Date().toDateString();
+  }).length;
+
+  const totalPending = encounters.reduce((s, e) => s + Number(e.totalAmount ?? 0), 0);
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <BillingIcon fontSize="large" color="primary" />
-        Billing Dashboard
+      <Typography variant="h5" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <BillingIcon color="primary" /> Billing Dashboard
       </Typography>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={6}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} sm={4}>
           <Card sx={{ bgcolor: '#FFF3E0' }}>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>Pending Bills</Typography>
-              <Typography variant="h3" fontWeight={600} color="#F57C00">{stats.pending}</Typography>
+              <Typography variant="caption" color="text.secondary">Pending Bills</Typography>
+              <Typography variant="h3" fontWeight={700} color="#F57C00">{encounters.length}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} sm={4}>
           <Card sx={{ bgcolor: '#E3F2FD' }}>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>Today's Bills</Typography>
-              <Typography variant="h3" fontWeight={600} color="#1976D2">{stats.today}</Typography>
+              <Typography variant="caption" color="text.secondary">Today's Bills</Typography>
+              <Typography variant="h3" fontWeight={700} color="#1976D2">{todayCount}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} sm={4}>
+          <Card sx={{ bgcolor: '#E8F5E9' }}>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">Total Pending Amount</Typography>
+              <Typography variant="h4" fontWeight={700} color="#2E7D32">
+                ₹{totalPending.toLocaleString('en-IN')}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Pending Bills Table */}
       <Paper sx={{ borderRadius: 2 }}>
         <TableContainer>
-          <Table>
+          <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: 'action.hover' }}>
-                <TableCell sx={{ fontWeight: 600 }}>OPD Card</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Patient</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Services</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Doctor</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Consultation</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Lab</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Pharmacy</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Total</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">Loading...</TableCell>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <CircularProgress size={28} />
+                  </TableCell>
                 </TableRow>
               ) : encounters.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Box sx={{ py: 4 }}>
-                      <BillingIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                      <Typography color="text.secondary">No pending bills</Typography>
-                    </Box>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                    <CheckCircle sx={{ fontSize: 40, color: 'success.light', mb: 1 }} />
+                    <Typography color="text.secondary">No pending bills — all clear!</Typography>
                   </TableCell>
                 </TableRow>
               ) : (
-                encounters.map((encounter) => (
-                  <TableRow key={encounter.id} hover>
+                encounters.map((enc) => (
+                  <TableRow key={enc.id} hover>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={600} color="primary">
-                        {encounter.appointment?.opdCardNumber || 'N/A'}
+                      <Typography variant="body2" fontWeight={600}>
+                        {enc.patient?.firstName} {enc.patient?.lastName}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {encounter.patient?.firstName} {encounter.patient?.lastName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {encounter.patient?.uhid}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        <Chip label="Consultation" size="small" color="primary" variant="outlined" />
-                        {encounter.labTestsOrdered && encounter.labTestsOrdered.length > 0 && (
-                          <Chip label="Lab Tests" size="small" color="info" variant="outlined" />
-                        )}
-                        {encounter.prescription && encounter.prescription.length > 0 && (
-                          <Chip label="Medicines" size="small" color="success" variant="outlined" />
-                        )}
-                        {encounter.scansOrdered && encounter.scansOrdered.length > 0 && (
-                          <Chip label="Scans" size="small" color="warning" variant="outlined" />
-                        )}
-                      </Box>
+                      <Typography variant="caption" color="text.secondary">{enc.patient?.uhid}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        Dr. {encounter.doctor?.firstName} {encounter.doctor?.lastName}
+                        Dr. {enc.doctor?.firstName} {enc.doctor?.lastName}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {format(new Date(encounter.createdAt), 'PP')}
+                        {format(new Date(enc.visitDate ?? enc.createdAt), 'dd MMM yy')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>₹{Number(enc.consultationFee ?? 0).toLocaleString('en-IN')}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={`₹${Number(enc.labCharges ?? 0).toLocaleString('en-IN')}`}
+                        color={Number(enc.labCharges) > 0 ? 'info' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={`₹${Number(enc.medicineCharges ?? 0).toLocaleString('en-IN')}`}
+                        color={Number(enc.medicineCharges) > 0 ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={700} color="primary">
+                        ₹{Number(enc.totalAmount ?? 0).toLocaleString('en-IN')}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Tooltip title="Generate Bill">
-                        <IconButton
-                          size="small"
-                          color="success"
-                          onClick={() => handleViewBill(encounter)}
-                        >
-                          <PaymentIcon fontSize="small" />
+                      <Tooltip title="Collect Payment">
+                        <IconButton size="small" color="success" onClick={() => handleOpenBill(enc)}>
+                          <CurrencyRupee fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="View Details">
+                        <IconButton size="small" color="info">
+                          <Visibility fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </TableCell>
@@ -244,140 +203,96 @@ const BillingDashboard: React.FC = () => {
         </TableContainer>
       </Paper>
 
-      {/* Generate Bill Dialog */}
-      <Dialog open={billDialog} onClose={() => setBillDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Generate Bill</DialogTitle>
+      {/* Collect Payment Dialog */}
+      <Dialog open={billDialog} onClose={() => !collecting && setBillDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CurrencyRupee color="success" /> Collect Payment
+        </DialogTitle>
         <DialogContent>
           {selectedEncounter && (
             <>
-              {/* Patient Info */}
-              <Box sx={{ mb: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">Patient</Typography>
-                    <Typography variant="body1" fontWeight={600}>
-                      {selectedEncounter.patient?.firstName} {selectedEncounter.patient?.lastName}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {selectedEncounter.patient?.uhid}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="caption" color="text.secondary">OPD Card</Typography>
-                    <Typography variant="body1" fontWeight={600} color="primary">
-                      {selectedEncounter.appointment?.opdCardNumber}
-                    </Typography>
-                  </Grid>
-                </Grid>
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {selectedEncounter.patient?.firstName} {selectedEncounter.patient?.lastName}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {selectedEncounter.patient?.uhid} &nbsp;|&nbsp; Dr. {selectedEncounter.doctor?.firstName} {selectedEncounter.doctor?.lastName}
+                </Typography>
               </Box>
 
-              {/* Bill Items */}
-              <Typography variant="h6" gutterBottom>Bill Details</Typography>
-              <Paper sx={{ p: 2, mb: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={8}>
-                    <Typography>Consultation Fee</Typography>
+              <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600} gutterBottom>Bill Summary</Typography>
+                {[
+                  { label: 'Consultation Fee', value: consultationFee },
+                  { label: 'Lab / Tests', value: labCharges },
+                  { label: 'Medicines', value: medicineCharges },
+                ].map(row => (
+                  <Grid container key={row.label} sx={{ mb: 0.5 }}>
+                    <Grid item xs={8}>
+                      <Typography variant="body2" color="text.secondary">{row.label}</Typography>
+                    </Grid>
+                    <Grid item xs={4} sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2">
+                        {row.value > 0 ? `₹${row.value.toLocaleString('en-IN')}` : '—'}
+                      </Typography>
+                    </Grid>
                   </Grid>
-                  <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={billDetails.consultationFee}
-                      onChange={(e) => setBillDetails({ ...billDetails, consultationFee: parseFloat(e.target.value) || 0 })}
-                      InputProps={{ startAdornment: '₹' }}
-                    />
-                  </Grid>
-
-                  {(selectedEncounter.labTestsOrdered || []).length > 0 && (
-                    <>
-                      <Grid item xs={8}>
-                        <Typography>Lab Tests ({selectedEncounter.labTestsOrdered.length} tests)</Typography>
-                      </Grid>
-                      <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={billDetails.labCharges}
-                          onChange={(e) => setBillDetails({ ...billDetails, labCharges: parseFloat(e.target.value) || 0 })}
-                          InputProps={{ startAdornment: '₹' }}
-                        />
-                      </Grid>
-                    </>
-                  )}
-
-                  {(selectedEncounter.prescription || []).length > 0 && (
-                    <>
-                      <Grid item xs={8}>
-                        <Typography>Medicines ({selectedEncounter.prescription.length} items)</Typography>
-                      </Grid>
-                      <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={billDetails.medicineCharges}
-                          onChange={(e) => setBillDetails({ ...billDetails, medicineCharges: parseFloat(e.target.value) || 0 })}
-                          InputProps={{ startAdornment: '₹' }}
-                        />
-                      </Grid>
-                    </>
-                  )}
-
-                  {(selectedEncounter.scansOrdered || []).length > 0 && (
-                    <>
-                      <Grid item xs={8}>
-                        <Typography>Scans/Imaging ({selectedEncounter.scansOrdered.length} scans)</Typography>
-                      </Grid>
-                      <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={billDetails.scanCharges}
-                          onChange={(e) => setBillDetails({ ...billDetails, scanCharges: parseFloat(e.target.value) || 0 })}
-                          InputProps={{ startAdornment: '₹' }}
-                        />
-                      </Grid>
-                    </>
-                  )}
-
-                  <Grid item xs={8}>
-                    <Typography>Discount</Typography>
-                  </Grid>
-                  <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      value={billDetails.discount}
-                      onChange={(e) => setBillDetails({ ...billDetails, discount: parseFloat(e.target.value) || 0 })}
-                      InputProps={{ startAdornment: '₹' }}
-                    />
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 2 }} />
-
+                ))}
+                <Divider sx={{ my: 1 }} />
                 <Grid container>
                   <Grid item xs={8}>
-                    <Typography variant="h6" fontWeight={600}>Total Amount</Typography>
+                    <Typography fontWeight={700}>Total</Typography>
                   </Grid>
                   <Grid item xs={4} sx={{ textAlign: 'right' }}>
-                    <Typography variant="h6" fontWeight={600} color="primary">
-                      ₹{calculateTotal().toFixed(2)}
+                    <Typography fontWeight={700} color="primary">
+                      ₹{totalAmount.toLocaleString('en-IN')}
                     </Typography>
                   </Grid>
                 </Grid>
               </Paper>
+
+              <Typography variant="subtitle2" fontWeight={600} gutterBottom>Payment Mode</Typography>
+              <ToggleButtonGroup
+                value={paymentMethod}
+                exclusive
+                onChange={(_, v) => v && setPaymentMethod(v)}
+                size="small"
+                fullWidth
+                sx={{ mb: 2 }}
+              >
+                {PAYMENT_METHODS.map(m => (
+                  <ToggleButton key={m} value={m} sx={{ fontSize: 12 }}>{m}</ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+
+              {(paymentMethod === 'UPI' || paymentMethod === 'CARD' || paymentMethod === 'BANK_TRANSFER') && (
+                <TextField
+                  label="Transaction / Reference ID"
+                  value={transactionRef}
+                  onChange={e => setTransactionRef(e.target.value)}
+                  fullWidth
+                  size="small"
+                />
+              )}
+
+              {totalAmount === 0 && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Total amount is ₹0. Please verify the bill before collecting.
+                </Alert>
+              )}
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBillDialog(false)}>Cancel</Button>
-          <Button 
-            onClick={handleGenerateBill} 
-            variant="contained" 
-            startIcon={<PaymentIcon />}
+          <Button onClick={() => setBillDialog(false)} disabled={collecting}>Cancel</Button>
+          <Button
+            variant="contained"
             color="success"
+            onClick={handleCollectPayment}
+            disabled={collecting || totalAmount === 0}
+            startIcon={collecting ? <CircularProgress size={16} /> : <CheckCircle />}
           >
-            Generate Bill & Mark Paid
+            {collecting ? 'Recording…' : `Collect ₹${totalAmount.toLocaleString('en-IN')}`}
           </Button>
         </DialogActions>
       </Dialog>

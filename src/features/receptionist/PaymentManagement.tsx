@@ -27,8 +27,11 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import paymentService from '../../services/paymentService';
+import { generateAdvanceSlip } from '../../utils/advanceSlipGenerator';
+import { useSelector } from 'react-redux';
 
 const PaymentManagement: React.FC = () => {
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -87,9 +90,31 @@ const PaymentManagement: React.FC = () => {
     }
   };
 
-  const handlePrintReceipt = (_payment: any) => {
-    // TODO: Implement receipt printing
-    toast.info('Receipt printing coming soon');
+  const handlePrintReceipt = (payment: any) => {
+    try {
+      generateAdvanceSlip({
+        hospital: {
+          name: authUser?.hospitalName || 'MediSync Hospital',
+        },
+        patient: {
+          name: `${payment.patient?.firstName ?? ''} ${payment.patient?.lastName ?? ''}`.trim(),
+          uhid:   payment.patient?.uhid   ?? '—',
+          mobile: payment.patient?.mobile ?? '',
+        },
+        payment: {
+          receiptNumber: payment.receiptNumber,
+          amount:        payment.amount,
+          paymentMethod: payment.paymentMethod,
+          description:   payment.description,
+          paidAt:        payment.paidAt,
+          transactionId: payment.transactionId,
+          purpose:       payment.description || 'Payment',
+        },
+        generatedBy: authUser?.name,
+      });
+    } catch {
+      toast.error('Failed to generate receipt');
+    }
   };
 
   const columns: GridColDef[] = [
