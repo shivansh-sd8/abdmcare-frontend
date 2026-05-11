@@ -3,7 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Box, Typography, IconButton, Grid,
   Divider, Chip, Autocomplete, CircularProgress, Tooltip,
-  Paper, Alert, Tabs, Tab, Badge,
+  Paper, Alert, Tabs, Tab, Badge, useTheme,
 } from '@mui/material';
 import {
   Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon,
@@ -90,21 +90,27 @@ const EMPTY_MED: Medicine = { medicineName: '', dosage: '', frequency: '', durat
 
 // ─── QuickPill: small click-to-fill button ────────────────────────────────────
 
-const QuickPill: React.FC<{ label: string; active?: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
-  <Chip
-    label={label}
-    size="small"
-    onClick={onClick}
-    sx={{
-      height: 22, fontSize: 11, cursor: 'pointer',
-      bgcolor: active ? '#1a3c6e' : '#f0f4f8',
-      color: active ? 'white' : '#555',
-      border: active ? 'none' : '1px solid #dde3ea',
-      fontWeight: active ? 700 : 400,
-      '&:hover': { bgcolor: active ? '#163260' : '#dde3ea' },
-    }}
-  />
-);
+const QuickPill: React.FC<{ label: string; active?: boolean; onClick: () => void }> = ({ label, active, onClick }) => {
+  const t = useTheme();
+  const dark = t.palette.mode === 'dark';
+  return (
+    <Chip
+      label={label}
+      size="small"
+      onClick={onClick}
+      sx={{
+        height: 22, fontSize: 11, cursor: 'pointer',
+        bgcolor: active
+          ? '#1a3c6e'
+          : (dark ? 'rgba(255,255,255,0.07)' : '#f0f4f8'),
+        color: active ? 'white' : (dark ? 'text.primary' : '#555'),
+        border: active ? 'none' : `1px solid ${dark ? 'rgba(255,255,255,0.12)' : '#dde3ea'}`,
+        fontWeight: active ? 700 : 400,
+        '&:hover': { bgcolor: active ? '#163260' : (dark ? 'rgba(255,255,255,0.12)' : '#dde3ea') },
+      }}
+    />
+  );
+};
 
 // ─── Section label ─────────────────────────────────────────────────────────────
 
@@ -118,6 +124,8 @@ const SLabel: React.FC<{ text: string }> = ({ text }) => (
 // ─── Vitals banner ────────────────────────────────────────────────────────────
 
 const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
+  const t = useTheme();
+  const dark = t.palette.mode === 'dark';
   const [vitals, setVitals] = useState<any>(null);
 
   useEffect(() => {
@@ -136,7 +144,7 @@ const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
     vitals.bloodPressureSystolic && vitals.bloodPressureDiastolic
       ? `BP: ${vitals.bloodPressureSystolic}/${vitals.bloodPressureDiastolic}` : null,
     vitals.heartRate    ? `Pulse: ${vitals.heartRate} bpm`  : null,
-    vitals.temperature  ? `Temp: ${vitals.temperature}°F`   : null,
+    vitals.temperature  ? `Temp: ${vitals.temperature}°C`   : null,
     vitals.oxygenSaturation ? `SpO₂: ${vitals.oxygenSaturation}%` : null,
     vitals.weight       ? `Wt: ${vitals.weight} kg`         : null,
     vitals.height       ? `Ht: ${vitals.height} cm`         : null,
@@ -145,10 +153,13 @@ const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
 
   return (
     <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', px: 2, py: 0.75,
-      bgcolor: '#eaf4fb', borderBottom: '1px solid #bee3f8' }}>
+      bgcolor: dark ? 'rgba(41,128,185,0.12)' : '#eaf4fb',
+      borderBottom: '1px solid',
+      borderColor: dark ? 'rgba(190,227,248,0.2)' : '#bee3f8' }}>
       <VitalsIcon sx={{ fontSize: 16, color: '#2980b9', alignSelf: 'center' }} />
       {items.map((item) => (
-        <Typography key={item as string} variant="caption" fontWeight={600} color="#1a5276">
+        <Typography key={item as string} variant="caption" fontWeight={600}
+          color={dark ? '#5dade2' : '#1a5276'}>
           {item}
         </Typography>
       ))}
@@ -159,6 +170,23 @@ const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+
+  // Centralised theme-aware colours
+  const C = {
+    cardBg:        isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+    cardBorder:    isDark ? 'rgba(255,255,255,0.10)' : '#e2e8f0',
+    rowBg:         isDark ? 'rgba(255,255,255,0.03)' : '#fafbfc',
+    rowBgAlt:      isDark ? 'rgba(255,255,255,0.05)' : 'white',
+    headerBg:      isDark ? 'rgba(255,255,255,0.06)' : '#f0f4f8',
+    selectedBg:    isDark ? 'rgba(26,60,110,0.40)'  : '#eef2f9',
+    orderedBg:     isDark ? 'rgba(26,60,110,0.20)'  : '#f0f4fa',
+    orderedBorder: isDark ? '#1a3c6e'               : '#bee0f0',
+    checkboxBg:    isDark ? 'rgba(255,255,255,0.06)' : 'white',
+    activeBorder:  '#1a3c6e',
+  };
+
   const [tab, setTab] = useState(0);
   const [saving,     setSaving]     = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -252,7 +280,10 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
       try {
         await encounterService.updateConsultation(encounter.id, buildPayload());
         setAutoSaved(new Date());
-      } catch (_) { /* silent */ }
+      } catch (e: any) {
+        console.warn('[AutoSave] Failed to save draft:', e?.response?.data?.message ?? e?.message);
+        // Non-blocking: show toast only for persistent failures, not transient ones
+      }
     }, 4000);
   }, [encounter?.id, buildPayload]);
 
@@ -359,7 +390,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
     if (focusedMedIdx === null) return null;
     const field = focusedMedField;
     return (
-      <Box sx={{ p: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2, mb: 1.5 }}>
+      <Box sx={{ p: 1.5, bgcolor: C.cardBg, border: '1px solid', borderColor: C.cardBorder, borderRadius: 2, mb: 1.5 }}>
         {(field === null || field === 'frequency') && (
           <Box sx={{ mb: 1 }}>
             <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mr: 1 }}>
@@ -596,7 +627,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                   display: 'grid',
                   gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1.2fr 34px',
                   gap: 0.5, px: 1, py: 0.5,
-                  bgcolor: '#f0f4f8', borderRadius: 1, mb: 0.5,
+                  bgcolor: C.headerBg, borderRadius: 1, mb: 0.5,
                 }}>
                   {['Medicine', 'Dosage', 'Freq', 'Duration', 'Instructions', ''].map((h) => (
                     <Typography key={h} variant="caption" fontWeight={700} color="text.secondary">{h}</Typography>
@@ -622,8 +653,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       gap: 0.5, px: 1, py: 0.75, mb: 0.5,
                       borderRadius: 1.5,
                       border: '1.5px solid',
-                      borderColor: focusedMedIdx === idx ? '#1a3c6e' : '#e2e8f0',
-                      bgcolor: focusedMedIdx === idx ? '#f0f4fa' : (idx % 2 ? '#fafbfc' : 'white'),
+                      borderColor: focusedMedIdx === idx ? '#1a3c6e' : C.cardBorder,
+                      bgcolor: focusedMedIdx === idx ? C.selectedBg : (idx % 2 ? C.rowBg : C.rowBgAlt),
                       alignItems: 'center',
                       cursor: 'pointer',
                     }}
@@ -637,7 +668,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       renderInput={(params) => (
                         <TextField {...params} placeholder="Medicine name" size="small"
                           onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('medicineName'); }}
-                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
                       )}
                     />
 
@@ -649,7 +680,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       renderInput={(params) => (
                         <TextField {...params} placeholder="Dosage" size="small"
                           onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('dosage'); }}
-                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
                       )}
                     />
 
@@ -661,7 +692,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       renderInput={(params) => (
                         <TextField {...params} placeholder="e.g. OD" size="small"
                           onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('frequency'); }}
-                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
                       )}
                     />
 
@@ -673,7 +704,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       renderInput={(params) => (
                         <TextField {...params} placeholder="e.g. 5 days" size="small"
                           onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('duration'); }}
-                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
                       )}
                     />
 
@@ -685,7 +716,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       renderInput={(params) => (
                         <TextField {...params} placeholder="e.g. After food" size="small"
                           onFocus={() => { setFocusedMedIdx(idx); setFocusedMedField('instructions'); }}
-                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12, bgcolor: 'white' } }} />
+                          sx={{ '& .MuiOutlinedInput-root': { fontSize: 12 } }} />
                       )}
                     />
 
@@ -703,7 +734,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                 sx={{
                   mt: 1, borderStyle: 'dashed', border: '1.5px dashed #b0bec5',
                   color: 'text.secondary', borderRadius: 1.5, py: 1,
-                  '&:hover': { borderColor: '#1a3c6e', color: '#1a3c6e', bgcolor: '#f0f4fa' },
+                  '&:hover': { borderColor: '#1a3c6e', color: '#1a3c6e', bgcolor: C.cardBg },
                 }}>
                 Add Medicine
               </Button>
@@ -712,7 +743,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
             {/* Right: quick-pick sidebar (always visible on desktop) */}
             <Box sx={{
               width: 200, flexShrink: 0, borderLeft: '1px solid', borderColor: 'divider',
-              overflowY: 'auto', p: 1.5, bgcolor: '#f8fafc', display: { xs: 'none', md: 'block' },
+              overflowY: 'auto', p: 1.5, bgcolor: C.cardBg, display: { xs: 'none', md: 'block' },
             }}>
               <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={1}>
                 QUICK FREQUENCY
@@ -767,18 +798,18 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       elevation={0}
                       onClick={() => toggleTest(test)}
                       sx={{
-                        p: 1, cursor: 'pointer', borderRadius: 1.5,
+                      p: 1, cursor: 'pointer', borderRadius: 1.5,
                         border: '1.5px solid',
-                        borderColor: selected ? '#1a3c6e' : '#e2e8f0',
-                        bgcolor: selected ? '#eef2f9' : 'white',
+                        borderColor: selected ? C.activeBorder : C.cardBorder,
+                        bgcolor: selected ? C.selectedBg : C.checkboxBg,
                         display: 'flex', alignItems: 'center', gap: 1,
-                        '&:hover': { borderColor: '#1a3c6e', bgcolor: '#f0f4fa' },
+                        '&:hover': { borderColor: C.activeBorder, bgcolor: selected ? C.selectedBg : C.cardBg },
                       }}
                     >
                       <Box sx={{
                         width: 16, height: 16, borderRadius: 0.5,
-                        border: '2px solid', borderColor: selected ? '#1a3c6e' : '#b0bec5',
-                        bgcolor: selected ? '#1a3c6e' : 'white',
+                        border: '2px solid', borderColor: selected ? '#1a3c6e' : (isDark ? 'rgba(255,255,255,0.3)' : '#b0bec5'),
+                        bgcolor: selected ? '#1a3c6e' : C.checkboxBg,
                         flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
@@ -830,7 +861,7 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
 
             {/* Summary of all ordered */}
             {labOrders.length > 0 && (
-              <Box sx={{ mt: 2, p: 1.5, bgcolor: '#f0f4fa', borderRadius: 2, border: '1px solid #bee0f0' }}>
+              <Box sx={{ mt: 2, p: 1.5, bgcolor: C.orderedBg, borderRadius: 2, border: '1px solid', borderColor: C.orderedBorder }}>
                 <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={0.75}>
                   ORDERED ({labOrders.length} test{labOrders.length !== 1 ? 's' : ''})
                 </Typography>

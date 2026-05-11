@@ -42,6 +42,7 @@ interface Round {
   vitalSigns?: any;
   doctor?: { id: string; firstName: string; lastName: string; specialization?: string };
   prescriptions?: Array<{ medicineName: string; dosage: string; frequency: string; duration: string; instructions?: string }>;
+  newPrescriptions?: Array<{ id: string; medications: any[]; status?: string; doctor?: any }>;
   labOrders?: Array<{ testName: string; testType: string; priority: string; status: string }>;
 }
 
@@ -457,8 +458,11 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                               </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                              {(round.prescriptions?.length ?? 0) > 0 && (
-                                <Chip label={`${round.prescriptions!.length} Rx`} size="small" color="success" icon={<Medication />} />
+                              {((round.prescriptions?.length ?? 0) + (round.newPrescriptions?.length ?? 0)) > 0 && (
+                                <Chip
+                                  label={`${(round.prescriptions?.length ?? 0) + (round.newPrescriptions?.length ?? 0)} Rx`}
+                                  size="small" color="success" icon={<Medication />}
+                                />
                               )}
                               {(round.labOrders?.length ?? 0) > 0 && (
                                 <Chip label={`${round.labOrders!.length} Labs`} size="small" color="info" icon={<Science />} />
@@ -490,7 +494,8 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                                 <Typography variant="body2">{round.notes}</Typography>
                               </Grid>
                             )}
-                            {(round.prescriptions?.length ?? 0) > 0 && (
+                            {/* Prescriptions: old-style (EncounterPrescription) + new-style (Prescription table) */}
+                            {((round.prescriptions?.length ?? 0) + (round.newPrescriptions?.length ?? 0)) > 0 && (
                               <Grid item xs={12}>
                                 <Typography variant="caption" color="text.secondary" fontWeight={700}>
                                   Prescriptions
@@ -504,8 +509,9 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                                     </TableRow>
                                   </TableHead>
                                   <TableBody>
-                                    {round.prescriptions!.map((p, pi) => (
-                                      <TableRow key={pi}>
+                                    {/* Old-style EncounterPrescription rows */}
+                                    {(round.prescriptions ?? []).map((p: any, pi: number) => (
+                                      <TableRow key={`ep-${pi}`}>
                                         <TableCell>{p.medicineName}</TableCell>
                                         <TableCell>{p.dosage}</TableCell>
                                         <TableCell>{p.frequency}</TableCell>
@@ -513,6 +519,18 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                                         <TableCell>{p.instructions || '—'}</TableCell>
                                       </TableRow>
                                     ))}
+                                    {/* New-style Prescription table rows */}
+                                    {(round.newPrescriptions ?? []).flatMap((rx: any, ri: number) =>
+                                      (Array.isArray(rx.medications) ? rx.medications : []).map((m: any, mi: number) => (
+                                        <TableRow key={`rx-${ri}-${mi}`}>
+                                          <TableCell>{m.name}</TableCell>
+                                          <TableCell>{m.dosage}</TableCell>
+                                          <TableCell>{m.frequency}</TableCell>
+                                          <TableCell>{m.duration}</TableCell>
+                                          <TableCell>{m.instructions || '—'}</TableCell>
+                                        </TableRow>
+                                      ))
+                                    )}
                                   </TableBody>
                                 </Table>
                               </Grid>
@@ -597,7 +615,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                   { key: 'bpSystolic',      label: 'BP Systolic',   placeholder: '120', unit: 'mmHg' },
                   { key: 'bpDiastolic',     label: 'BP Diastolic',  placeholder: '80',  unit: 'mmHg' },
                   { key: 'heartRate',       label: 'Pulse',         placeholder: '72',  unit: 'bpm' },
-                  { key: 'temperature',     label: 'Temperature',   placeholder: '98.6',unit: '°F' },
+                  { key: 'temperature',     label: 'Temperature',   placeholder: '98.6',unit: '°C' },
                   { key: 'oxygenSaturation',label: 'SpO₂',          placeholder: '98',  unit: '%' },
                   { key: 'weight',          label: 'Weight',        placeholder: '70',  unit: 'kg' },
                   { key: 'height',          label: 'Height',        placeholder: '165', unit: 'cm' },

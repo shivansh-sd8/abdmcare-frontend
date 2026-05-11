@@ -26,6 +26,8 @@ import {
   CardContent,
   alpha,
   Chip,
+  Divider,
+  useTheme,
 } from '@mui/material';
 import {
   Add,
@@ -34,6 +36,9 @@ import {
   Thermostat,
   Favorite,
   Air,
+  FitnessCenter,
+  Height,
+  Opacity,
 } from '@mui/icons-material';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import vitalsService from '../../services/vitalsService';
@@ -57,6 +62,8 @@ interface VitalsRecord {
 
 const VitalsManagement: React.FC = () => {
   const permissions = useRolePermissions();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const [vitals, setVitals] = useState<VitalsRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,8 +107,14 @@ const VitalsManagement: React.FC = () => {
   const fetchPatients = async () => {
     try {
       const response = await patientService.searchPatients({ limit: 100 }) as any;
-      setPatients(response.data?.patients || response.data?.data || []);
-    } catch { /* silently fail */ }
+      // Backend returns: { success, data: Patient[] }  (array directly, no wrapper key)
+      const list = Array.isArray(response.data)
+        ? response.data
+        : response.data?.patients || response.data?.data || [];
+      setPatients(list);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load patient list');
+    }
   };
 
   const handleCreate = async () => {
@@ -189,7 +202,7 @@ const VitalsManagement: React.FC = () => {
                   <TableCell sx={{ fontWeight: 600 }}>Patient</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>BP (mmHg)</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Heart Rate</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Temp (°F)</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Temp (°C)</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>SpO2</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Date</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
@@ -220,7 +233,7 @@ const VitalsManagement: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>{v.heartRate ? `${v.heartRate} bpm` : '-'}</TableCell>
-                      <TableCell>{v.temperature ? `${v.temperature}°F` : '-'}</TableCell>
+                      <TableCell>{v.temperature ? `${v.temperature}°C` : '-'}</TableCell>
                       <TableCell>{getSpO2Status(v.oxygenSaturation) || '-'}</TableCell>
                       <TableCell>{new Date(v.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
@@ -251,7 +264,7 @@ const VitalsManagement: React.FC = () => {
             <Grid item xs={6}><TextField label="BP Systolic" type="number" fullWidth size="small" value={formData.bloodPressureSystolic} onChange={(e) => setFormData({ ...formData, bloodPressureSystolic: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">mmHg</Typography> }} /></Grid>
             <Grid item xs={6}><TextField label="BP Diastolic" type="number" fullWidth size="small" value={formData.bloodPressureDiastolic} onChange={(e) => setFormData({ ...formData, bloodPressureDiastolic: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">mmHg</Typography> }} /></Grid>
             <Grid item xs={6}><TextField label="Heart Rate" type="number" fullWidth size="small" value={formData.heartRate} onChange={(e) => setFormData({ ...formData, heartRate: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">bpm</Typography> }} /></Grid>
-            <Grid item xs={6}><TextField label="Temperature" type="number" fullWidth size="small" value={formData.temperature} onChange={(e) => setFormData({ ...formData, temperature: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">°F</Typography> }} /></Grid>
+            <Grid item xs={6}><TextField label="Temperature" type="number" fullWidth size="small" value={formData.temperature} onChange={(e) => setFormData({ ...formData, temperature: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">°C</Typography> }} /></Grid>
             <Grid item xs={6}><TextField label="Respiratory Rate" type="number" fullWidth size="small" value={formData.respiratoryRate} onChange={(e) => setFormData({ ...formData, respiratoryRate: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">/min</Typography> }} /></Grid>
             <Grid item xs={6}><TextField label="SpO2" type="number" fullWidth size="small" value={formData.oxygenSaturation} onChange={(e) => setFormData({ ...formData, oxygenSaturation: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">%</Typography> }} /></Grid>
             <Grid item xs={6}><TextField label="Weight" type="number" fullWidth size="small" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} InputProps={{ endAdornment: <Typography variant="caption">kg</Typography> }} /></Grid>
@@ -266,26 +279,139 @@ const VitalsManagement: React.FC = () => {
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog open={viewOpen} onClose={() => setViewOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Vitals Details</DialogTitle>
-        <DialogContent>
+      <Dialog open={viewOpen} onClose={() => setViewOpen(false)} maxWidth="sm" fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" fontWeight={700}>Vitals Details</Typography>
           {selectedVitals && (
-            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Typography><strong>Patient:</strong> {selectedVitals.patient?.firstName} {selectedVitals.patient?.lastName}</Typography>
-              <Typography><strong>Date:</strong> {new Date(selectedVitals.createdAt).toLocaleString()}</Typography>
-              <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><Air sx={{ color: '#E74C3C' }} /><Typography variant="body2">BP</Typography><Typography fontWeight={600}>{selectedVitals.bloodPressureSystolic || '-'}/{selectedVitals.bloodPressureDiastolic || '-'} mmHg</Typography></Paper></Grid>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><Favorite sx={{ color: '#E74C3C' }} /><Typography variant="body2">Heart Rate</Typography><Typography fontWeight={600}>{selectedVitals.heartRate || '-'} bpm</Typography></Paper></Grid>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><Thermostat sx={{ color: '#F39C12' }} /><Typography variant="body2">Temperature</Typography><Typography fontWeight={600}>{selectedVitals.temperature || '-'} °F</Typography></Paper></Grid>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><MonitorHeart sx={{ color: '#4A90E2' }} /><Typography variant="body2">SpO2</Typography><Typography fontWeight={600}>{selectedVitals.oxygenSaturation || '-'}%</Typography></Paper></Grid>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><Typography variant="body2">Weight</Typography><Typography fontWeight={600}>{selectedVitals.weight || '-'} kg</Typography></Paper></Grid>
-                <Grid item xs={6}><Paper sx={{ p: 1.5, textAlign: 'center', backgroundColor: 'grey.50' }}><Typography variant="body2">Height</Typography><Typography fontWeight={600}>{selectedVitals.height || '-'} cm</Typography></Paper></Grid>
-              </Grid>
-              {selectedVitals.notes && <Typography sx={{ mt: 1 }}><strong>Notes:</strong> {selectedVitals.notes}</Typography>}
-            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {selectedVitals.patient?.firstName} {selectedVitals.patient?.lastName}
+              {selectedVitals.patient?.uhid && ` · ${selectedVitals.patient.uhid}`}
+              {' · '}{new Date(selectedVitals.createdAt).toLocaleString()}
+            </Typography>
           )}
+        </DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          {selectedVitals && (() => {
+            const vitalCards = [
+              {
+                label: 'Blood Pressure',
+                value: (selectedVitals.bloodPressureSystolic && selectedVitals.bloodPressureDiastolic)
+                  ? `${selectedVitals.bloodPressureSystolic}/${selectedVitals.bloodPressureDiastolic}`
+                  : '—',
+                unit: 'mmHg',
+                icon: <Air />,
+                color: '#e53e3e',
+                status: getBPStatus(selectedVitals.bloodPressureSystolic, selectedVitals.bloodPressureDiastolic),
+              },
+              {
+                label: 'Heart Rate',
+                value: selectedVitals.heartRate ?? '—',
+                unit: 'bpm',
+                icon: <Favorite />,
+                color: '#e53e3e',
+              },
+              {
+                label: 'Temperature',
+                value: selectedVitals.temperature ?? '—',
+                unit: '°C',
+                icon: <Thermostat />,
+                color: '#dd6b20',
+              },
+              {
+                label: 'SpO2',
+                value: selectedVitals.oxygenSaturation ?? '—',
+                unit: '%',
+                icon: <Opacity />,
+                color: '#3182ce',
+                status: getSpO2Status(selectedVitals.oxygenSaturation),
+              },
+              {
+                label: 'Resp. Rate',
+                value: selectedVitals.respiratoryRate ?? '—',
+                unit: '/min',
+                icon: <MonitorHeart />,
+                color: '#6b46c1',
+              },
+              {
+                label: 'Weight',
+                value: selectedVitals.weight ?? '—',
+                unit: 'kg',
+                icon: <FitnessCenter />,
+                color: '#2f855a',
+              },
+              {
+                label: 'Height',
+                value: selectedVitals.height ?? '—',
+                unit: 'cm',
+                icon: <Height />,
+                color: '#2c7a7b',
+              },
+            ];
+
+            return (
+              <Grid container spacing={2}>
+                {vitalCards.map((card) => (
+                  <Grid item xs={6} key={card.label}>
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: isDark ? alpha(card.color, 0.25) : alpha(card.color, 0.2),
+                        bgcolor: isDark ? alpha(card.color, 0.08) : alpha(card.color, 0.05),
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.5,
+                        height: '100%',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Box sx={{
+                          color: card.color,
+                          display: 'flex',
+                          p: 0.5,
+                          borderRadius: 1,
+                          bgcolor: isDark ? alpha(card.color, 0.15) : alpha(card.color, 0.1),
+                        }}>
+                          {card.icon}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                          {card.label}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+                        <Typography variant="h6" fontWeight={700} sx={{ color: card.color, lineHeight: 1 }}>
+                          {String(card.value)}
+                        </Typography>
+                        {card.value !== '—' && (
+                          <Typography variant="caption" color="text.secondary">{card.unit}</Typography>
+                        )}
+                      </Box>
+                      {card.status && <Box sx={{ mt: 0.5 }}>{card.status}</Box>}
+                    </Box>
+                  </Grid>
+                ))}
+                {selectedVitals.notes && (
+                  <Grid item xs={12}>
+                    <Box sx={{
+                      p: 2, borderRadius: 2, border: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: isDark ? 'rgba(255,255,255,0.03)' : 'grey.50',
+                    }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>{selectedVitals.notes}</Typography>
+                    </Box>
+                  </Grid>
+                )}
+              </Grid>
+            );
+          })()}
         </DialogContent>
-        <DialogActions><Button onClick={() => setViewOpen(false)}>Close</Button></DialogActions>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button variant="contained" onClick={() => setViewOpen(false)}>Close</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

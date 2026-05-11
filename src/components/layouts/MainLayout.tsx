@@ -42,11 +42,14 @@ import {
   PersonAdd,
   MeetingRoom,
   Receipt,
+  DarkMode,
+  LightMode,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
 import { getMenuItemsForRole, UserRole } from '../../config/rolePermissions';
 import api from '../../services/api';
+import { useThemeMode } from '../../context/ThemeContext';
 
 const drawerWidth = 280;
 
@@ -81,6 +84,8 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
+  const { mode, toggleTheme } = useThemeMode();
+  const isDark = mode === 'dark';
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
@@ -126,6 +131,22 @@ const MainLayout: React.FC = () => {
     return roleColors[role] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
   };
 
+  // Solid accent color for dark-mode sidebar highlights
+  const getRoleAccent = (role: string) => {
+    const map: { [key: string]: string } = {
+      SUPER_ADMIN:    '#FF6B6B',
+      ADMIN:          '#667eea',
+      DOCTOR:         '#50C878',
+      NURSE:          '#9B59B6',
+      RECEPTIONIST:   '#F39C12',
+      LAB_TECHNICIAN: '#E74C3C',
+      PHARMACIST:     '#3498DB',
+    };
+    return map[role] || '#667eea';
+  };
+
+  const roleAccent = getRoleAccent(userRole);
+
   const getRoleLabel = (role: string) => {
     const roleLabels: { [key: string]: string } = {
       SUPER_ADMIN: 'Super Admin',
@@ -154,10 +175,20 @@ const MainLayout: React.FC = () => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: getRoleColor(userRole),
+        bgcolor: isDark ? '#0d1117' : 'transparent',
+        background: isDark ? 'none' : getRoleColor(userRole),
         color: 'white',
+        // Subtle left accent strip in dark mode
+        ...(isDark && {
+          borderRight: `1px solid rgba(240,246,252,0.08)`,
+        }),
       }}
     >
+      {/* Top accent bar in dark mode */}
+      {isDark && (
+        <Box sx={{ height: 3, background: `linear-gradient(90deg, ${roleAccent}, transparent)` }} />
+      )}
+
       <Box sx={{ p: 3, pb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
           <Box
@@ -165,7 +196,8 @@ const MainLayout: React.FC = () => {
               width: 44,
               height: 44,
               borderRadius: 2,
-              background: 'rgba(255,255,255,0.2)',
+              background: isDark ? alpha(roleAccent, 0.15) : 'rgba(255,255,255,0.2)',
+              border: isDark ? `1px solid ${alpha(roleAccent, 0.3)}` : 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -176,10 +208,10 @@ const MainLayout: React.FC = () => {
             🏥
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight="700" sx={{ lineHeight: 1.2 }}>
+            <Typography variant="h6" fontWeight="700" sx={{ lineHeight: 1.2, color: isDark ? '#e6edf3' : 'white' }}>
               AbhaAyushman
             </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.85, fontSize: '0.7rem' }}>
+            <Typography variant="caption" sx={{ opacity: 0.6, fontSize: '0.7rem', color: isDark ? '#8b949e' : 'rgba(255,255,255,0.85)' }}>
               ABDM Integrated HIMS
             </Typography>
           </Box>
@@ -189,12 +221,12 @@ const MainLayout: React.FC = () => {
       <Box sx={{ px: 2, mb: 2 }}>
         <Box
           sx={{
-            background: alpha('#ffffff', 0.15),
+            background: isDark ? alpha(roleAccent, 0.08) : alpha('#ffffff', 0.15),
             borderRadius: 2,
             p: 2,
             backdropFilter: 'blur(10px)',
             border: '1px solid',
-            borderColor: alpha('#ffffff', 0.2),
+            borderColor: isDark ? alpha(roleAccent, 0.2) : alpha('#ffffff', 0.2),
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -202,16 +234,17 @@ const MainLayout: React.FC = () => {
               sx={{
                 width: 48,
                 height: 48,
-                bgcolor: 'rgba(255,255,255,0.3)',
-                color: 'white',
+                bgcolor: isDark ? alpha(roleAccent, 0.25) : 'rgba(255,255,255,0.3)',
+                color: isDark ? roleAccent : 'white',
                 fontWeight: 'bold',
                 fontSize: '1.1rem',
+                border: isDark ? `2px solid ${alpha(roleAccent, 0.4)}` : 'none',
               }}
             >
               {userName.substring(0, 2).toUpperCase()}
             </Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" fontWeight="600" noWrap>
+              <Typography variant="body2" fontWeight="600" noWrap sx={{ color: isDark ? '#e6edf3' : 'white' }}>
                 {userName}
               </Typography>
               <Chip
@@ -221,9 +254,9 @@ const MainLayout: React.FC = () => {
                   height: 20,
                   fontSize: '0.65rem',
                   fontWeight: 600,
-                  bgcolor: 'rgba(255,255,255,0.25)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.3)',
+                  bgcolor: isDark ? alpha(roleAccent, 0.2) : 'rgba(255,255,255,0.25)',
+                  color: isDark ? roleAccent : 'white',
+                  border: `1px solid ${isDark ? alpha(roleAccent, 0.35) : 'rgba(255,255,255,0.3)'}`,
                   mt: 0.5,
                 }}
               />
@@ -232,7 +265,7 @@ const MainLayout: React.FC = () => {
         </Box>
       </Box>
 
-      <Divider sx={{ borderColor: alpha('#ffffff', 0.2), mx: 2 }} />
+      <Divider sx={{ borderColor: isDark ? 'rgba(240,246,252,0.08)' : alpha('#ffffff', 0.2), mx: 2 }} />
 
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <List sx={{ px: 2, py: 2 }}>
@@ -244,15 +277,24 @@ const MainLayout: React.FC = () => {
                   onClick={() => navigate(item.path)}
                   sx={{
                     borderRadius: 2,
-                    py: 1.5,
+                    py: 1.25,
                     px: 2,
-                    color: 'white',
+                    color: isDark
+                      ? (isActive ? roleAccent : '#8b949e')
+                      : 'white',
                     transition: 'all 0.2s',
-                    backgroundColor: isActive ? alpha('#ffffff', 0.2) : 'transparent',
+                    backgroundColor: isActive
+                      ? (isDark ? alpha(roleAccent, 0.12) : alpha('#ffffff', 0.2))
+                      : 'transparent',
                     '&:hover': {
-                      backgroundColor: alpha('#ffffff', 0.15),
+                      backgroundColor: isDark
+                        ? alpha(roleAccent, 0.08)
+                        : alpha('#ffffff', 0.15),
+                      color: isDark ? roleAccent : 'white',
                       transform: 'translateX(4px)',
                     },
+                    // Active left indicator
+                    position: 'relative',
                     '&:before': isActive
                       ? {
                           content: '""',
@@ -260,9 +302,9 @@ const MainLayout: React.FC = () => {
                           left: 0,
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          width: 4,
+                          width: 3,
                           height: '60%',
-                          bgcolor: 'white',
+                          bgcolor: isDark ? roleAccent : 'white',
                           borderRadius: '0 4px 4px 0',
                         }
                       : {},
@@ -270,9 +312,11 @@ const MainLayout: React.FC = () => {
                 >
                   <ListItemIcon
                     sx={{
-                      color: 'white',
+                      color: isDark
+                        ? (isActive ? roleAccent : '#484f58')
+                        : 'white',
                       minWidth: 40,
-                      opacity: isActive ? 1 : 0.8,
+                      opacity: isActive ? 1 : (isDark ? 1 : 0.8),
                     }}
                   >
                     {item.icon}
@@ -282,6 +326,9 @@ const MainLayout: React.FC = () => {
                     primaryTypographyProps={{
                       fontWeight: isActive ? 600 : 500,
                       fontSize: '0.9rem',
+                      color: isDark
+                        ? (isActive ? roleAccent : '#8b949e')
+                        : 'white',
                     }}
                   />
                   {item.badge && (
@@ -292,8 +339,9 @@ const MainLayout: React.FC = () => {
                         height: 20,
                         fontSize: '0.65rem',
                         fontWeight: 600,
-                        bgcolor: '#4caf50',
-                        color: 'white',
+                        bgcolor: isDark ? alpha('#4caf50', 0.2) : '#4caf50',
+                        color: isDark ? '#4caf50' : 'white',
+                        border: isDark ? `1px solid ${alpha('#4caf50', 0.35)}` : 'none',
                       }}
                     />
                   )}
@@ -304,7 +352,7 @@ const MainLayout: React.FC = () => {
         </List>
       </Box>
 
-      <Divider sx={{ borderColor: alpha('#ffffff', 0.2), mx: 2 }} />
+      <Divider sx={{ borderColor: isDark ? 'rgba(240,246,252,0.08)' : alpha('#ffffff', 0.2), mx: 2 }} />
 
       <List sx={{ px: 2, py: 2 }}>
         <ListItem disablePadding>
@@ -312,15 +360,16 @@ const MainLayout: React.FC = () => {
             onClick={handleLogout}
             sx={{
               borderRadius: 2,
-              py: 1.5,
+              py: 1.25,
               px: 2,
-              color: 'white',
+              color: isDark ? '#8b949e' : 'white',
               '&:hover': {
-                backgroundColor: alpha('#d32f2f', 0.3),
+                backgroundColor: isDark ? alpha('#f56565', 0.12) : alpha('#d32f2f', 0.3),
+                color: isDark ? '#f56565' : 'white',
               },
             }}
           >
-            <ListItemIcon sx={{ color: 'white', minWidth: 40 }}>
+            <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
               <Logout />
             </ListItemIcon>
             <ListItemText
@@ -328,6 +377,7 @@ const MainLayout: React.FC = () => {
               primaryTypographyProps={{
                 fontWeight: 500,
                 fontSize: '0.9rem',
+                color: 'inherit',
               }}
             />
           </ListItemButton>
@@ -335,10 +385,10 @@ const MainLayout: React.FC = () => {
       </List>
 
       <Box sx={{ p: 2, pt: 0 }}>
-        <Typography variant="caption" sx={{ opacity: 0.7, display: 'block', textAlign: 'center', mb: 0.5 }}>
+        <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', textAlign: 'center', mb: 0.5, color: isDark ? '#8b949e' : 'white' }}>
           AbhaAyushman v1.0.0
         </Typography>
-        <Typography variant="caption" sx={{ opacity: 0.6, display: 'block', textAlign: 'center', fontSize: '0.65rem' }}>
+        <Typography variant="caption" sx={{ opacity: 0.4, display: 'block', textAlign: 'center', fontSize: '0.65rem', color: isDark ? '#8b949e' : 'white' }}>
           ABDM Certified Healthcare
         </Typography>
       </Box>
@@ -346,18 +396,18 @@ const MainLayout: React.FC = () => {
   );
 
   return (
-    <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh', bgcolor: '#f5f7fa' }}>
+    <Box sx={{ display: 'flex', width: '100%', minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar
         position="fixed"
-        elevation={1}
+        elevation={0}
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
-          bgcolor: 'white',
+          bgcolor: 'background.paper',
           color: 'text.primary',
-          borderBottom: '2px solid',
+          borderBottom: '1px solid',
           borderColor: 'divider',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          boxShadow: isDark ? 'none' : '0 1px 8px rgba(0,0,0,0.06)',
         }}
       >
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, sm: 3 } }}>
@@ -391,6 +441,14 @@ const MainLayout: React.FC = () => {
             )}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              size="large"
+              onClick={toggleTheme}
+              title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              color="inherit"
+            >
+              {mode === 'light' ? <DarkMode /> : <LightMode />}
+            </IconButton>
             <IconButton 
               size="large"
               onClick={() => navigate('/notifications')}
@@ -447,7 +505,7 @@ const MainLayout: React.FC = () => {
               boxSizing: 'border-box',
               width: drawerWidth,
               border: 'none',
-              boxShadow: '4px 0 24px rgba(0,0,0,0.12)',
+              boxShadow: isDark ? 'none' : '4px 0 24px rgba(0,0,0,0.12)',
             },
           }}
           open
@@ -462,7 +520,7 @@ const MainLayout: React.FC = () => {
           p: { xs: 2, sm: 3, md: 4 },
           pt: 0,
           minHeight: '100vh',
-          bgcolor: '#f5f7fa',
+          bgcolor: 'background.default',
           width: '100%',
         }}
       >

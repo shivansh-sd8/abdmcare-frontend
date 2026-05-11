@@ -3,14 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import App from './App';
 import { store } from './store';
-import theme from './theme';
+import { AppThemeProvider } from './context/ThemeContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,8 +29,7 @@ root.render(
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
+          <AppThemeProvider>
             <App />
             <ToastContainer
               position="top-right"
@@ -47,7 +44,7 @@ root.render(
               limit={3}
               theme="colored"
             />
-          </ThemeProvider>
+          </AppThemeProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </Provider>

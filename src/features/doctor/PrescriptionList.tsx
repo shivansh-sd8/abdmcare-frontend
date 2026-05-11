@@ -245,8 +245,10 @@ ${rx.notes ? `<div class="notes"><strong>Notes:</strong> ${rx.notes}</div>` : ''
         {permissions.canCreatePrescription && (
             <Button variant="contained" startIcon={<Add />}
               onClick={() => {
-                patientService.searchPatients({ limit: 100 } as any).then((r: any) =>
-                  setPatients(r.data?.patients || r.data?.data || []));
+                patientService.searchPatients({ limit: 100 } as any).then((r: any) => {
+                  const list = Array.isArray(r.data) ? r.data : r.data?.patients || r.data?.data || [];
+                  setPatients(list);
+                });
                 setCreateOpen(true);
               }}>
             New Prescription

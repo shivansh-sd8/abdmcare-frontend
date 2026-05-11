@@ -112,7 +112,7 @@ export const useRolePermissions = (): UserPermissions => {
     canViewVitals: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role),
     canOrderInvestigation: role === 'DOCTOR',
     canViewInvestigations: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'].includes(role),
-    canUpdateInvestigationStatus: ['DOCTOR', 'LAB_TECHNICIAN'].includes(role),
+    canUpdateInvestigationStatus: ['DOCTOR', 'LAB_TECHNICIAN', 'RADIOLOGIST', 'ADMIN', 'SUPER_ADMIN'].includes(role),
     
     // System permissions
     canManageUsers: canManageUsers(role),
