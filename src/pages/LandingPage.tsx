@@ -33,7 +33,6 @@ import {
   Assessment,
   CheckCircle,
   ArrowForward,
-  Star,
   Menu as MenuIcon,
   Close,
   Science,
@@ -48,6 +47,9 @@ import {
   Groups,
   EventNote,
   MonitorHeart,
+  Code,
+  DataObject,
+  Api,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -161,46 +163,6 @@ const ModuleCard: React.FC<ModuleCardProps> = ({ icon, title, desc, color, roles
   </Card>
 );
 
-/* ─── testimonial card ─── */
-interface TestimonialProps {
-  quote: string;
-  name: string;
-  role: string;
-  hospital: string;
-  initials: string;
-  color: string;
-}
-const Testimonial: React.FC<TestimonialProps> = ({ quote, name, role, hospital, initials, color }) => (
-  <Card
-    elevation={0}
-    sx={{
-      height: '100%',
-      border: '1px solid',
-      borderColor: 'divider',
-      p: 0,
-      transition: 'box-shadow 0.3s',
-      '&:hover': { boxShadow: 6 },
-    }}
-  >
-    <CardContent sx={{ p: 3.5 }}>
-      <Stack direction="row" spacing={0.5} sx={{ mb: 2 }}>
-        {[1, 2, 3, 4, 5].map((s) => <Star key={s} sx={{ color: '#FBBF24', fontSize: 16 }} />)}
-      </Stack>
-      <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.8, mb: 3, fontStyle: 'italic' }}>
-        "{quote}"
-      </Typography>
-      <Stack direction="row" spacing={1.5} alignItems="center">
-        <Avatar sx={{ bgcolor: color, width: 40, height: 40, fontWeight: 700, fontSize: '0.9rem' }}>
-          {initials}
-        </Avatar>
-        <Box>
-          <Typography variant="subtitle2" fontWeight={700}>{name}</Typography>
-          <Typography variant="caption" color="text.secondary">{role} · {hospital}</Typography>
-        </Box>
-      </Stack>
-    </CardContent>
-  </Card>
-);
 
 /* ═══════════════════════════════════════════════════════════ MAIN ═══ */
 const LandingPage: React.FC = () => {
@@ -257,7 +219,7 @@ const LandingPage: React.FC = () => {
     {
       icon: <HealthAndSafety fontSize="medium" />,
       title: 'ABHA & Consent',
-      desc: 'Fully ABDM-compliant ABHA ID creation, health record linking, and patient consent management.',
+      desc: 'ABHA ID creation framework, health record linking capabilities, and consent management system designed for ABDM integration.',
       color: '#8B5CF6',
       roles: ['Admin', 'Doctor', 'Receptionist'],
     },
@@ -271,53 +233,32 @@ const LandingPage: React.FC = () => {
     {
       icon: <Assessment fontSize="medium" />,
       title: 'Analytics & Audit',
-      desc: 'Live dashboards, operational insights, and comprehensive audit logs for full regulatory compliance.',
+      desc: 'Dashboard with operational insights, comprehensive audit logs, and reporting capabilities for hospital management.',
       color: '#14B8A6',
       roles: ['Admin', 'Super Admin'],
     },
   ];
 
-  const testimonials: TestimonialProps[] = [
-    {
-      quote: 'AbhaAyushman has transformed our patient flow. The integrated billing across lab, pharmacy, and OPD is something no other HIMS offered us.',
-      name: 'Dr. Priya Sharma',
-      role: 'Medical Director',
-      hospital: 'Apollo Diagnostics, Jaipur',
-      initials: 'PS',
-      color: '#6366F1',
-    },
-    {
-      quote: 'Setting up ABHA IDs for patients is now a two-minute task. The ABDM integration is genuinely seamless and the support team is outstanding.',
-      name: 'Ramesh Agarwal',
-      role: 'Hospital Administrator',
-      hospital: 'Sunrise Multi-Specialty, Pune',
-      initials: 'RA',
-      color: '#0EA5E9',
-    },
-    {
-      quote: 'Our lab team loves the structured result entry with pre-filled reference values. It saves us 40% time on report generation alone.',
-      name: 'Dr. Kavita Nair',
-      role: 'Head of Pathology',
-      hospital: 'Kokilaben Hospital, Mumbai',
-      initials: 'KN',
-      color: '#10B981',
-    },
-  ];
 
   const benefits = [
     'Complete OPD & IPD Workflow',
-    'ABHA ID Integration & Consent',
-    'Role-Based Access for 8+ Roles',
+    'ABHA ID Framework Ready',
+    'Role-Based Access Control',
     'Automated Itemized Billing',
     'Structured Lab Report Generation',
-    'Prescription Dispensing Tracking',
-    'Real-Time Analytics Dashboard',
+    'Prescription & Pharmacy Management',
+    'Analytics Dashboard',
     'Multi-Hospital Support',
-    'Audit Logs & ABDM Compliance',
-    'Mobile-Responsive Design',
+    'Comprehensive Audit Logs',
+    'Mobile-Responsive Interface',
   ];
 
-  const navLinks = ['Features', 'Modules', 'Testimonials'];
+  const navLinks = [
+    { label: 'Features', path: '#features' },
+    { label: 'Modules', path: '#modules' },
+    { label: 'Benefits', path: '#benefits' },
+    { label: 'Documentation', path: '/documentation' },
+  ];
 
   return (
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', overflowX: 'hidden' }}>
@@ -359,9 +300,17 @@ const LandingPage: React.FC = () => {
             <Stack direction="row" spacing={4} alignItems="center" sx={{ mr: 4 }}>
               {navLinks.map((link) => (
                 <Typography
-                  key={link}
+                  key={link.label}
                   variant="body2"
                   fontWeight={600}
+                  onClick={() => {
+                    if (link.path.startsWith('/')) {
+                      navigate(link.path);
+                    } else {
+                      const element = document.querySelector(link.path);
+                      element?.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
                   sx={{
                     cursor: 'pointer',
                     opacity: 0.8,
@@ -369,7 +318,7 @@ const LandingPage: React.FC = () => {
                     transition: 'opacity 0.2s',
                   }}
                 >
-                  {link}
+                  {link.label}
                 </Typography>
               ))}
             </Stack>
@@ -423,8 +372,20 @@ const LandingPage: React.FC = () => {
           <Divider sx={{ mb: 1 }} />
           <List>
             {navLinks.map((link) => (
-              <ListItem key={link} button onClick={() => setDrawerOpen(false)}>
-                <ListItemText primary={link} />
+              <ListItem
+                key={link.label}
+                button
+                onClick={() => {
+                  setDrawerOpen(false);
+                  if (link.path.startsWith('/')) {
+                    navigate(link.path);
+                  } else {
+                    const element = document.querySelector(link.path);
+                    element?.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+              >
+                <ListItemText primary={link.label} />
               </ListItem>
             ))}
           </List>
@@ -471,15 +432,15 @@ const LandingPage: React.FC = () => {
             <Grid item xs={12} md={7}>
                 {/* Badge */}
               <Chip
-                  icon={<Verified sx={{ color: '#4ADE80 !important', fontSize: '16px !important' }} />}
-                  label="ABDM Certified · Government of India"
+                  icon={<Verified sx={{ color: '#818CF8 !important', fontSize: '16px !important' }} />}
+                  label="Applying for ABDM Integration"
                 sx={{
-                    bgcolor: alpha('#4ADE80', 0.12),
-                    color: '#4ADE80',
+                    bgcolor: alpha('#818CF8', 0.12),
+                    color: '#818CF8',
                     fontWeight: 700,
                     fontSize: '0.75rem',
                   mb: 3,
-                    border: `1px solid ${alpha('#4ADE80', 0.3)}`,
+                    border: `1px solid ${alpha('#818CF8', 0.3)}`,
                 }}
               />
 
@@ -513,9 +474,9 @@ const LandingPage: React.FC = () => {
                 variant="h6"
                   sx={{ color: alpha('#fff', 0.7), lineHeight: 1.8, mb: 4, maxWidth: 560, fontWeight: 400 }}
                 >
-                  AbhaAyushman unifies every corner of your hospital — OPD, IPD, Lab,
-                  Pharmacy, and Billing — into one ABDM-native system built for
-                  modern Indian healthcare.
+                  A comprehensive Hospital Information Management System designed to streamline
+                  OPD, IPD, Lab, Pharmacy, and Billing workflows — built with ABDM integration
+                  capabilities for modern Indian healthcare.
               </Typography>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 5 }}>
@@ -560,7 +521,7 @@ const LandingPage: React.FC = () => {
 
                 {/* Trust line */}
                 <Stack direction="row" spacing={2} flexWrap="wrap" rowGap={1}>
-                  {['No credit card', 'HIPAA + ABDM ready', '99.9% uptime', '24/7 support'].map((t) => (
+                  {['Cloud-Based', 'ABDM Integration Ready', 'Role-Based Access', 'Secure & Compliant'].map((t) => (
                     <Stack key={t} direction="row" spacing={0.5} alignItems="center">
                       <CheckCircle sx={{ color: '#4ADE80', fontSize: 16 }} />
                       <Typography variant="caption" sx={{ color: alpha('#fff', 0.65), fontWeight: 500 }}>{t}</Typography>
@@ -656,19 +617,19 @@ const LandingPage: React.FC = () => {
                       position: 'absolute',
                       top: -16,
                       right: -16,
-                      bgcolor: alpha('#022C22', 0.9),
+                      bgcolor: alpha('#1E1B4B', 0.9),
                       backdropFilter: 'blur(16px)',
-                      border: `1px solid ${alpha('#4ADE80', 0.4)}`,
+                      border: `1px solid ${alpha('#818CF8', 0.4)}`,
                       borderRadius: 3,
                       px: 2,
                       py: 1.25,
                     }}
                   >
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <Shield sx={{ color: '#4ADE80', fontSize: 20 }} />
+                      <Shield sx={{ color: '#818CF8', fontSize: 20 }} />
                       <Box>
-                        <Typography sx={{ color: 'white', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1 }}>ABDM Certified</Typography>
-                        <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.65rem' }}>NHA Compliant Platform</Typography>
+                        <Typography sx={{ color: 'white', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1 }}>ABDM Integration</Typography>
+                        <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.65rem' }}>Application in Progress</Typography>
                       </Box>
                     </Stack>
                   </Paper>
@@ -681,10 +642,10 @@ const LandingPage: React.FC = () => {
           <Slide in={visible} direction="up" timeout={1000}>
             <Grid container spacing={2} sx={{ mt: { xs: 6, md: 10 } }}>
               {[
-                { value: '50+', label: 'Hospitals Onboarded', color: '#818CF8' },
-                { value: '2L+', label: 'Patients Managed', color: '#38BDF8' },
-                { value: '99.9%', label: 'Uptime SLA', color: '#4ADE80' },
-                { value: '< 2s', label: 'Avg Response Time', color: '#FBBF24' },
+                { value: '8+', label: 'Clinical Modules', color: '#818CF8' },
+                { value: '10+', label: 'User Roles', color: '#38BDF8' },
+                { value: 'FHIR', label: 'Standards Ready', color: '#4ADE80' },
+                { value: '24/7', label: 'Support', color: '#FBBF24' },
               ].map((s) => (
                 <Grid item xs={6} md={3} key={s.label}>
                   <StatCard {...s} />
@@ -696,7 +657,7 @@ const LandingPage: React.FC = () => {
       </Box>
 
       {/* ── MODULES ───────────────────────────────────────────────── */}
-      <Box sx={{ py: { xs: 10, md: 14 }, bgcolor: 'background.default' }}>
+      <Box id="modules" sx={{ py: { xs: 10, md: 14 }, bgcolor: 'background.default' }}>
         <Container maxWidth="lg">
           <Box sx={{ textAlign: 'center', mb: 8 }}>
             <Chip
@@ -726,6 +687,7 @@ const LandingPage: React.FC = () => {
 
       {/* ── WHY US (benefits) ─────────────────────────────────────── */}
       <Box
+        id="benefits"
         sx={{
           py: { xs: 10, md: 14 },
           background: `linear-gradient(180deg, ${alpha('#6366F1', 0.03)} 0%, transparent 100%)`,
@@ -744,9 +706,9 @@ const LandingPage: React.FC = () => {
                 healthcare
           </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.9 }}>
-                We built AbhaAyushman from the ground up with ABDM at the core — not
-                as an afterthought. Every feature, every role, every workflow is shaped
-                by real hospital needs across India.
+                AbhaAyushman is being developed to support India's ABDM mission by providing
+                a comprehensive HIMS platform. We're building features and workflows designed
+                for seamless ABDM integration to help healthcare providers join the digital health ecosystem.
           </Typography>
               <Button
                 variant="contained"
@@ -796,7 +758,7 @@ const LandingPage: React.FC = () => {
       </Box>
 
       {/* ── ROLES SECTION ─────────────────────────────────────────── */}
-      <Box sx={{ py: { xs: 10, md: 14 } }}>
+      <Box id="features" sx={{ py: { xs: 10, md: 14 } }}>
         <Container maxWidth="lg">
         <Box sx={{ textAlign: 'center', mb: 8 }}>
             <Chip icon={<People sx={{ fontSize: '14px !important' }} />} label="Role-Based Access" size="small" sx={{ bgcolor: alpha('#F59E0B', 0.08), color: '#F59E0B', fontWeight: 700, mb: 2 }} />
@@ -845,25 +807,116 @@ const LandingPage: React.FC = () => {
       </Container>
       </Box>
 
-      {/* ── TESTIMONIALS ──────────────────────────────────────────── */}
-      <Box sx={{ py: { xs: 10, md: 14 }, bgcolor: alpha(theme.palette.primary.main, 0.02), borderTop: '1px solid', borderColor: 'divider' }}>
+      {/* ── TECHNICAL TRANSPARENCY ─────────────────────────────── */}
+      <Box sx={{ py: { xs: 10, md: 14 }, bgcolor: alpha(theme.palette.background.paper, 0.5) }}>
         <Container maxWidth="lg">
           <Box sx={{ textAlign: 'center', mb: 8 }}>
-            <Chip label="Trusted by India's Hospitals" size="small" sx={{ bgcolor: alpha('#FBBF24', 0.08), color: '#D97706', fontWeight: 700, mb: 2 }} />
+            <Chip
+              label="For Healthcare Authorities & Reviewers"
+              size="small"
+              sx={{ bgcolor: alpha('#8B5CF6', 0.08), color: '#8B5CF6', fontWeight: 700, mb: 2 }}
+            />
             <Typography variant="h3" fontWeight={800} gutterBottom letterSpacing="-1px">
-              Loved by healthcare teams
+              Built with Transparency
             </Typography>
-            <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 400 }}>
-              Real results from real hospitals across India.
+            <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 640, mx: 'auto', fontWeight: 400 }}>
+              Professional platform designed for ABDM integration with complete technical documentation
             </Typography>
           </Box>
-          <Grid container spacing={3}>
-            {testimonials.map((t, i) => (
-              <Grid item xs={12} md={4} key={i}>
-                <Testimonial {...t} />
+
+          <Grid container spacing={3} sx={{ mb: 6 }}>
+            {[
+              {
+                title: 'Modern Architecture',
+                desc: 'Built with latest technologies and best practices for scalability and performance',
+                icon: <Code fontSize="large" />,
+                color: '#6366F1',
+              },
+              {
+                title: 'FHIR R4 Compliant',
+                desc: 'Health records structured using FHIR R4 standards for interoperability',
+                icon: <DataObject fontSize="large" />,
+                color: '#0EA5E9',
+              },
+              {
+                title: 'Security First',
+                desc: 'Enterprise-grade security with encryption, audit logs, and role-based access',
+                icon: <Shield fontSize="large" />,
+                color: '#10B981',
+              },
+              {
+                title: 'API Documentation',
+                desc: 'Complete OpenAPI 3.0 specification with 50+ documented endpoints',
+                icon: <Api fontSize="large" />,
+                color: '#F59E0B',
+              },
+            ].map((item, i) => (
+              <Grid item xs={12} sm={6} md={3} key={i}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    height: '100%',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    textAlign: 'center',
+                    transition: 'all 0.3s',
+                    '&:hover': {
+                      borderColor: item.color,
+                      boxShadow: `0 8px 24px ${alpha(item.color, 0.15)}`,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 2,
+                      bgcolor: alpha(item.color, 0.1),
+                      color: item.color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      mx: 'auto',
+                      mb: 2,
+                    }}
+                  >
+                    {item.icon}
+                  </Box>
+                  <Typography variant="h6" fontWeight={700} gutterBottom>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                    {item.desc}
+                  </Typography>
+                </Paper>
               </Grid>
             ))}
           </Grid>
+
+          <Box sx={{ textAlign: 'center' }}>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={() => navigate('/documentation')}
+              sx={{
+                borderColor: alpha('#6366F1', 0.3),
+                color: '#6366F1',
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                fontWeight: 700,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: '#6366F1',
+                  bgcolor: alpha('#6366F1', 0.05),
+                },
+              }}
+            >
+              View Complete Technical Documentation
+            </Button>
+          </Box>
         </Container>
       </Box>
 
@@ -880,9 +933,9 @@ const LandingPage: React.FC = () => {
         <Blob color="#0EA5E9" size={400} top="50px" right="-60px" opacity={0.25} />
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
           <Chip
-            icon={<TrendingUp sx={{ color: '#4ADE80 !important', fontSize: '16px !important' }} />}
-            label="Join 50+ hospitals already onboard"
-            sx={{ bgcolor: alpha('#4ADE80', 0.12), color: '#4ADE80', fontWeight: 700, mb: 3, border: `1px solid ${alpha('#4ADE80', 0.3)}` }}
+            icon={<TrendingUp sx={{ color: '#818CF8 !important', fontSize: '16px !important' }} />}
+            label="Built for Modern Healthcare"
+            sx={{ bgcolor: alpha('#818CF8', 0.12), color: '#818CF8', fontWeight: 700, mb: 3, border: `1px solid ${alpha('#818CF8', 0.3)}` }}
           />
           <Typography
             variant="h2"
@@ -894,7 +947,7 @@ const LandingPage: React.FC = () => {
             your hospital?
           </Typography>
           <Typography variant="h6" sx={{ color: alpha('#fff', 0.65), mb: 5, fontWeight: 400 }}>
-            Get started in minutes. No setup fees. Cancel anytime.
+            Explore our comprehensive HIMS platform designed for Indian healthcare providers.
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
             <Button
@@ -935,7 +988,7 @@ const LandingPage: React.FC = () => {
             </Button>
           </Stack>
           <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), display: 'block', mt: 3 }}>
-            No credit card required · ABDM Certified · Data stays in India
+            Professional HIMS · ABDM Integration in Progress · Secure & Compliant
           </Typography>
         </Container>
       </Box>
@@ -959,12 +1012,12 @@ const LandingPage: React.FC = () => {
                 <Typography fontWeight={800} color="white" fontSize="1.1rem">AbhaAyushman</Typography>
               </Stack>
               <Typography variant="body2" sx={{ lineHeight: 1.9, maxWidth: 280 }}>
-                India's most advanced ABDM-native Hospital Information Management
-                System — built for the future of Indian healthcare.
+                A comprehensive Hospital Information Management System with ABDM integration
+                capabilities — built for the future of Indian healthcare.
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
-                <Chip label="ABDM Certified" size="small" sx={{ bgcolor: alpha('#4ADE80', 0.1), color: '#4ADE80', fontWeight: 600, fontSize: '0.7rem' }} />
-                <Chip label="NHA Compliant" size="small" sx={{ bgcolor: alpha('#38BDF8', 0.1), color: '#38BDF8', fontWeight: 600, fontSize: '0.7rem' }} />
+                <Chip label="ABDM Ready" size="small" sx={{ bgcolor: alpha('#818CF8', 0.1), color: '#818CF8', fontWeight: 600, fontSize: '0.7rem' }} />
+                <Chip label="Enterprise Grade" size="small" sx={{ bgcolor: alpha('#38BDF8', 0.1), color: '#38BDF8', fontWeight: 600, fontSize: '0.7rem' }} />
               </Stack>
             </Grid>
 
@@ -1013,7 +1066,7 @@ const LandingPage: React.FC = () => {
               © 2026 AbhaAyushman. All rights reserved.
             </Typography>
             <Typography variant="caption">
-              Built with ♥ for Indian Healthcare · ABDM Certified Platform
+              Built with ♥ for Indian Healthcare · ABDM Integration in Progress
             </Typography>
           </Stack>
         </Container>

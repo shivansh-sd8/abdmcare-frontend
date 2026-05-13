@@ -235,7 +235,7 @@ const SuperAdminSignup: React.FC = () => {
           <Stack direction="row" spacing={1.5} sx={{ position: 'relative', zIndex: 1 }}>
             {[
               { icon: <Shield sx={{ fontSize: 14 }} />, label: 'Secured with encryption', color: '#C4B5FD' },
-              { icon: <Verified sx={{ fontSize: 14 }} />, label: 'ABDM Certified', color: '#4ADE80' },
+              { icon: <Verified sx={{ fontSize: 14 }} />, label: 'ABDM Integration Ready', color: '#818CF8' },
             ].map((b) => (
               <Stack key={b.label} direction="row" spacing={0.6} alignItems="center">
                 <Box sx={{ color: b.color }}>{b.icon}</Box>

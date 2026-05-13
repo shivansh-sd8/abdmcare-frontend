@@ -123,9 +123,9 @@ const Login: React.FC = () => {
             </Stack>
 
             <Chip
-              icon={<Verified sx={{ color: '#4ADE80 !important', fontSize: '15px !important' }} />}
-              label="ABDM Certified Platform"
-              sx={{ bgcolor: alpha('#4ADE80', 0.12), color: '#4ADE80', fontWeight: 700, fontSize: '0.72rem', mb: 3, border: `1px solid ${alpha('#4ADE80', 0.25)}` }}
+              icon={<Verified sx={{ color: '#818CF8 !important', fontSize: '15px !important' }} />}
+              label="ABDM Integration Ready"
+              sx={{ bgcolor: alpha('#818CF8', 0.12), color: '#818CF8', fontWeight: 700, fontSize: '0.72rem', mb: 3, border: `1px solid ${alpha('#818CF8', 0.25)}` }}
             />
 
             <Typography variant="h3" fontWeight={800} color="white" sx={{ lineHeight: 1.2, letterSpacing: '-1px', mb: 2 }}>
@@ -135,15 +135,15 @@ const Login: React.FC = () => {
               </Box>
             </Typography>
             <Typography variant="body1" sx={{ color: alpha('#fff', 0.6), lineHeight: 1.8, maxWidth: 380 }}>
-              Unified OPD, IPD, Lab, Pharmacy, and Billing — built for modern Indian healthcare with ABDM at its core.
+              Unified OPD, IPD, Lab, Pharmacy, and Billing — built for modern Indian healthcare with ABDM integration capabilities.
             </Typography>
 
             {/* Mini stats */}
             <Stack direction="row" spacing={2} sx={{ mt: 5 }}>
               {[
-                { v: '50+', l: 'Hospitals' },
-                { v: '2L+', l: 'Patients' },
-                { v: '8', l: 'Role Types' },
+                { v: '8+', l: 'Modules' },
+                { v: '10+', l: 'Roles' },
+                { v: 'FHIR', l: 'Ready' },
               ].map((s) => (
                 <Box key={s.l} sx={{ textAlign: 'center', px: 2.5, py: 1.5, borderRadius: 2, bgcolor: alpha('#fff', 0.06), border: `1px solid ${alpha('#fff', 0.1)}` }}>
                   <Typography fontWeight={800} color="white" fontSize="1.3rem" lineHeight={1}>{s.v}</Typography>
@@ -156,8 +156,8 @@ const Login: React.FC = () => {
           {/* Bottom trust badges */}
           <Stack direction="row" spacing={1.5} sx={{ position: 'relative', zIndex: 1 }}>
             {[
-              { icon: <Shield sx={{ fontSize: 14 }} />, label: 'Data stays in India', color: '#4ADE80' },
-              { icon: <Groups sx={{ fontSize: 14 }} />, label: 'HIPAA Compliant', color: '#38BDF8' },
+              { icon: <Shield sx={{ fontSize: 14 }} />, label: 'Secure & Compliant', color: '#818CF8' },
+              { icon: <Groups sx={{ fontSize: 14 }} />, label: 'Enterprise Grade', color: '#38BDF8' },
             ].map((b) => (
               <Stack key={b.label} direction="row" spacing={0.6} alignItems="center">
                 <Box sx={{ color: b.color }}>{b.icon}</Box>

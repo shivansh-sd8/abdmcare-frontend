@@ -32,19 +32,21 @@ import BillingDashboard from './features/billing/BillingDashboard';
 import Login from './features/auth/Login';
 import SuperAdminSignup from './features/auth/SuperAdminSignup';
 import LandingPage from './pages/LandingPage';
+import DocumentationPage from './pages/DocumentationPage';
 import PrivateRoute from './components/common/PrivateRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
 
 const App: React.FC = () => {
   return (
     <Routes>
-      <Route path="/landing" element={<LandingPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/documentation" element={<DocumentationPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<SuperAdminSignup />} />
       <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
       
       <Route
-        path="/"
+        path="/app"
         element={
           <PrivateRoute>
             <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -53,7 +55,7 @@ const App: React.FC = () => {
           </PrivateRoute>
         }
       >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           
           {/* ABHA - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
@@ -276,7 +278,7 @@ const App: React.FC = () => {
           />
         </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
