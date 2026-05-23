@@ -130,7 +130,7 @@ const SuperAdminSignup: React.FC = () => {
     if (!formData.secretKey) { setError('Secret key is required'); return; }
     try {
       setLoading(true);
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8082';
       const response = await fetch(`${apiBaseUrl}/api/v1/auth/super-admin-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

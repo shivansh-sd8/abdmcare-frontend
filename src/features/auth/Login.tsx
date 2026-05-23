@@ -50,7 +50,7 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8082';
       const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
