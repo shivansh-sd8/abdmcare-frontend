@@ -1,0 +1,62 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+
+jobs:
+  deploy-production:
+    name: Deploy Production
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            echo "--- Pulling latest code ---"
+            cd /var/www/abhaayushman/abdmcare-frontend
+            git pull origin main
+            echo "--- Installing dependencies ---"
+            npm ci
+            echo "--- Building React app ---"
+            npm run build
+            echo "--- Restarting server ---"
+            pm2 reload abhaayushman-frontend --update-env
+            pm2 save
+            echo "--- Production deploy complete ---"
+
+  deploy-beta:
+    name: Deploy Beta
+    if: github.ref == 'refs/heads/beta'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
+            echo "--- Pulling latest beta code ---"
+            cd /var/www/abhaayushman/abdmcare-frontend-beta
+            git pull origin beta
+            echo "--- Installing dependencies ---"
+            npm install
+            echo "--- Building React app ---"
+            npm run build
+            echo "--- Restarting beta server ---"
+            if pm2 list | grep -q "abhaayushman-frontend-beta"; then
+              pm2 reload abhaayushman-frontend-beta --update-env
+            else
+              PORT=3003 pm2 start npm --name abhaayushman-frontend-beta -- start
+            fi
+            pm2 save
+            echo "--- Beta deploy complete ---"
