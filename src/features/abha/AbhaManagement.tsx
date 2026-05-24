@@ -195,7 +195,13 @@ const AbhaManagement: React.FC = () => {
     try {
       const res: any = await abhaService.enrolByDrivingLicense({ txnId, ...dlForm });
       const data = res?.data || res;
-      setCreatedAbha(data?.profile || data);
+      const profile = data?.profile || data?.ABHAProfile || data;
+      setCreatedAbha(profile);
+      const token = data?.tokens?.token;
+      if (token) {
+        setXToken(token);
+        fetchAbhaCard(token);
+      }
       setActiveStep(3);
       toast.success('ABHA created via Driving License!');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'DL enrollment failed'); }
@@ -433,11 +439,12 @@ const AbhaManagement: React.FC = () => {
   // CARD / QR
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const fetchAbhaCard = async (token?: string) => {
+  const fetchAbhaCard = async (token?: string, usePhr = false) => {
     const t = token || xToken;
     if (!t) return;
     try {
-      const res: any = await abhaService.getAbhaCard(t);
+      const isPhr = usePhr || (tabValue === 1 && verifyMethod === 'abha-address');
+      const res: any = isPhr ? await abhaService.phrGetCard(t) : await abhaService.getAbhaCard(t);
       const blob = res instanceof Blob ? res : new Blob([res], { type: 'image/png' });
       setCardImageUrl(URL.createObjectURL(blob));
     } catch { /* optional */ }
@@ -446,7 +453,8 @@ const AbhaManagement: React.FC = () => {
   const handleDownloadCard = async () => {
     if (!xToken) { toast.error('Please verify ABHA first to download card'); return; }
     try {
-      const res: any = await abhaService.getAbhaCard(xToken);
+      const isPhr = tabValue === 1 && verifyMethod === 'abha-address';
+      const res: any = isPhr ? await abhaService.phrGetCard(xToken) : await abhaService.getAbhaCard(xToken);
       const blob = res instanceof Blob ? res : new Blob([res], { type: 'image/png' });
       const url = URL.createObjectURL(blob);
       setCardImageUrl(url);

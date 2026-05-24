@@ -63,6 +63,9 @@ class AbhaService {
     lastName: string;
     dob: string;
     gender: string;
+    state?: string;
+    district?: string;
+    pinCode?: string;
   }) {
     return api.post(`${BASE}/enrollment/dl/enrol`, data);
   }
@@ -168,10 +171,37 @@ class AbhaService {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // PROFILE OTP OPERATIONS (mobile/email change)
+  // ══════════════════════════════════════════════════════════════════════════
+  async profileRequestOtp(params: {
+    scope: string[];
+    loginHint: string;
+    loginId: string;
+    otpSystem: 'aadhaar' | 'abdm';
+  }, xToken: string) {
+    return api.post(`${BASE}/profile/request-otp`, params, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  async profileVerifyOtp(scope: string[], txnId: string, otp: string, xToken: string) {
+    return api.post(`${BASE}/profile/verify-otp`, { scope, txnId, otp }, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // NEW vs RETURNING PATIENT LOOKUP
   // ══════════════════════════════════════════════════════════════════════════
   async lookupPatient(identifier: string) {
     return api.get(`${BASE}/patient/lookup`, { params: { identifier } });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HIP — FACILITY QR & RECEIVED SHARES
+  // ══════════════════════════════════════════════════════════════════════════
+  async getFacilityQrData() {
+    return api.get('/api/v1/hip/facility-qr');
+  }
+
+  async getReceivedShares() {
+    return api.get('/api/v1/hip/received-shares');
   }
 }
 

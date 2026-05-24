@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Alert, Chip, Grid, Divider,
   CircularProgress, Avatar, Paper, IconButton, TextField, InputAdornment,
+  Tabs, Tab,
 } from '@mui/material';
 import {
   QrCodeScanner, CameraAlt, Stop, CheckCircle, PersonAdd,
-  ContentCopy, Refresh, HealthAndSafety, Search, Person,
+  ContentCopy, Refresh, HealthAndSafety, Search, Person, Visibility,
 } from '@mui/icons-material';
 import jsQR from 'jsqr';
 import { toast } from 'react-toastify';
@@ -35,6 +36,31 @@ const ScanAndShare: React.FC = () => {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
+  const [activeTab, setActiveTab] = useState(0);
+  const [facilityQr, setFacilityQr] = useState<any>(null);
+  const [receivedShares, setReceivedShares] = useState<any[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+
+  const loadFacilityQr = useCallback(async () => {
+    try {
+      const res: any = await abhaService.getFacilityQrData();
+      setFacilityQr(res?.data || res);
+    } catch {}
+  }, []);
+
+  const loadReceivedShares = useCallback(async () => {
+    setSharesLoading(true);
+    try {
+      const res: any = await abhaService.getReceivedShares();
+      setReceivedShares(res?.data || res || []);
+    } catch {}
+    finally { setSharesLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    loadFacilityQr();
+    loadReceivedShares();
+  }, [loadFacilityQr, loadReceivedShares]);
 
   const parseQrData = useCallback((raw: string): ScanResult | null => {
     try { return JSON.parse(raw); } catch {}
@@ -196,7 +222,110 @@ const ScanAndShare: React.FC = () => {
         <Chip icon={<HealthAndSafety />} label="ABDM V3 M1" color="success" variant="outlined" />
       </Box>
 
-      <Grid container spacing={3}>
+      <Paper sx={{ mb: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label="Scan Patient QR" icon={<QrCodeScanner />} iconPosition="start" />
+          <Tab label="Facility QR (for patients)" icon={<Visibility />} iconPosition="start" />
+          <Tab label={`Received Shares (${receivedShares.length})`} icon={<Person />} iconPosition="start" />
+        </Tabs>
+      </Paper>
+
+      {/* ── Tab 1: Facility QR Display ──────────────────────────────── */}
+      {activeTab === 1 && (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>Health Facility QR Code</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Display this QR at the reception counter. Patients scan it with their PHR app to share their ABHA profile with your facility.
+          </Typography>
+          {facilityQr ? (
+            <Box>
+              <Box sx={{
+                display: 'inline-block', p: 4, border: '3px solid', borderColor: 'primary.main',
+                borderRadius: 3, bgcolor: 'white', mb: 3,
+              }}>
+                <Box sx={{
+                  width: 250, height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  bgcolor: 'grey.100', borderRadius: 2, fontFamily: 'monospace', fontSize: 11, p: 2,
+                  wordBreak: 'break-all', textAlign: 'left',
+                }}>
+                  {JSON.stringify({ hipId: facilityQr.hipId, hipName: facilityQr.hipName, url: facilityQr.scanAndShareUrl }, null, 2)}
+                </Box>
+              </Box>
+              <Divider sx={{ my: 2 }} />
+              <Grid container spacing={2} sx={{ maxWidth: 500, mx: 'auto', textAlign: 'left' }}>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">HIP ID</Typography>
+                  <Typography fontWeight={600}>{facilityQr.hipId || '—'}</Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="caption" color="text.secondary">HIP Name</Typography>
+                  <Typography fontWeight={600}>{facilityQr.hipName || '—'}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="caption" color="text.secondary">Callback URL</Typography>
+                  <Typography fontWeight={500} sx={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>{facilityQr.scanAndShareUrl || '—'}</Typography>
+                </Grid>
+              </Grid>
+              <Alert severity="info" sx={{ mt: 3, textAlign: 'left' }}>
+                In production, this data is encoded as a QR image registered with ABDM. Patients scan it with their PHR app, which then sends their profile to your <strong>POST /api/v3/hip/patient/share</strong> callback.
+              </Alert>
+            </Box>
+          ) : (
+            <Box sx={{ py: 4 }}>
+              <CircularProgress size={24} />
+              <Typography sx={{ mt: 1 }}>Loading facility data...</Typography>
+            </Box>
+          )}
+        </Paper>
+      )}
+
+      {/* ── Tab 2: Received Shares ──────────────────────────────────── */}
+      {activeTab === 2 && (
+        <Paper sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Received Profile Shares</Typography>
+            <Button size="small" startIcon={sharesLoading ? <CircularProgress size={16} /> : <Refresh />}
+              onClick={loadReceivedShares} disabled={sharesLoading}>
+              Refresh
+            </Button>
+          </Box>
+          {receivedShares.length === 0 ? (
+            <Alert severity="info">
+              No profile shares received yet. When patients scan your facility QR with their PHR app, their profiles will appear here.
+            </Alert>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {receivedShares.map((share: any) => (
+                <Card key={share.id} variant="outlined">
+                  <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>{share.name?.[0] || 'P'}</Avatar>
+                        <Box>
+                          <Typography fontWeight={600}>{share.name || 'Unknown'}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            ABHA: {share.abhaNumber || '—'} | Token: {share.tokenNumber}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Chip size="small" label={new Date(share.receivedAt).toLocaleTimeString()} variant="outlined" />
+                        <Button size="small" variant="contained"
+                          onClick={() => { setActiveTab(0); setManualInput(share.abhaNumber || share.abhaAddress || ''); }}>
+                          Look Up
+                        </Button>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </Paper>
+      )}
+
+      {/* ── Tab 0: Scan Patient QR ──────────────────────────────────── */}
+      {activeTab === 0 && <Grid container spacing={3}>
         {/* ── Left: Scanner ─────────────────────────────────────────── */}
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
@@ -427,7 +556,7 @@ const ScanAndShare: React.FC = () => {
             </Paper>
           )}
         </Grid>
-      </Grid>
+      </Grid>}
     </Box>
   );
 };
