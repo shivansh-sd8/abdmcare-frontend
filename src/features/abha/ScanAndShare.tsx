@@ -7,6 +7,7 @@ import {
   QrCodeScanner, CameraAlt, Stop, CheckCircle, PersonAdd,
   ContentCopy, Refresh, HealthAndSafety, Search, Person,
 } from '@mui/icons-material';
+import jsQR from 'jsqr';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
@@ -25,6 +26,7 @@ interface ScanResult {
 const ScanAndShare: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -33,13 +35,6 @@ const ScanAndShare: React.FC = () => {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
-  const [hasBarcodeApi, setHasBarcodeApi] = useState(true);
-
-  useEffect(() => {
-    if (!('BarcodeDetector' in window)) {
-      setHasBarcodeApi(false);
-    }
-  }, []);
 
   const parseQrData = useCallback((raw: string): ScanResult | null => {
     try { return JSON.parse(raw); } catch {}
@@ -120,39 +115,44 @@ const ScanAndShare: React.FC = () => {
       video.srcObject = stream;
 
       await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => {
-          video.play().then(resolve).catch(reject);
-        };
+        video.onloadedmetadata = () => { video.play().then(resolve).catch(reject); };
         setTimeout(() => reject(new Error('Camera took too long to start')), 10000);
       });
 
       setScanning(true);
 
-      if (!('BarcodeDetector' in window)) return;
+      // jsQR-based detection — works on ALL browsers
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
 
-      const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-      let busy = false;
-
-      intervalRef.current = setInterval(async () => {
-        if (busy || !videoRef.current || !streamRef.current) return;
+      intervalRef.current = setInterval(() => {
+        if (!videoRef.current || !streamRef.current) return;
         if (videoRef.current.readyState < 2) return;
-        busy = true;
-        try {
-          const barcodes = await detector.detect(videoRef.current);
-          if (barcodes.length > 0) {
-            const raw = barcodes[0].rawValue;
-            const parsed = parseQrData(raw);
-            if (parsed) {
-              if (intervalRef.current) clearInterval(intervalRef.current);
-              setScannedData(parsed);
-              stopCamera();
-              handleLookup(parsed);
-              return;
-            }
+
+        const vw = videoRef.current.videoWidth;
+        const vh = videoRef.current.videoHeight;
+        if (!vw || !vh) return;
+
+        canvas.width = vw;
+        canvas.height = vh;
+        ctx.drawImage(videoRef.current, 0, 0, vw, vh);
+
+        const imageData = ctx.getImageData(0, 0, vw, vh);
+        const code = jsQR(imageData.data, vw, vh, { inversionAttempts: 'dontInvert' });
+
+        if (code && code.data) {
+          const parsed = parseQrData(code.data);
+          if (parsed) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            intervalRef.current = null;
+            setScannedData(parsed);
+            stopCamera();
+            handleLookup(parsed);
           }
-        } catch {}
-        busy = false;
-      }, 500);
+        }
+      }, 400);
     } catch (err: any) {
       setCameraError(err?.message || 'Failed to access camera. Allow camera permission and try again.');
       setScanning(false);
@@ -204,12 +204,7 @@ const ScanAndShare: React.FC = () => {
               <QrCodeScanner /> QR Code Scanner
             </Typography>
 
-            {!hasBarcodeApi && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Your browser doesn't support QR scanning natively. Camera will open but won't auto-detect QR codes.
-                Use the manual input below, or try Chrome 83+.
-              </Alert>
-            )}
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
 
             <Box sx={{
               width: '100%', height: 350, bgcolor: 'grey.900', borderRadius: 2, mb: 2,
