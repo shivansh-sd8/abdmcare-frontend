@@ -28,6 +28,7 @@ const Profile: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     role: '',
@@ -50,6 +51,7 @@ const Profile: React.FC = () => {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       setFormData({
         firstName: user.firstName || '',
+        lastName: user.lastName || '',
         email: user.email || '',
         phone: user.phone || '',
         role: user.role || '',
@@ -138,7 +140,7 @@ const Profile: React.FC = () => {
                 fontSize: '3rem',
               }}
             >
-              DR
+              {`${formData.firstName?.charAt(0) || ''}${formData.lastName?.charAt(0) || ''}`.toUpperCase() || '?'}
             </Avatar>
             <Typography variant="h6" fontWeight="600" gutterBottom>
               {formData.firstName}

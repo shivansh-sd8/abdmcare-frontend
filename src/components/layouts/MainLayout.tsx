@@ -93,7 +93,7 @@ const MainLayout: React.FC = () => {
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
-  const userRole = (user.role || 'DOCTOR') as UserRole;
+  const userRole = user.role as UserRole | undefined;
 
   // Fetch hospital name for non-super-admin users
   React.useEffect(() => {
@@ -111,7 +111,7 @@ const MainLayout: React.FC = () => {
   }, [user.hospitalId, userRole]);
   
   // Get menu items based on user role
-  const roleBasedMenuItems = getMenuItemsForRole(userRole);
+  const roleBasedMenuItems = userRole ? getMenuItemsForRole(userRole) : [];
   
   // Map menu items to include icons
   const menuItems = roleBasedMenuItems.map(item => ({
@@ -149,7 +149,7 @@ const MainLayout: React.FC = () => {
     return map[role] || '#667eea';
   };
 
-  const roleAccent = getRoleAccent(userRole);
+  const roleAccent = getRoleAccent(userRole || '');
 
   const getRoleLabel = (role: string) => {
     const roleLabels: { [key: string]: string } = {
@@ -180,7 +180,7 @@ const MainLayout: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         bgcolor: isDark ? '#0d1117' : 'transparent',
-        background: isDark ? 'none' : getRoleColor(userRole),
+        background: isDark ? 'none' : getRoleColor(userRole || ''),
         color: 'white',
         // Subtle left accent strip in dark mode
         ...(isDark && {
@@ -252,7 +252,7 @@ const MainLayout: React.FC = () => {
                 {userName}
               </Typography>
               <Chip
-                label={getRoleLabel(userRole)}
+                label={getRoleLabel(userRole || '')}
                 size="small"
                 sx={{
                   height: 20,

@@ -34,6 +34,7 @@ import {
   CheckCircle,
 } from '@mui/icons-material';
 import prescriptionService from '../../services/prescriptionService';
+import { toast } from 'react-toastify';
 
 interface MedicationItem {
   name: string;
@@ -50,6 +51,8 @@ interface Prescription {
   medications: MedicationItem[];
   diagnosis?: string;
   notes?: string;
+  status?: string;
+  dispensedAt?: string;
   createdAt: string;
 }
 
@@ -62,6 +65,7 @@ const PrescriptionQueue: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+  const [dispensingId, setDispensingId] = useState<string | null>(null);
 
   const fetchPrescriptions = useCallback(async () => {
     try {
@@ -99,6 +103,25 @@ const PrescriptionQueue: React.FC = () => {
     printWindow.print();
   };
 
+  const handleDispense = async (prescription: Prescription) => {
+    try {
+      setDispensingId(prescription.id);
+      await prescriptionService.dispensePrescription(prescription.id, {
+        medicines: (prescription.medications || []).map(m => ({
+          name: m.name,
+          price: 0,
+          quantity: 1,
+        })),
+      });
+      toast.success('Prescription dispensed successfully');
+      fetchPrescriptions();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to dispense prescription');
+    } finally {
+      setDispensingId(null);
+    }
+  };
+
   const todayCount = prescriptions.filter(p => new Date(p.createdAt).toDateString() === new Date().toDateString()).length;
 
   return (
@@ -116,7 +139,11 @@ const PrescriptionQueue: React.FC = () => {
         {[
           { title: 'Total Prescriptions', value: totalCount, icon: <LocalPharmacy />, color: '#9B59B6' },
           { title: "Today's Queue", value: todayCount, icon: <Medication />, color: '#4A90E2' },
-          { title: 'Dispensed Today', value: 0, icon: <CheckCircle />, color: '#50C878' },
+          { title: 'Dispensed Today', value: prescriptions.filter(p => {
+            if (p.status?.toUpperCase() !== 'DISPENSED') return false;
+            const today = new Date().toDateString();
+            return p.dispensedAt ? new Date(p.dispensedAt).toDateString() === today : true;
+          }).length, icon: <CheckCircle />, color: '#50C878' },
         ].map((card) => (
           <Grid item xs={12} sm={4} key={card.title}>
             <Card sx={{ background: `linear-gradient(135deg, ${alpha(card.color, 0.08)} 0%, ${alpha(card.color, 0.02)} 100%)`, border: `1px solid ${alpha(card.color, 0.2)}`, borderRadius: 3 }}>
@@ -184,6 +211,26 @@ const PrescriptionQueue: React.FC = () => {
                           <Tooltip title="Print for Dispensing">
                             <IconButton size="small" color="primary" onClick={() => handlePrint(rx)}><Print fontSize="small" /></IconButton>
                           </Tooltip>
+                          {rx.status?.toUpperCase() !== 'DISPENSED' && (
+                            <Tooltip title="Dispense">
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  startIcon={dispensingId === rx.id ? <CircularProgress size={14} color="inherit" /> : <CheckCircle />}
+                                  disabled={dispensingId === rx.id}
+                                  onClick={() => handleDispense(rx)}
+                                  sx={{ textTransform: 'none', minWidth: 0, px: 1.5 }}
+                                >
+                                  Dispense
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          )}
+                          {rx.status?.toUpperCase() === 'DISPENSED' && (
+                            <Chip label="Dispensed" size="small" color="success" variant="outlined" />
+                          )}
                         </Box>
                       </TableCell>
                     </TableRow>

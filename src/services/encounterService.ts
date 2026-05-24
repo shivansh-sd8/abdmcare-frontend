@@ -1,13 +1,5 @@
 import api from './api';
 
-interface CreateEncounterData {
-  patientId: string;
-  doctorId: string;
-  type: 'OPD' | 'IPD' | 'EMERGENCY';
-  chiefComplaint: string;
-  notes?: string;
-}
-
 interface UpdateEncounterData {
   chiefComplaint?: string;
   diagnosis?: string;
@@ -17,9 +9,7 @@ interface UpdateEncounterData {
 }
 
 class EncounterService {
-  async createEncounter(data: CreateEncounterData) {
-    return api.post('/api/v1/encounters', data);
-  }
+  // Note: encounters are created via appointment check-in, not directly.
 
   async getAllEncounters(params?: {
     page?: number;

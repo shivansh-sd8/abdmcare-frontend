@@ -19,6 +19,10 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
     return <>{children}</>;
   }
 
+  if (!role) {
+    return <>{fallback}</>;
+  }
+
   const hasPermission = requiredRoles.includes(role);
 
   if (!hasPermission) {

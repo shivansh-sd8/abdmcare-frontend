@@ -44,7 +44,7 @@ export const menuPermissions: MenuItem[] = [
     path: '/app/abha',
     icon: 'HealthAndSafety',
     badge: 'ABDM',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST'],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
   },
   {
     text: 'Scan & Share',
@@ -177,7 +177,7 @@ export const canCreatePatient = (role: UserRole): boolean => {
 };
 
 export const canEditPatient = (role: UserRole): boolean => {
-  return ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role);
+  return ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'].includes(role);
 };
 
 export const canDeletePatient = (role: UserRole): boolean => {
@@ -218,6 +218,18 @@ export const canViewReports = (role: UserRole): boolean => {
 
 export const canManageABHA = (role: UserRole): boolean => {
   return ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST'].includes(role);
+};
+
+export const canDispensePrescription = (role: UserRole): boolean => {
+  return ['PHARMACIST', 'ADMIN', 'SUPER_ADMIN'].includes(role);
+};
+
+export const canRecordVitals = (role: UserRole): boolean => {
+  return ['DOCTOR', 'NURSE'].includes(role);
+};
+
+export const canOrderInvestigation = (role: UserRole): boolean => {
+  return role === 'DOCTOR';
 };
 
 export const canManageConsent = (role: UserRole): boolean => {

@@ -338,7 +338,7 @@ const Dashboard: React.FC = () => {
             <Skeleton variant="rectangular" height={140} sx={{ borderRadius: 3 }} />
           ) : (
             <StatCard
-              title={permissions.isDoctor ? "My Patients" : permissions.isNurse ? "Assigned Patients" : "Total Patients"}
+              title={permissions.isNurse ? "Assigned Patients" : "Total Patients"}
               value={stats.totalPatients.toLocaleString()}
               icon={<People sx={{ fontSize: 32 }} />}
               color="#4A90E2"
@@ -401,7 +401,7 @@ const Dashboard: React.FC = () => {
               <Skeleton variant="rectangular" height={140} sx={{ borderRadius: 3 }} />
             ) : (
               <StatCard
-                title={permissions.isDoctor ? "My Appointments" : permissions.isReceptionist ? "Today's Queue" : "Today's Appointments"}
+                title={permissions.isReceptionist ? "Today's Queue" : "Today's Appointments"}
                 value={stats.todayAppointments.toLocaleString()}
                 icon={<CalendarToday sx={{ fontSize: 32 }} />}
                 color="#F39C12"

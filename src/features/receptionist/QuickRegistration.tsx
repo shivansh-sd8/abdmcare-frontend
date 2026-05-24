@@ -168,7 +168,8 @@ const QuickRegistration: React.FC = () => {
       setLoading(true);
       await patientService.createPatient({
         ...patientData,
-        ...(abhaLinked && linkedAbhaNumber ? { abhaNumber: linkedAbhaNumber.replace(/-/g, '') } : {}),
+        dob: patientData.dob || new Date().toISOString(),
+        ...(abhaLinked && linkedAbhaNumber ? { abhaId: linkedAbhaNumber.replace(/-/g, '') } : {}),
       });
       toast.success('Patient registered successfully!');
       

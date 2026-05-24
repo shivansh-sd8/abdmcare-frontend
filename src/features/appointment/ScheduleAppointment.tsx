@@ -24,7 +24,7 @@ import {
   CheckCircle,
   ArrowBack,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import appointmentService from '../../services/appointmentService';
 import patientService from '../../services/patientService';
@@ -52,6 +52,7 @@ const timeSlots = [
 
 const ScheduleAppointment: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [searchingDoctors, setSearchingDoctors] = useState(false);
@@ -77,7 +78,19 @@ const ScheduleAppointment: React.FC = () => {
   useEffect(() => {
     fetchDoctors();
     fetchRecentPatients();
-  }, []);
+
+    const state = location.state as any;
+    if (state?.patientId) {
+      handleChange('patientId', state.patientId);
+      const preselected: any = { id: state.patientId, firstName: '', lastName: '', mobile: '', uhid: '' };
+      if (state.patientName) {
+        const parts = state.patientName.split(' ');
+        preselected.firstName = parts[0] || '';
+        preselected.lastName = parts.slice(1).join(' ') || '';
+      }
+      setSelectedPatient(preselected);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecentPatients = async () => {
     try {

@@ -86,8 +86,8 @@ const PatientList: React.FC = () => {
       setStats({
         total: data.data?.total || 0,
         abhaLinked: data.data?.abhaLinked || 0,
-        newToday: data.data?.todayCount || 0,
-        appointments: 0,
+        newToday: data.data?.todayRegistrations || data.data?.todayCount || 0,
+        appointments: data.data?.appointments || 0,
       });
     } catch (error: any) {
       console.error('Error fetching stats:', error);
@@ -156,9 +156,11 @@ const PatientList: React.FC = () => {
       field: 'abha',
       headerName: 'ABHA Status',
       width: 220,
-      renderCell: (params: GridRenderCellParams) => (
+      renderCell: (params: GridRenderCellParams) => {
+        const abhaValue = params.row.abhaNumber || params.row.abhaId || params.row.abhaRecord?.abhaNumber || '';
+        return (
         <Box>
-          {params.row.abhaNumber ? (
+          {abhaValue ? (
             <Box>
               <Chip
                 icon={<HealthAndSafety />}
@@ -168,7 +170,7 @@ const PatientList: React.FC = () => {
                 sx={{ mb: 0.5 }}
               />
               <Typography variant="caption" display="block" color="text.secondary">
-                {params.row.abhaNumber}
+                {abhaValue}
               </Typography>
             </Box>
           ) : (
@@ -180,7 +182,8 @@ const PatientList: React.FC = () => {
             />
           )}
         </Box>
-      ),
+        );
+      },
     },
     {
       field: 'demographics',
@@ -387,14 +390,15 @@ const PatientList: React.FC = () => {
         <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
           <MenuItem onClick={() => {
             handleMenuClose();
-            if (selectedPatient?.abhaNumber) {
-              navigate('/app/abha', { state: { patientId: selectedPatient.id, abhaNumber: selectedPatient.abhaNumber, mode: 'view' } });
+            const abhaValue = selectedPatient?.abhaNumber || selectedPatient?.abhaId || selectedPatient?.abhaRecord?.abhaNumber || '';
+            if (abhaValue) {
+              navigate('/app/abha', { state: { patientId: selectedPatient.id, abhaNumber: abhaValue, mode: 'view' } });
             } else {
               navigate('/app/abha', { state: { patientId: selectedPatient.id, patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`, mobile: selectedPatient.mobile, mode: 'link' } });
             }
           }}>
             <HealthAndSafety fontSize="small" sx={{ mr: 1 }} />
-            {selectedPatient?.abhaNumber ? 'View ABHA Details' : 'Link ABHA'}
+            {(selectedPatient?.abhaNumber || selectedPatient?.abhaId || selectedPatient?.abhaRecord?.abhaNumber) ? 'View ABHA Details' : 'Link ABHA'}
           </MenuItem>
         </PermissionGuard>
         <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>

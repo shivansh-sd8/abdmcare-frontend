@@ -76,7 +76,7 @@ const DoctorList: React.FC = () => {
       const data = response as any;
       setStats({
         total: data.data?.total || 0,
-        active: data.data?.active || 0,
+        active: data.data?.hprLinked || data.data?.active || data.data?.total || 0,
         specializations: data.data?.specializations?.length || 0,
       });
     } catch (error: any) {
@@ -312,7 +312,13 @@ const DoctorList: React.FC = () => {
         overflow: 'auto',
       }}>
         <DataGrid
-          rows={doctors}
+          rows={searchQuery.trim() ? doctors.filter((doc) => {
+            const q = searchQuery.toLowerCase();
+            const name = `${doc.firstName || ''} ${doc.lastName || ''}`.toLowerCase();
+            const spec = (doc.specialization || '').toLowerCase();
+            const regNo = (doc.registrationNo || '').toLowerCase();
+            return name.includes(q) || spec.includes(q) || regNo.includes(q);
+          }) : doctors}
           loading={loading}
           columns={columns}
           initialState={{

@@ -14,10 +14,13 @@ import {
   canViewReports,
   canManageABHA,
   canManageConsent,
+  canDispensePrescription,
+  canRecordVitals,
+  canOrderInvestigation,
 } from '../config/rolePermissions';
 
 interface UserPermissions {
-  role: UserRole;
+  role: UserRole | null;
   userId: string;
   userName: string;
   hospitalId: string;
@@ -44,6 +47,7 @@ interface UserPermissions {
   canCreateEncounter: boolean;
   canViewEncounters: boolean;
   canCreatePrescription: boolean;
+  canDispensePrescription: boolean;
   canViewPrescriptions: boolean;
   canRecordVitals: boolean;
   canViewVitals: boolean;
@@ -74,7 +78,8 @@ export const useRolePermissions = (): UserPermissions => {
     return userData ? JSON.parse(userData) : {};
   }, []);
 
-  const role = (user.role || 'DOCTOR') as UserRole;
+  const validRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST', 'BILLING_STAFF', 'RADIOLOGIST'];
+  const role: UserRole | null = validRoles.includes(user.role as UserRole) ? (user.role as UserRole) : null;
   const userId = user.id || '';
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
   const hospitalId = user.hospitalId || '';
@@ -86,40 +91,41 @@ export const useRolePermissions = (): UserPermissions => {
     hospitalId,
     
     // Patient permissions
-    canCreatePatient: canCreatePatient(role),
-    canEditPatient: canEditPatient(role),
-    canDeletePatient: canDeletePatient(role),
-    canViewAllPatients: ['SUPER_ADMIN', 'ADMIN'].includes(role),
+    canCreatePatient: role ? canCreatePatient(role) : false,
+    canEditPatient: role ? canEditPatient(role) : false,
+    canDeletePatient: role ? canDeletePatient(role) : false,
+    canViewAllPatients: role ? ['SUPER_ADMIN', 'ADMIN'].includes(role) : false,
     
     // Doctor permissions
-    canCreateDoctor: canCreateDoctor(role),
-    canEditDoctor: canEditDoctor(role),
-    canDeleteDoctor: canDeleteDoctor(role),
-    canViewAllDoctors: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'].includes(role),
+    canCreateDoctor: role ? canCreateDoctor(role) : false,
+    canEditDoctor: role ? canEditDoctor(role) : false,
+    canDeleteDoctor: role ? canDeleteDoctor(role) : false,
+    canViewAllDoctors: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'].includes(role) : false,
     
     // Appointment permissions
-    canCreateAppointment: canCreateAppointment(role),
-    canEditAppointment: canEditAppointment(role),
-    canCancelAppointment: canCancelAppointment(role),
-    canViewAllAppointments: ['SUPER_ADMIN', 'ADMIN'].includes(role),
+    canCreateAppointment: role ? canCreateAppointment(role) : false,
+    canEditAppointment: role ? canEditAppointment(role) : false,
+    canCancelAppointment: role ? canCancelAppointment(role) : false,
+    canViewAllAppointments: role ? ['SUPER_ADMIN', 'ADMIN'].includes(role) : false,
     
     // Clinical permissions
-    canCreateEncounter: ['SUPER_ADMIN', 'DOCTOR'].includes(role),
-    canViewEncounters: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role),
+    canCreateEncounter: role ? ['SUPER_ADMIN', 'DOCTOR'].includes(role) : false,
+    canViewEncounters: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role) : false,
     canCreatePrescription: role === 'DOCTOR',
-    canViewPrescriptions: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST'].includes(role),
-    canRecordVitals: ['DOCTOR', 'NURSE'].includes(role),
-    canViewVitals: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role),
-    canOrderInvestigation: role === 'DOCTOR',
-    canViewInvestigations: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'].includes(role),
-    canUpdateInvestigationStatus: ['DOCTOR', 'LAB_TECHNICIAN', 'RADIOLOGIST', 'ADMIN', 'SUPER_ADMIN'].includes(role),
+    canDispensePrescription: role ? canDispensePrescription(role) : false,
+    canViewPrescriptions: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST'].includes(role) : false,
+    canRecordVitals: role ? canRecordVitals(role) : false,
+    canViewVitals: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role) : false,
+    canOrderInvestigation: role ? canOrderInvestigation(role) : false,
+    canViewInvestigations: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'].includes(role) : false,
+    canUpdateInvestigationStatus: role ? ['DOCTOR', 'LAB_TECHNICIAN', 'RADIOLOGIST', 'ADMIN', 'SUPER_ADMIN'].includes(role) : false,
     
     // System permissions
-    canManageUsers: canManageUsers(role),
-    canViewReports: canViewReports(role),
-    canManageABHA: canManageABHA(role),
-    canManageConsent: canManageConsent(role),
-    canAccessAuditLogs: ['SUPER_ADMIN', 'ADMIN'].includes(role),
+    canManageUsers: role ? canManageUsers(role) : false,
+    canViewReports: role ? canViewReports(role) : false,
+    canManageABHA: role ? canManageABHA(role) : false,
+    canManageConsent: role ? canManageConsent(role) : false,
+    canAccessAuditLogs: role ? ['SUPER_ADMIN', 'ADMIN'].includes(role) : false,
     
     // Helper flags
     isAdmin: role === 'ADMIN',

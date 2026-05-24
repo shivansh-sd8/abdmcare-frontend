@@ -9,6 +9,7 @@ import {
   Add, Delete, Medication, Print, LocalPharmacy, Search,
   Refresh, ExpandMore, ExpandLess, Person, Close, CheckCircle,
 } from '@mui/icons-material';
+import { useSelector } from 'react-redux';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import prescriptionService from '../../services/prescriptionService';
 import patientService from '../../services/patientService';
@@ -50,6 +51,7 @@ const FREQ_COLORS: Record<string, string> = {
 
 export default function PrescriptionList() {
   const permissions = useRolePermissions();
+  const authUser = useSelector((state: any) => state.auth?.user);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
@@ -162,6 +164,7 @@ export default function PrescriptionList() {
     try {
       await prescriptionService.createPrescription({
         patientId: formData.patientId,
+        doctorId: authUser?.doctorId || authUser?.id,
         medications: validMeds,
         diagnosis: formData.diagnosis,
         notes: formData.notes,

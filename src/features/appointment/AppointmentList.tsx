@@ -223,7 +223,7 @@ const AppointmentList: React.FC = () => {
         setStats({
           total: statsData.total || 0,
           today: statsData.today || 0,
-          upcoming: statsData.upcoming || 0,
+          upcoming: statsData.scheduled || statsData.upcoming || 0,
           completed: statsData.completed || 0,
         });
       }
@@ -439,7 +439,7 @@ const AppointmentList: React.FC = () => {
   const statsCards = [
     { label: 'Total Appointments', value: stats.total, color: '#4A90E2', icon: <CalendarToday /> },
     { label: 'Today', value: stats.today, color: '#F39C12', icon: <Schedule /> },
-    { label: 'Upcoming', value: stats.upcoming, color: '#9B59B6', icon: <AccessTime /> },
+    { label: 'Scheduled', value: stats.upcoming, color: '#9B59B6', icon: <AccessTime /> },
     { label: 'Completed', value: stats.completed, color: '#50C878', icon: <CheckCircle /> },
   ];
 
@@ -547,7 +547,13 @@ const AppointmentList: React.FC = () => {
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
       }}>
         <DataGrid
-          rows={appointments}
+          rows={searchQuery.trim() ? appointments.filter((apt) => {
+            const q = searchQuery.toLowerCase();
+            const patientName = `${apt.patient?.firstName || ''} ${apt.patient?.lastName || ''}`.toLowerCase();
+            const doctorName = `${apt.doctor?.firstName || ''} ${apt.doctor?.lastName || ''}`.toLowerCase();
+            const id = (apt.id || '').toLowerCase();
+            return patientName.includes(q) || doctorName.includes(q) || id.includes(q);
+          }) : appointments}
           loading={loading}
           columns={columns}
           initialState={{

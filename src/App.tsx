@@ -73,7 +73,7 @@ const App: React.FC = () => {
             <Route 
               path="abha" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
                   <AbhaManagement />
                 </RoleProtectedRoute>
               } 
@@ -108,7 +108,7 @@ const App: React.FC = () => {
             <Route 
               path="patients/new" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
                   <PatientRegistration />
                 </RoleProtectedRoute>
               } 
