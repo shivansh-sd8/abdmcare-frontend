@@ -269,7 +269,7 @@ const PatientList: React.FC = () => {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => navigate('/patients/new')}
+              onClick={() => navigate('/app/patients/new')}
             >
               New Patient
             </Button>

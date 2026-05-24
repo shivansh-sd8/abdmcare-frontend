@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { setCredentials } from '../../store/slices/authSlice';
 import {
   Box,
   TextField,
@@ -37,6 +39,7 @@ const Blob: React.FC<{ color: string; size: number; top?: string | number; botto
 
 const Login: React.FC = () => {
   const navigate  = useNavigate();
+  const dispatch  = useDispatch();
   const theme     = useTheme();
   const isMobile  = useMediaQuery(theme.breakpoints.down('md'));
   const [email, setEmail]               = useState('');
@@ -60,8 +63,9 @@ const Login: React.FC = () => {
       if (response.ok) {
         localStorage.setItem('token', data.data.token);
         localStorage.setItem('user', JSON.stringify(data.data.user));
+        dispatch(setCredentials({ user: data.data.user, token: data.data.token }));
         toast.success('Welcome back!');
-        navigate('/dashboard');
+        navigate('/app/dashboard');
       } else {
         const msg = data.message || 'Invalid credentials';
         setError(msg);
@@ -103,7 +107,7 @@ const Login: React.FC = () => {
           <Box sx={{ position: 'relative', zIndex: 1 }}>
             <Button
               startIcon={<ArrowBack />}
-              onClick={() => navigate('/landing')}
+              onClick={() => navigate('/')}
               sx={{ color: alpha('#fff', 0.5), '&:hover': { color: 'white' }, textTransform: 'none', fontWeight: 500, pl: 0 }}
             >
               Back to home

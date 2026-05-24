@@ -100,15 +100,10 @@ const QuickRegistration: React.FC = () => {
   const handleCreateAbha = async () => {
     try {
       setLoading(true);
-      // Call ABHA creation API
-      await abhaService.createAbha({
-        mobile: patientData.mobile,
-        txnId: '',
-      } as any);
+      await abhaService.dlSendMobileOtp(patientData.mobile);
       toast.success('OTP sent to registered mobile number');
-      // Handle OTP verification flow
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create ABHA');
+      toast.error(error.response?.data?.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
     }

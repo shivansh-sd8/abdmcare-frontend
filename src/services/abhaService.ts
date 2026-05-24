@@ -1,158 +1,169 @@
 import api from './api';
 
-export interface GenerateOtpRequest {
-  aadhaar: string;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// ABHA Service V3 — Maps to backend /api/v1/abha/* routes
+// ─────────────────────────────────────────────────────────────────────────────
 
-export interface GenerateMobileOtpRequest {
-  mobile: string;
-  txnId?: string;
-}
-
-export interface VerifyOtpRequest {
-  txnId: string;
-  otp: string;
-}
-
-export interface CreateAbhaRequest {
-  txnId: string;
-  mobile?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  gender?: string;
-  dob?: string;
-}
-
-export interface AbhaProfile {
-  abhaNumber: string;
-  abhaAddress?: string;
-  firstName: string;
-  middleName?: string;
-  lastName: string;
-  gender: string;
-  dob: string;
-  mobile: string;
-  email?: string;
-  address?: any;
-  profilePhoto?: string;
-  kycStatus?: string;
-}
-
-export interface AbhaLoginRequest {
-  abhaAddress: string;
-  password?: string;
-  authMethod: 'AADHAAR_OTP' | 'MOBILE_OTP' | 'PASSWORD';
-}
-
-export interface SearchAbhaRequest {
-  abhaNumber?: string;
-  abhaAddress?: string;
-  mobile?: string;
-}
-
-export interface UpdateProfileRequest {
-  firstName?: string;
-  middleName?: string;
-  lastName?: string;
-  email?: string;
-  address?: any;
-  profilePhoto?: string;
-}
-
-export interface LinkAbhaRequest {
-  patientId: string;
-  abhaNumber: string;
-  abhaAddress?: string;
-}
+const BASE = '/api/v1/abha';
 
 class AbhaService {
-  // M1 - ABHA Creation via Aadhaar
-  async generateAadhaarOtp(data: GenerateOtpRequest) {
-    return api.post('/api/v1/abha/generate-aadhaar-otp', data);
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: ENROLLMENT — Aadhaar OTP
+  // ══════════════════════════════════════════════════════════════════════════
+  async generateAadhaarOtp(aadhaar: string) {
+    return api.post(`${BASE}/enrollment/aadhaar/send-otp`, { aadhaar });
   }
 
-  async verifyAadhaarOtp(data: VerifyOtpRequest) {
-    return api.post('/api/v1/abha/verify-aadhaar-otp', data);
+  async resendAadhaarOtp(txnId: string, aadhaar: string) {
+    return api.post(`${BASE}/enrollment/aadhaar/resend-otp`, { txnId, aadhaar });
   }
 
-  async createAbha(data: CreateAbhaRequest) {
-    return api.post('/api/v1/abha/create', data);
+  async enrolByAadhaar(txnId: string, otp: string, mobile: string) {
+    return api.post(`${BASE}/enrollment/aadhaar/enrol`, { txnId, otp, mobile });
   }
 
-  // M1 - ABHA Creation via Mobile
-  async generateMobileOtp(data: GenerateMobileOtpRequest) {
-    return api.post('/api/v1/abha/generate-mobile-otp', data);
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: ENROLLMENT — Mobile verification (after Aadhaar enrol)
+  // ══════════════════════════════════════════════════════════════════════════
+  async sendMobileVerifyOtp(txnId: string, mobile: string) {
+    return api.post(`${BASE}/enrollment/mobile/send-otp`, { txnId, mobile });
   }
 
-  async verifyMobileOtp(data: VerifyOtpRequest) {
-    return api.post('/api/v1/abha/verify-mobile-otp', data);
+  async verifyMobileOtp(txnId: string, otp: string) {
+    return api.post(`${BASE}/enrollment/mobile/verify-otp`, { txnId, otp });
   }
 
-  // M1 - ABHA Login
-  async login(data: AbhaLoginRequest) {
-    return api.post('/api/v1/abha/login', data);
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: ABHA ADDRESS
+  // ══════════════════════════════════════════════════════════════════════════
+  async getAbhaAddressSuggestions(txnId: string) {
+    return api.get(`${BASE}/enrollment/abha-address/suggestions`, { params: { txnId } });
   }
 
-  // M1 - Profile Management
-  async getProfile(abhaId: string): Promise<AbhaProfile> {
-    return api.get(`/api/v1/abha/profile/${abhaId}`);
+  async createAbhaAddress(txnId: string, abhaAddress: string) {
+    return api.post(`${BASE}/enrollment/abha-address`, { txnId, abhaAddress });
   }
 
-  async updateProfile(abhaId: string, data: UpdateProfileRequest) {
-    return api.put(`/api/v1/abha/profile/${abhaId}`, data);
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: ENROLLMENT — Driving License
+  // ══════════════════════════════════════════════════════════════════════════
+  async dlSendMobileOtp(mobile: string) {
+    return api.post(`${BASE}/enrollment/dl/send-otp`, { mobile });
   }
 
-  async getQrCode(abhaId: string) {
-    return api.get(`/api/v1/abha/qr-code/${abhaId}`, {
+  async dlVerifyMobileOtp(txnId: string, otp: string) {
+    return api.post(`${BASE}/enrollment/dl/verify-otp`, { txnId, otp });
+  }
+
+  async enrolByDrivingLicense(data: {
+    txnId: string;
+    dlNumber: string;
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    dob: string;
+    gender: string;
+  }) {
+    return api.post(`${BASE}/enrollment/dl/enrol`, data);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: LOGIN / VERIFICATION
+  // ══════════════════════════════════════════════════════════════════════════
+  async loginRequestOtp(params: {
+    scope: string[];
+    loginHint: string;
+    loginId: string;
+    otpSystem: 'aadhaar' | 'abdm';
+  }) {
+    return api.post(`${BASE}/login/request-otp`, params);
+  }
+
+  async loginVerifyOtp(scope: string[], txnId: string, otp: string) {
+    return api.post(`${BASE}/login/verify-otp`, { scope, txnId, otp });
+  }
+
+  async loginVerifyPassword(scope: string[], abhaNumber: string, password: string) {
+    return api.post(`${BASE}/login/verify-password`, { scope, abhaNumber, password });
+  }
+
+  async loginVerifyUser(abhaNumber: string, txnId: string) {
+    return api.post(`${BASE}/login/verify-user`, { abhaNumber, txnId });
+  }
+
+  async loginSearch(abhaNumber: string) {
+    return api.post(`${BASE}/login/search`, { abhaNumber });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: FIND ABHA
+  // ══════════════════════════════════════════════════════════════════════════
+  async findAbhaByMobile(mobile: string) {
+    return api.post(`${BASE}/find`, { mobile });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: PROFILE (requires X-token from login)
+  // ══════════════════════════════════════════════════════════════════════════
+  async getProfile(xToken: string) {
+    return api.get(`${BASE}/profile`, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  async updateProfile(xToken: string, updates: Record<string, any>) {
+    return api.patch(`${BASE}/profile`, updates, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  async getQrCode(xToken: string) {
+    return api.get(`${BASE}/profile/qr`, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  async getAbhaCard(xToken: string) {
+    return api.get(`${BASE}/profile/card`, {
+      headers: { 'X-token': `Bearer ${xToken}` },
       responseType: 'blob',
     });
   }
 
-  async downloadAbhaCard(abhaId: string) {
-    return api.get(`/api/v1/abha/card/${abhaId}`, {
-      responseType: 'blob',
-    });
+  async logout(xToken: string) {
+    return api.get(`${BASE}/profile/logout`, { headers: { 'X-token': `Bearer ${xToken}` } });
   }
 
-  // M1 - Search & Retrieve
-  async searchAbha(data: SearchAbhaRequest) {
-    return api.post('/api/v1/abha/search', data);
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1: PHR / ABHA Address Verification
+  // ══════════════════════════════════════════════════════════════════════════
+  async phrSearch(abhaAddress: string) {
+    return api.post(`${BASE}/phr/search`, { abhaAddress });
   }
 
-  async retrieveAbha(data: { aadhaar?: string; mobile?: string }) {
-    return api.post('/api/v1/abha/retrieve', data);
+  async phrRequestOtp(abhaAddress: string, scope: string[], otpSystem: 'aadhaar' | 'abdm') {
+    return api.post(`${BASE}/phr/request-otp`, { abhaAddress, scope, otpSystem });
   }
 
-  // Patient Linking
-  async linkToPatient(data: LinkAbhaRequest) {
-    return api.post('/api/v1/abha/link-patient', data);
+  async phrVerifyOtp(scope: string[], txnId: string, otp: string) {
+    return api.post(`${BASE}/phr/verify-otp`, { scope, txnId, otp });
   }
 
-  async unlinkFromPatient(abhaId: string, patientId: string) {
-    return api.delete(`/api/v1/abha/${abhaId}/unlink/${patientId}`);
+  async phrGetProfile(xToken: string) {
+    return api.get(`${BASE}/phr/profile`, { headers: { 'X-token': `Bearer ${xToken}` } });
   }
 
-  // Account Management
-  async deactivateAbha(abhaId: string, reason: string) {
-    return api.put(`/api/v1/abha/${abhaId}/deactivate`, { reason });
+  async phrGetCard(xToken: string) {
+    return api.get(`${BASE}/phr/card`, { headers: { 'X-token': `Bearer ${xToken}` } });
   }
 
-  async reactivateAbha(abhaId: string) {
-    return api.put(`/api/v1/abha/${abhaId}/reactivate`);
+  // ══════════════════════════════════════════════════════════════════════════
+  // PATIENT LINKING
+  // ══════════════════════════════════════════════════════════════════════════
+  async linkToPatient(abhaNumber: string, patientId: string, abhaAddress?: string) {
+    return api.post(`${BASE}/link`, { abhaNumber, patientId, abhaAddress });
   }
 
-  async deleteAbha(abhaId: string, reason: string) {
-    return api.delete(`/api/v1/abha/${abhaId}`, { data: { reason } });
+  async unlinkFromPatient(abhaNumber: string, patientId: string) {
+    return api.post(`${BASE}/unlink`, { abhaNumber, patientId });
   }
 
-  // Verification
-  async verifyAbha(abhaNumber: string) {
-    return api.post('/api/v1/abha/verify', { abhaNumber });
-  }
-
-  async checkAbhaExists(abhaNumber: string) {
-    return api.get(`/api/v1/abha/exists/${abhaNumber}`);
+  async getLocalRecord(abhaNumber: string) {
+    return api.get(`${BASE}/record/${abhaNumber}`);
   }
 }
 

@@ -30,6 +30,7 @@ import InvestigationQueue from './features/lab/InvestigationQueue';
 import PrescriptionQueue from './features/pharmacy/PrescriptionQueue';
 import BillingDashboard from './features/billing/BillingDashboard';
 import Login from './features/auth/Login';
+import ForgotPassword from './features/auth/ForgotPassword';
 import SuperAdminSignup from './features/auth/SuperAdminSignup';
 import LandingPage from './pages/LandingPage';
 import DocumentationPage from './pages/DocumentationPage';
@@ -42,6 +43,7 @@ const App: React.FC = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/documentation" element={<DocumentationPage />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/signup" element={<SuperAdminSignup />} />
       <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
       

@@ -319,12 +319,12 @@ const Dashboard: React.FC = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
           {(permissions.isAdmin || permissions.isSuperAdmin || permissions.isDoctor || permissions.isReceptionist) && (
-            <Button variant="outlined" startIcon={<EventAvailable />} onClick={() => navigate('/appointments')}>
+            <Button variant="outlined" startIcon={<EventAvailable />} onClick={() => navigate('/app/appointments')}>
               {permissions.isReceptionist ? 'Appointment Queue' : 'View Calendar'}
             </Button>
           )}
           {permissions.canCreatePatient && (
-            <Button variant="contained" startIcon={<PersonAdd />} onClick={() => navigate('/patients/new')}>
+            <Button variant="contained" startIcon={<PersonAdd />} onClick={() => navigate('/app/patients/new')}>
               New Patient
             </Button>
           )}
@@ -510,7 +510,7 @@ const Dashboard: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   startIcon={<PersonAdd />}
-                  onClick={() => navigate('/patients/new')}
+                  onClick={() => navigate('/app/patients/new')}
                   sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Register New Patient
@@ -523,7 +523,7 @@ const Dashboard: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   startIcon={<EventAvailable />}
-                  onClick={() => navigate('/appointments')}
+                  onClick={() => navigate('/app/appointments')}
                   sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Schedule Appointment
@@ -536,7 +536,7 @@ const Dashboard: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   startIcon={<MedicalServices />}
-                  onClick={() => navigate('/abha')}
+                  onClick={() => navigate('/app/abha')}
                   sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Create ABHA
@@ -548,7 +548,7 @@ const Dashboard: React.FC = () => {
                 variant="outlined"
                 fullWidth
                 startIcon={<People />}
-                onClick={() => navigate('/patients')}
+                onClick={() => navigate('/app/patients')}
                 sx={{ justifyContent: 'flex-start', py: 1.2 }}
               >
                 {permissions.isDoctor ? 'My Patients' : permissions.isNurse ? 'Assigned Patients' : 'View Patients'}
@@ -560,7 +560,7 @@ const Dashboard: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   startIcon={<CalendarToday />}
-                  onClick={() => navigate('/appointments')}
+                  onClick={() => navigate('/app/appointments')}
                   sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   {permissions.isReceptionist ? 'Appointment Queue' : permissions.isDoctor ? 'My Appointments' : 'View Appointments'}
@@ -573,7 +573,7 @@ const Dashboard: React.FC = () => {
                   variant="outlined"
                   fullWidth
                   startIcon={<PersonAdd />}
-                  onClick={() => navigate('/quick-registration')}
+                  onClick={() => navigate('/app/quick-registration')}
                   sx={{ justifyContent: 'flex-start', py: 1.2 }}
                 >
                   Quick Registration
@@ -583,10 +583,10 @@ const Dashboard: React.FC = () => {
               {/* Doctor-specific actions */}
               {permissions.isDoctor && (
                 <>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     My Encounters
                   </Button>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/prescriptions')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/prescriptions')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     Write Prescription
                   </Button>
                 </>
@@ -595,10 +595,10 @@ const Dashboard: React.FC = () => {
               {/* Nurse-specific actions */}
               {permissions.isNurse && (
                 <>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/vitals')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/vitals')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     Record Vitals
                   </Button>
-                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                  <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/encounters')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                     View Encounters
                   </Button>
                 </>
@@ -606,14 +606,14 @@ const Dashboard: React.FC = () => {
 
               {/* Lab Tech actions */}
               {permissions.isLabTechnician && (
-                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/investigations')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/investigations')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                   Lab Queue
                 </Button>
               )}
 
               {/* Pharmacist actions */}
               {permissions.isPharmacist && (
-                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/pharmacy')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
+                <Button variant="outlined" fullWidth startIcon={<MedicalServices />} onClick={() => navigate('/app/pharmacy')} sx={{ justifyContent: 'flex-start', py: 1.2 }}>
                   Pharmacy Queue
                 </Button>
               )}

@@ -260,7 +260,7 @@ const ScheduleAppointment: React.FC = () => {
       await appointmentService.createAppointment(appointmentData);
 
       toast.success('✅ Appointment scheduled successfully!');
-      navigate('/appointments');
+      navigate('/app/appointments');
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Failed to schedule appointment';
       toast.error(errorMessage);
@@ -301,7 +301,7 @@ const ScheduleAppointment: React.FC = () => {
           <Button
             variant="outlined"
             startIcon={<ArrowBack />}
-            onClick={() => navigate('/appointments')}
+            onClick={() => navigate('/app/appointments')}
             sx={{
               color: 'white',
               borderColor: 'white',
@@ -584,7 +584,7 @@ const ScheduleAppointment: React.FC = () => {
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                 <Button
                   variant="outlined"
-                  onClick={() => navigate('/appointments')}
+                  onClick={() => navigate('/app/appointments')}
                   disabled={loading}
                 >
                   Cancel

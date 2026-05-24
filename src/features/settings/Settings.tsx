@@ -15,6 +15,8 @@ import {
   Card,
   CardContent,
   Alert,
+  TextField,
+  CircularProgress,
 } from '@mui/material';
 import {
   Notifications,
@@ -23,6 +25,7 @@ import {
   Security,
   Storage,
   Save,
+  Lock,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -62,6 +65,28 @@ const Settings: React.FC = () => {
       toast.success('Settings saved successfully');
     } catch (error) {
       toast.error('Failed to save settings');
+    }
+  };
+
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) { toast.error('Fill in all password fields'); return; }
+    if (newPassword.length < 6) { toast.error('New password must be at least 6 characters'); return; }
+    if (newPassword !== confirmNewPassword) { toast.error('Passwords do not match'); return; }
+    setPwdLoading(true);
+    try {
+      await api.post('/api/v1/auth/update-password', { currentPassword, newPassword });
+      toast.success('Password updated successfully');
+      setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update password');
+    } finally {
+      setPwdLoading(false);
     }
   };
 
@@ -158,6 +183,40 @@ const Settings: React.FC = () => {
               </Typography>
             </Box>
             <Divider sx={{ mb: 2 }} />
+
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Lock fontSize="small" color="action" />
+                <Typography variant="subtitle1" fontWeight={600}>Change Password</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <TextField
+                  fullWidth size="small" type="password" label="Current Password"
+                  value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                />
+                <TextField
+                  fullWidth size="small" type="password" label="New Password"
+                  value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  helperText="At least 6 characters"
+                />
+                <TextField
+                  fullWidth size="small" type="password" label="Confirm New Password"
+                  value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)}
+                  error={confirmNewPassword.length > 0 && newPassword !== confirmNewPassword}
+                  helperText={confirmNewPassword.length > 0 && newPassword !== confirmNewPassword ? 'Passwords do not match' : ''}
+                />
+                <Button
+                  variant="contained" onClick={handleChangePassword}
+                  disabled={pwdLoading || !currentPassword || !newPassword || newPassword !== confirmNewPassword}
+                  startIcon={pwdLoading ? <CircularProgress size={16} /> : <Lock />}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  {pwdLoading ? 'Updating...' : 'Update Password'}
+                </Button>
+              </Box>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
             
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Button variant="outlined" fullWidth>

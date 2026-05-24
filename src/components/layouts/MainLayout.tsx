@@ -451,7 +451,7 @@ const MainLayout: React.FC = () => {
             </IconButton>
             <IconButton 
               size="large"
-              onClick={() => navigate('/notifications')}
+              onClick={() => navigate('/app/notifications')}
               title="Notifications"
             >
               <Badge badgeContent={3} color="error">
@@ -460,14 +460,14 @@ const MainLayout: React.FC = () => {
             </IconButton>
             <IconButton 
               size="large"
-              onClick={() => navigate('/settings')}
+              onClick={() => navigate('/app/settings')}
               title="Settings"
             >
               <Settings />
             </IconButton>
             <IconButton 
               size="large"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate('/app/profile')}
               title="Profile"
             >
               <AccountCircle />

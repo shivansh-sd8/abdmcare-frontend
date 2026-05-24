@@ -144,7 +144,7 @@ const SuperAdminSignup: React.FC = () => {
       if (!response.ok) throw new Error(data.message || 'Signup failed');
       localStorage.setItem('token', data.data.token);
       localStorage.setItem('user', JSON.stringify(data.data.user));
-      navigate('/dashboard');
+      navigate('/app/dashboard');
     } catch (err: any) {
       setError(err.message || 'An error occurred during signup');
     } finally {

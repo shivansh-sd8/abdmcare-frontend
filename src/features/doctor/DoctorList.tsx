@@ -225,7 +225,7 @@ const DoctorList: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<Add />}
-            onClick={() => navigate('/doctors/new')}
+            onClick={() => navigate('/app/doctors/new')}
             sx={{
               background: 'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
               '&:hover': {

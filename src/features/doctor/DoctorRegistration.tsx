@@ -97,7 +97,7 @@ const DoctorRegistration: React.FC = () => {
       await doctorService.createDoctor(doctorData);
 
       toast.success('✅ Doctor registered successfully!');
-      navigate('/doctors');
+      navigate('/app/doctors');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to register doctor');
     } finally {
@@ -414,7 +414,7 @@ const DoctorRegistration: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4, pt: 3, borderTop: '1px solid #e0e0e0' }}>
               <Button
                 variant="outlined"
-                onClick={() => navigate('/doctors')}
+                onClick={() => navigate('/app/doctors')}
                 sx={{ minWidth: 120 }}
               >
                 Cancel

@@ -464,7 +464,7 @@ const AppointmentList: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
-          onClick={() => navigate('/appointments/schedule')}
+          onClick={() => navigate('/app/appointments/schedule')}
           sx={{
             background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
             '&:hover': {

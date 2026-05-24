@@ -37,7 +37,7 @@ import {
   Description,
   EventAvailable,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import patientService from '../../services/patientService';
 import abhaService from '../../services/abhaService';
@@ -74,6 +74,8 @@ const timeSlots = [
 
 const PatientRegistration: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const abhaData = (location.state as any)?.abhaData;
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -87,6 +89,37 @@ const PatientRegistration: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [abhaLinked, setAbhaLinked] = useState(false);
+
+  // Pre-populate from ABHA data if navigating from ABHA creation
+  useEffect(() => {
+    if (abhaData) {
+      const genderMap: Record<string, string> = { M: 'MALE', F: 'FEMALE', O: 'OTHER', MALE: 'MALE', FEMALE: 'FEMALE', OTHER: 'OTHER' };
+      const dob = abhaData.yearOfBirth
+        ? `${abhaData.yearOfBirth}-${String(abhaData.monthOfBirth || '01').padStart(2, '0')}-${String(abhaData.dayOfBirth || '01').padStart(2, '0')}`
+        : abhaData.dob || '';
+
+      setFormData(prev => ({
+        ...prev,
+        firstName: abhaData.firstName || abhaData.name?.split(' ')[0] || '',
+        middleName: abhaData.middleName || '',
+        lastName: abhaData.lastName || abhaData.name?.split(' ').slice(-1)[0] || '',
+        gender: genderMap[abhaData.gender?.toUpperCase()] || abhaData.gender || '',
+        dob,
+        mobile: abhaData.mobile || '',
+        email: abhaData.email || '',
+        address: {
+          line1: abhaData.address || abhaData.addressLine || '',
+          line2: '',
+          city: abhaData.districtName || abhaData.district || '',
+          state: abhaData.stateName || abhaData.state || '',
+          pincode: abhaData.pincode || abhaData.pinCode || '',
+        },
+        emergencyContact: prev.emergencyContact,
+        abhaNumber: abhaData.ABHANumber || abhaData.abhaNumber || '',
+      }));
+      setAbhaLinked(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Appointment form ──────────────────────────────────────────────────────
   const [scheduleAppt, setScheduleAppt] = useState(true); // checkbox default ON
@@ -173,7 +206,7 @@ const PatientRegistration: React.FC = () => {
     if (!formData.abhaNumber) { toast.error('Please enter ABHA number'); return; }
     try {
       setLoading(true);
-      const response: any = await abhaService.searchAbha({ abhaNumber: formData.abhaNumber });
+      const response: any = await abhaService.loginSearch(formData.abhaNumber.replace(/-/g, ''));
       if (response.data) { setAbhaLinked(true); toast.success('ABHA found and linked!'); }
     } catch { toast.error('ABHA not found'); }
     finally { setLoading(false); }
@@ -237,10 +270,10 @@ const PatientRegistration: React.FC = () => {
           notes:     apptData.notes,
         });
         toast.success('Patient registered & appointment scheduled!');
-        navigate('/appointments');
+        navigate('/app/appointments');
       } else {
         toast.success('Patient registered successfully!');
-        navigate('/patients');
+        navigate('/app/patients');
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to register patient');
@@ -275,6 +308,12 @@ const PatientRegistration: React.FC = () => {
 
       <Card elevation={3} sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: 4 }}>
+
+          {abhaData && (
+            <Alert severity="success" sx={{ mb: 3 }}>
+              Patient details pre-filled from ABHA profile ({abhaData.ABHANumber || abhaData.abhaNumber}). Review and complete registration.
+            </Alert>
+          )}
 
           {/* ── Step 0: Basic Info ──────────────────────────────────────── */}
           {activeStep === 0 && (
@@ -586,7 +625,7 @@ const PatientRegistration: React.FC = () => {
               Back
             </Button>
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <Button variant="outlined" onClick={() => navigate('/patients')} sx={{ minWidth: 120 }}>Cancel</Button>
+              <Button variant="outlined" onClick={() => navigate('/app/patients')} sx={{ minWidth: 120 }}>Cancel</Button>
               {activeStep === steps.length - 1 ? (
                 <Button variant="contained" onClick={handleSubmit} disabled={loading}
                   startIcon={loading ? <CircularProgress size={20} /> : (scheduleAppt ? <EventAvailable /> : <CheckCircle />)}
