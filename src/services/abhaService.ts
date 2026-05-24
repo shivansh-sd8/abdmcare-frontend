@@ -75,6 +75,7 @@ class AbhaService {
     loginHint: string;
     loginId: string;
     otpSystem: 'aadhaar' | 'abdm';
+    txnId?: string;
   }) {
     return api.post(`${BASE}/login/request-otp`, params);
   }

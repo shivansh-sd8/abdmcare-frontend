@@ -377,24 +377,40 @@ const PatientList: React.FC = () => {
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem onClick={handleMenuClose}>
+        <MenuItem onClick={() => {
+          handleMenuClose();
+          navigate('/app/ehr', { state: { patientId: selectedPatient?.id } });
+        }}>
           <Visibility fontSize="small" sx={{ mr: 1 }} />
           View Full Profile
         </MenuItem>
         <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={() => {
+            handleMenuClose();
+            if (selectedPatient?.abhaNumber) {
+              navigate('/app/abha', { state: { patientId: selectedPatient.id, abhaNumber: selectedPatient.abhaNumber, mode: 'view' } });
+            } else {
+              navigate('/app/abha', { state: { patientId: selectedPatient.id, patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`, mobile: selectedPatient.mobile, mode: 'link' } });
+            }
+          }}>
             <HealthAndSafety fontSize="small" sx={{ mr: 1 }} />
             {selectedPatient?.abhaNumber ? 'View ABHA Details' : 'Link ABHA'}
           </MenuItem>
         </PermissionGuard>
         <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={() => {
+            handleMenuClose();
+            navigate('/app/appointments/schedule', { state: { patientId: selectedPatient?.id, patientName: `${selectedPatient?.firstName} ${selectedPatient?.lastName}` } });
+          }}>
             <CalendarToday fontSize="small" sx={{ mr: 1 }} />
             Book Appointment
           </MenuItem>
         </PermissionGuard>
         <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={() => {
+            handleMenuClose();
+            navigate('/app/patients/new', { state: { editPatient: selectedPatient } });
+          }}>
             <Edit fontSize="small" sx={{ mr: 1 }} />
             Edit Patient
           </MenuItem>

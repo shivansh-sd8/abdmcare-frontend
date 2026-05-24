@@ -57,6 +57,13 @@ const QuickRegistration: React.FC = () => {
     otp: '',
   });
 
+  const [abhaOtp, setAbhaOtp] = useState('');
+  const [abhaTxnId, setAbhaTxnId] = useState('');
+  const [abhaLinkInput, setAbhaLinkInput] = useState('');
+  const [abhaVerifying, setAbhaVerifying] = useState(false);
+  const [abhaLinked, setAbhaLinked] = useState(false);
+  const [linkedAbhaNumber, setLinkedAbhaNumber] = useState('');
+
   const steps = ['Patient Details', 'ABHA (Optional)', 'Confirmation'];
 
   const handlePatientChange = (field: string, value: any) => {
@@ -100,8 +107,11 @@ const QuickRegistration: React.FC = () => {
   const handleCreateAbha = async () => {
     try {
       setLoading(true);
-      await abhaService.dlSendMobileOtp(patientData.mobile);
-      toast.success('OTP sent to registered mobile number');
+      const res: any = await abhaService.generateAadhaarOtp(abhaData.aadhaarNumber);
+      const txn = res?.data?.txnId || res?.txnId;
+      if (!txn) throw new Error('No txnId received');
+      setAbhaTxnId(txn);
+      toast.success('OTP sent to Aadhaar-linked mobile');
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to send OTP');
     } finally {
@@ -109,10 +119,57 @@ const QuickRegistration: React.FC = () => {
     }
   };
 
+  const handleVerifyAbhaOtp = async () => {
+    try {
+      setLoading(true);
+      const res: any = await abhaService.enrolByAadhaar(abhaTxnId, abhaOtp, patientData.mobile);
+      const data = res?.data || res;
+      const profile = data?.profile || data?.ABHAProfile || data;
+      const abhaNum = profile?.ABHANumber || profile?.abhaNumber;
+      if (abhaNum) {
+        setLinkedAbhaNumber(abhaNum);
+        setAbhaLinked(true);
+        setShowAbhaDialog(false);
+        toast.success('ABHA created and linked successfully!');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to verify OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLinkExistingAbha = async () => {
+    if (!abhaLinkInput.trim()) { toast.error('Enter ABHA number or address'); return; }
+    try {
+      setAbhaVerifying(true);
+      const isAddress = abhaLinkInput.includes('@');
+      if (isAddress) {
+        const res: any = await abhaService.phrSearch(abhaLinkInput);
+        if (res?.data || res) {
+          setLinkedAbhaNumber(abhaLinkInput);
+          setAbhaLinked(true);
+          toast.success('ABHA address verified');
+        }
+      } else {
+        const res: any = await abhaService.loginSearch(abhaLinkInput.replace(/-/g, ''));
+        if (res?.data || res) {
+          setLinkedAbhaNumber(abhaLinkInput);
+          setAbhaLinked(true);
+          toast.success('ABHA number verified');
+        }
+      }
+    } catch { toast.error('ABHA not found'); }
+    finally { setAbhaVerifying(false); }
+  };
+
   const handleRegister = async () => {
     try {
       setLoading(true);
-      await patientService.createPatient(patientData);
+      await patientService.createPatient({
+        ...patientData,
+        ...(abhaLinked && linkedAbhaNumber ? { abhaNumber: linkedAbhaNumber.replace(/-/g, '') } : {}),
+      });
       toast.success('Patient registered successfully!');
       
       // Reset form
@@ -133,6 +190,11 @@ const QuickRegistration: React.FC = () => {
       });
       setActiveStep(0);
       setHasAbha(null);
+      setAbhaLinked(false);
+      setLinkedAbhaNumber('');
+      setAbhaTxnId('');
+      setAbhaOtp('');
+      setAbhaLinkInput('');
     } catch (error: any) {
       const msg = error.response?.data?.message || 'Failed to register patient';
       if (msg.toLowerCase().includes('unique') || msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('already')) {
@@ -327,11 +389,16 @@ const QuickRegistration: React.FC = () => {
                   fullWidth
                   label="ABHA Number or Address"
                   placeholder="e.g., 12-3456-7890-1234 or name@abdm"
+                  value={abhaLinkInput}
+                  onChange={(e) => setAbhaLinkInput(e.target.value)}
                   sx={{ mb: 2 }}
                 />
-                <Button variant="contained">
-                  Link ABHA
+                <Button variant="contained" onClick={handleLinkExistingAbha} disabled={abhaVerifying || !abhaLinkInput.trim()}>
+                  {abhaVerifying ? 'Verifying...' : 'Verify & Link ABHA'}
                 </Button>
+                {abhaLinked && (
+                  <Chip label={`ABHA Linked: ${linkedAbhaNumber}`} color="success" icon={<CheckCircle />} sx={{ ml: 2 }} />
+                )}
               </Box>
             )}
 
@@ -375,7 +442,7 @@ const QuickRegistration: React.FC = () => {
               <Grid item xs={12}>
                 <Typography variant="body1">
                   <strong>ABHA Status:</strong>{' '}
-                  {hasAbha === true ? 'Linked' : hasAbha === false ? 'Creating New' : 'Not Linked'}
+                  {abhaLinked ? linkedAbhaNumber : 'Not Linked'}
                 </Typography>
               </Grid>
             </Grid>
@@ -416,18 +483,40 @@ const QuickRegistration: React.FC = () => {
             fullWidth
             label="Aadhaar Number"
             value={abhaData.aadhaarNumber}
-            onChange={(e) => setAbhaData({ ...abhaData, aadhaarNumber: e.target.value })}
+            onChange={(e) => setAbhaData({ ...abhaData, aadhaarNumber: e.target.value.replace(/\D/g, '') })}
+            inputProps={{ maxLength: 12 }}
+            helperText={abhaTxnId ? 'OTP sent to Aadhaar-linked mobile' : `${abhaData.aadhaarNumber.length}/12 digits`}
             sx={{ mt: 2, mb: 2 }}
+            disabled={!!abhaTxnId}
           />
-          <Typography variant="caption" color="text.secondary">
-            An OTP will be sent to the mobile number linked with this Aadhaar
-          </Typography>
+          {abhaTxnId && (
+            <TextField
+              fullWidth
+              label="Enter OTP"
+              value={abhaOtp}
+              onChange={(e) => setAbhaOtp(e.target.value.replace(/\D/g, ''))}
+              inputProps={{ maxLength: 6 }}
+              helperText={`${abhaOtp.length}/6`}
+              sx={{ mb: 2 }}
+            />
+          )}
+          {!abhaTxnId && (
+            <Typography variant="caption" color="text.secondary">
+              An OTP will be sent to the mobile number linked with this Aadhaar
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowAbhaDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreateAbha} disabled={loading}>
-            {loading ? 'Sending OTP...' : 'Send OTP'}
-          </Button>
+          <Button onClick={() => { setShowAbhaDialog(false); setAbhaTxnId(''); setAbhaOtp(''); }}>Cancel</Button>
+          {!abhaTxnId ? (
+            <Button variant="contained" onClick={handleCreateAbha} disabled={loading || abhaData.aadhaarNumber.length !== 12}>
+              {loading ? 'Sending OTP...' : 'Send OTP'}
+            </Button>
+          ) : (
+            <Button variant="contained" onClick={handleVerifyAbhaOtp} disabled={loading || abhaOtp.length !== 6}>
+              {loading ? 'Verifying...' : 'Verify & Create ABHA'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
