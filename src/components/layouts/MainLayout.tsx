@@ -44,6 +44,8 @@ import {
   Receipt,
   DarkMode,
   LightMode,
+  QrCodeScanner,
+  HowToReg,
 } from '@mui/icons-material';
 import { useAppDispatch } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
@@ -74,6 +76,8 @@ const getIconComponent = (iconName: string) => {
     PersonAdd: <PersonAdd />,
     MeetingRoom: <MeetingRoom />,
     Receipt: <Receipt />,
+    QrCodeScanner: <QrCodeScanner />,
+    HowToReg: <HowToReg />,
   };
   return iconMap[iconName] || <Dashboard />;
 };

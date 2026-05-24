@@ -8,6 +8,8 @@ import RoleProtectedRoute from './components/common/RoleProtectedRoute';
 
 const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
 const AbhaManagement = React.lazy(() => import('./features/abha/AbhaManagement'));
+const ScanAndShare = React.lazy(() => import('./features/abha/ScanAndShare'));
+const PatientCheckIn = React.lazy(() => import('./features/abha/PatientCheckIn'));
 const PatientList = React.lazy(() => import('./features/patient/PatientList'));
 const PatientRegistration = React.lazy(() => import('./features/patient/PatientRegistration'));
 const DoctorList = React.lazy(() => import('./features/doctor/DoctorList'));
@@ -77,6 +79,24 @@ const App: React.FC = () => {
               } 
             />
             
+            <Route
+              path="scan-share"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
+                  <ScanAndShare />
+                </RoleProtectedRoute>
+              }
+            />
+
+            <Route
+              path="patient-checkin"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
+                  <PatientCheckIn />
+                </RoleProtectedRoute>
+              }
+            />
+
             <Route 
               path="patients" 
               element={

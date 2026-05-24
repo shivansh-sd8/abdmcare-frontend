@@ -236,10 +236,6 @@ const AbhaManagement: React.FC = () => {
     finally { setLoading(false); }
   };
 
-  const handleSkipAbhaAddress = () => {
-    setActiveStep(abhaAddressStepIndex + 1);
-  };
-
   // ═══════════════════════════════════════════════════════════════════════════
   // VERIFICATION / SEARCH
   // ═══════════════════════════════════════════════════════════════════════════
@@ -634,7 +630,6 @@ const AbhaManagement: React.FC = () => {
           startIcon={loading ? <CircularProgress size={18} /> : <CheckCircle />}>
           {loading ? 'Creating...' : 'Create ABHA Address'}
         </Button>
-        <Button variant="text" onClick={handleSkipAbhaAddress} color="inherit">Skip for now</Button>
       </Box>
     </Box>
   );
@@ -783,6 +778,14 @@ const AbhaManagement: React.FC = () => {
                         <MenuItem value="O">Other</MenuItem>
                       </Select>
                     </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField fullWidth label="State" value={dlForm.state}
+                      onChange={(e) => setDlForm({ ...dlForm, state: e.target.value })} placeholder="e.g., Delhi" />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField fullWidth label="District" value={dlForm.district}
+                      onChange={(e) => setDlForm({ ...dlForm, district: e.target.value })} placeholder="e.g., New Delhi" />
                   </Grid>
                   <Grid item xs={12} md={4}>
                     <TextField fullWidth label="PIN Code" value={dlForm.pinCode}

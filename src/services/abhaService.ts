@@ -166,6 +166,13 @@ class AbhaService {
   async getLocalRecord(abhaNumber: string) {
     return api.get(`${BASE}/record/${abhaNumber}`);
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // NEW vs RETURNING PATIENT LOOKUP
+  // ══════════════════════════════════════════════════════════════════════════
+  async lookupPatient(identifier: string) {
+    return api.get(`${BASE}/patient/lookup`, { params: { identifier } });
+  }
 }
 
 const abhaService = new AbhaService();

@@ -47,6 +47,20 @@ export const menuPermissions: MenuItem[] = [
     roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST'],
   },
   {
+    text: 'Scan & Share',
+    path: '/app/scan-share',
+    icon: 'QrCodeScanner',
+    badge: 'M1',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
+  },
+  {
+    text: 'Patient Check-In',
+    path: '/app/patient-checkin',
+    icon: 'HowToReg',
+    badge: 'M1',
+    roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
+  },
+  {
     text: 'Patients',
     path: '/app/patients',
     icon: 'People',
