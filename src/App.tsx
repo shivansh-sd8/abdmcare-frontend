@@ -1,289 +1,277 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 
 import MainLayout from './components/layouts/MainLayout';
-import Dashboard from './features/dashboard/Dashboard';
-import AbhaManagement from './features/abha/AbhaManagement';
-import PatientList from './features/patient/PatientList';
-import PatientRegistration from './features/patient/PatientRegistration';
-import DoctorList from './features/doctor/DoctorList';
-import DoctorRegistration from './features/doctor/DoctorRegistration';
-import AppointmentList from './features/appointment/AppointmentList';
-import ScheduleAppointment from './features/appointment/ScheduleAppointment';
-import ConsentManagement from './features/consent/ConsentManagement';
-import Profile from './features/profile/Profile';
-import Settings from './features/settings/Settings';
-import Notifications from './features/notifications/Notifications';
-import AuditLogs from './features/audit/AuditLogs';
-import HospitalManagement from './features/hospital/HospitalManagement';
-import UserManagement from './features/user/UserManagement';
-import QuickRegistration from './features/receptionist/QuickRegistration';
-import PaymentManagement from './features/receptionist/PaymentManagement';
-import EncounterList from './features/doctor/EncounterList';
-import PrescriptionList from './features/doctor/PrescriptionList';
-import VitalsManagement from './features/doctor/VitalsManagement';
-import EHRList from './features/ehr/EHRList';
-import AdmissionList from './features/ipd/AdmissionList';
-import WardManager from './features/ipd/WardManager';
-import InvestigationQueue from './features/lab/InvestigationQueue';
-import PrescriptionQueue from './features/pharmacy/PrescriptionQueue';
-import BillingDashboard from './features/billing/BillingDashboard';
-import Login from './features/auth/Login';
-import ForgotPassword from './features/auth/ForgotPassword';
-import SuperAdminSignup from './features/auth/SuperAdminSignup';
-import LandingPage from './pages/LandingPage';
-import DocumentationPage from './pages/DocumentationPage';
 import PrivateRoute from './components/common/PrivateRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
 
+const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
+const AbhaManagement = React.lazy(() => import('./features/abha/AbhaManagement'));
+const PatientList = React.lazy(() => import('./features/patient/PatientList'));
+const PatientRegistration = React.lazy(() => import('./features/patient/PatientRegistration'));
+const DoctorList = React.lazy(() => import('./features/doctor/DoctorList'));
+const DoctorRegistration = React.lazy(() => import('./features/doctor/DoctorRegistration'));
+const AppointmentList = React.lazy(() => import('./features/appointment/AppointmentList'));
+const ScheduleAppointment = React.lazy(() => import('./features/appointment/ScheduleAppointment'));
+const ConsentManagement = React.lazy(() => import('./features/consent/ConsentManagement'));
+const Profile = React.lazy(() => import('./features/profile/Profile'));
+const Settings = React.lazy(() => import('./features/settings/Settings'));
+const Notifications = React.lazy(() => import('./features/notifications/Notifications'));
+const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
+const HospitalManagement = React.lazy(() => import('./features/hospital/HospitalManagement'));
+const UserManagement = React.lazy(() => import('./features/user/UserManagement'));
+const QuickRegistration = React.lazy(() => import('./features/receptionist/QuickRegistration'));
+const PaymentManagement = React.lazy(() => import('./features/receptionist/PaymentManagement'));
+const EncounterList = React.lazy(() => import('./features/doctor/EncounterList'));
+const PrescriptionList = React.lazy(() => import('./features/doctor/PrescriptionList'));
+const VitalsManagement = React.lazy(() => import('./features/doctor/VitalsManagement'));
+const EHRList = React.lazy(() => import('./features/ehr/EHRList'));
+const AdmissionList = React.lazy(() => import('./features/ipd/AdmissionList'));
+const WardManager = React.lazy(() => import('./features/ipd/WardManager'));
+const InvestigationQueue = React.lazy(() => import('./features/lab/InvestigationQueue'));
+const PrescriptionQueue = React.lazy(() => import('./features/pharmacy/PrescriptionQueue'));
+const BillingDashboard = React.lazy(() => import('./features/billing/BillingDashboard'));
+const Login = React.lazy(() => import('./features/auth/Login'));
+const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword'));
+const SuperAdminSignup = React.lazy(() => import('./features/auth/SuperAdminSignup'));
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
+
+const PageLoader = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+    <CircularProgress />
+  </Box>
+);
+
 const App: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/documentation" element={<DocumentationPage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/signup" element={<SuperAdminSignup />} />
-      <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
-      
-      <Route
-        path="/app"
-        element={
-          <PrivateRoute>
-            <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-              <MainLayout />
-            </Box>
-          </PrivateRoute>
-        }
-      >
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          
-          {/* ABHA - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
-          <Route 
-            path="abha" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-                <AbhaManagement />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Patients - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST */}
-          <Route 
-            path="patients" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
-                <PatientList />
-              </RoleProtectedRoute>
-            } 
-          />
-          <Route 
-            path="patients/new" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
-                <PatientRegistration />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Doctors - SUPER_ADMIN, ADMIN, DOCTOR, RECEPTIONIST */}
-          <Route 
-            path="doctors" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-                <DoctorList />
-              </RoleProtectedRoute>
-            } 
-          />
-          <Route 
-            path="doctors/new" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
-                <DoctorRegistration />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Appointments - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST */}
-          <Route 
-            path="appointments" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
-                <AppointmentList />
-              </RoleProtectedRoute>
-            } 
-          />
-          <Route 
-            path="appointments/schedule" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-                <ScheduleAppointment />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Consent - SUPER_ADMIN, ADMIN, DOCTOR */}
-          <Route 
-            path="consent" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR']}>
-                <ConsentManagement />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Encounters - SUPER_ADMIN, ADMIN, DOCTOR, NURSE */}
-          <Route 
-            path="encounters" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
-                <EncounterList />
-              </RoleProtectedRoute>
-            } 
-          />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/documentation" element={<DocumentationPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/signup" element={<SuperAdminSignup />} />
+        <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
+        
+        <Route
+          path="/app"
+          element={
+            <PrivateRoute>
+              <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+                <MainLayout />
+              </Box>
+            </PrivateRoute>
+          }
+        >
+            <Route index element={<Navigate to="/app/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            
+            <Route 
+              path="abha" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                  <AbhaManagement />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="patients" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <PatientList />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="patients/new" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
+                  <PatientRegistration />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="doctors" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                  <DoctorList />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="doctors/new" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <DoctorRegistration />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="appointments" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <AppointmentList />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="appointments/schedule" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+                  <ScheduleAppointment />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="consent" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR']}>
+                  <ConsentManagement />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="encounters" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
+                  <EncounterList />
+                </RoleProtectedRoute>
+              } 
+            />
 
-          {/* EHR - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, RECEPTIONIST, RADIOLOGIST */}
-          <Route
-            path="ehr"
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
-                <EHRList />
-              </RoleProtectedRoute>
-            }
-          />
-          
-          {/* Prescriptions - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, PHARMACIST */}
-          <Route 
-            path="prescriptions" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST']}>
-                <PrescriptionList />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Vitals - SUPER_ADMIN, ADMIN, DOCTOR, NURSE */}
-          <Route 
-            path="vitals" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
-                <VitalsManagement />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Investigations/Lab - SUPER_ADMIN, ADMIN, DOCTOR, NURSE, LAB_TECHNICIAN, RADIOLOGIST */}
-          <Route 
-            path="investigations" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST']}>
-                <InvestigationQueue />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Pharmacy - PHARMACIST */}
-          <Route 
-            path="pharmacy" 
-            element={
-              <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
-                <PrescriptionQueue />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Billing Dashboard - BILLING_STAFF */}
-          <Route 
-            path="billing" 
-            element={
-              <RoleProtectedRoute requiredRoles={['BILLING_STAFF', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
-                <BillingDashboard />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Profile, Settings, Notifications - All roles */}
-          <Route path="profile" element={<Profile />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="notifications" element={<Notifications />} />
-          
-          {/* Audit Logs - SUPER_ADMIN, ADMIN */}
-          <Route 
-            path="audit-logs" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
-                <AuditLogs />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Hospitals - SUPER_ADMIN only */}
-          <Route 
-            path="hospitals" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN']}>
-                <HospitalManagement />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* User Management - SUPER_ADMIN, ADMIN */}
-          <Route 
-            path="users" 
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
-                <UserManagement />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Quick Registration - RECEPTIONIST, ADMIN, SUPER_ADMIN */}
-          <Route 
-            path="quick-registration" 
-            element={
-              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN']}>
-                <QuickRegistration />
-              </RoleProtectedRoute>
-            } 
-          />
-          
-          {/* Payments - RECEPTIONIST, ADMIN, SUPER_ADMIN, BILLING_STAFF */}
-          <Route 
-            path="payments" 
-            element={
-              <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF']}>
-                <PaymentManagement />
-              </RoleProtectedRoute>
-            } 
-          />
+            <Route
+              path="ehr"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                  <EHRList />
+                </RoleProtectedRoute>
+              }
+            />
+            
+            <Route 
+              path="prescriptions" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST']}>
+                  <PrescriptionList />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="vitals" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE']}>
+                  <VitalsManagement />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="investigations" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST']}>
+                  <InvestigationQueue />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="pharmacy" 
+              element={
+                <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
+                  <PrescriptionQueue />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="billing" 
+              element={
+                <RoleProtectedRoute requiredRoles={['BILLING_STAFF', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
+                  <BillingDashboard />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="notifications" element={<Notifications />} />
+            
+            <Route 
+              path="audit-logs" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <AuditLogs />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="hospitals" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN']}>
+                  <HospitalManagement />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="users" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <UserManagement />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="quick-registration" 
+              element={
+                <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN']}>
+                  <QuickRegistration />
+                </RoleProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="payments" 
+              element={
+                <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF']}>
+                  <PaymentManagement />
+                </RoleProtectedRoute>
+              } 
+            />
 
-          {/* IPD Admissions - multi-role */}
-          <Route
-            path="ipd"
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
-                <AdmissionList />
-              </RoleProtectedRoute>
-            }
-          />
+            <Route
+              path="ipd"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <AdmissionList />
+                </RoleProtectedRoute>
+              }
+            />
 
-          {/* Ward Manager */}
-          <Route
-            path="ward-manager"
-            element={
-              <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'NURSE']}>
-                <WardManager />
-              </RoleProtectedRoute>
-            }
-          />
-        </Route>
+            <Route
+              path="ward-manager"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'NURSE']}>
+                  <WardManager />
+                </RoleProtectedRoute>
+              }
+            />
+          </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 };
 
 export default App;
-// Test beta deploy

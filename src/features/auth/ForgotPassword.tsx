@@ -46,7 +46,7 @@ const ForgotPassword: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8082';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082';
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();

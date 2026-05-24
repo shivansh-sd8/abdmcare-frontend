@@ -24,7 +24,7 @@ jobs:
             cd /var/www/abhaayushman/abdmcare-frontend
             git pull origin main
             echo "--- Installing dependencies ---"
-            npm ci
+            npm install
             echo "--- Building React app ---"
             npm run build
             echo "--- Restarting server ---"
