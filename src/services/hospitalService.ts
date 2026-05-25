@@ -93,6 +93,14 @@ class HospitalService {
   async getAllHospitalStats() {
     return api.get('/api/v1/hospitals/stats');
   }
+
+  async getSchedule(id: string) {
+    return api.get(`/api/v1/hospitals/${id}/schedule`);
+  }
+
+  async updateSchedule(id: string, data: any) {
+    return api.put(`/api/v1/hospitals/${id}/schedule`, data);
+  }
 }
 
 const hospitalService = new HospitalService();

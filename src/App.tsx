@@ -12,8 +12,10 @@ const ScanAndShare = React.lazy(() => import('./features/abha/ScanAndShare'));
 const PatientCheckIn = React.lazy(() => import('./features/abha/PatientCheckIn'));
 const PatientList = React.lazy(() => import('./features/patient/PatientList'));
 const PatientRegistration = React.lazy(() => import('./features/patient/PatientRegistration'));
+const PatientProfile = React.lazy(() => import('./features/patient/PatientProfile'));
 const DoctorList = React.lazy(() => import('./features/doctor/DoctorList'));
 const DoctorRegistration = React.lazy(() => import('./features/doctor/DoctorRegistration'));
+const DoctorProfile = React.lazy(() => import('./features/doctor/DoctorProfile'));
 const AppointmentList = React.lazy(() => import('./features/appointment/AppointmentList'));
 const ScheduleAppointment = React.lazy(() => import('./features/appointment/ScheduleAppointment'));
 const ConsentManagement = React.lazy(() => import('./features/consent/ConsentManagement'));
@@ -23,7 +25,6 @@ const Notifications = React.lazy(() => import('./features/notifications/Notifica
 const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
 const HospitalManagement = React.lazy(() => import('./features/hospital/HospitalManagement'));
 const UserManagement = React.lazy(() => import('./features/user/UserManagement'));
-const QuickRegistration = React.lazy(() => import('./features/receptionist/QuickRegistration'));
 const PaymentManagement = React.lazy(() => import('./features/receptionist/PaymentManagement'));
 const EncounterList = React.lazy(() => import('./features/doctor/EncounterList'));
 const PrescriptionList = React.lazy(() => import('./features/doctor/PrescriptionList'));
@@ -79,23 +80,9 @@ const App: React.FC = () => {
               } 
             />
             
-            <Route
-              path="scan-share"
-              element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
-                  <ScanAndShare />
-                </RoleProtectedRoute>
-              }
-            />
-
-            <Route
-              path="patient-checkin"
-              element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST', 'NURSE']}>
-                  <PatientCheckIn />
-                </RoleProtectedRoute>
-              }
-            />
+            {/* Redirects for consolidated routes */}
+            <Route path="scan-share" element={<Navigate to="/app/abha" state={{ tab: 'scan' }} replace />} />
+            <Route path="patient-checkin" element={<Navigate to="/app/abha" state={{ tab: 'checkin' }} replace />} />
 
             <Route 
               path="patients" 
@@ -113,6 +100,14 @@ const App: React.FC = () => {
                 </RoleProtectedRoute>
               } 
             />
+            <Route 
+              path="patients/:id" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                  <PatientProfile />
+                </RoleProtectedRoute>
+              } 
+            />
             
             <Route 
               path="doctors" 
@@ -127,6 +122,14 @@ const App: React.FC = () => {
               element={
                 <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
                   <DoctorRegistration />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="doctors/:id" 
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <DoctorProfile />
                 </RoleProtectedRoute>
               } 
             />
@@ -251,23 +254,8 @@ const App: React.FC = () => {
               } 
             />
             
-            <Route 
-              path="quick-registration" 
-              element={
-                <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN']}>
-                  <QuickRegistration />
-                </RoleProtectedRoute>
-              } 
-            />
             
-            <Route 
-              path="payments" 
-              element={
-                <RoleProtectedRoute requiredRoles={['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF']}>
-                  <PaymentManagement />
-                </RoleProtectedRoute>
-              } 
-            />
+            <Route path="payments" element={<Navigate to="/app/billing" replace />} />
 
             <Route
               path="ipd"

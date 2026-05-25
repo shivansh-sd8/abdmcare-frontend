@@ -46,15 +46,14 @@ import doctorService from '../../services/doctorService';
 import {
   validate,
   validationPatterns,
-  validationMessages,
   validateMobile,
   validateEmail,
   validatePincode,
   validateAge,
-  validateABHANumber,
 } from '../../utils/validation';
 
-const steps = ['Basic Information', 'Contact & Address', 'ABHA Linking', 'Appointment'];
+const ALL_STEPS = ['Basic Information', 'Contact & Address', 'ABHA Linking', 'Appointment'];
+const EDIT_STEPS = ['Basic Information', 'Contact & Address', 'ABHA Linking'];
 
 const appointmentTypes = [
   { value: 'OPD',              label: 'OPD — General Consultation' },
@@ -66,22 +65,26 @@ const appointmentTypes = [
   { value: 'TELECONSULTATION', label: 'Tele-Consultation' },
 ];
 
-const timeSlots = [
+const FALLBACK_SLOTS = [
   '09:00','09:30','10:00','10:30','11:00','11:30',
   '12:00','12:30','14:00','14:30','15:00','15:30',
   '16:00','16:30','17:00','17:30','18:00','18:30',
+  '19:00','19:30','20:00','20:30','21:00',
 ];
 
 const PatientRegistration: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const abhaData = (location.state as any)?.abhaData;
+  const editPatient = (location.state as any)?.editPatient;
+  const isEditMode = !!editPatient;
+  const steps = isEditMode ? EDIT_STEPS : ALL_STEPS;
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // ── Patient form ─────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    firstName: '', middleName: '', lastName: '',
+    firstName: '', lastName: '',
     gender: '', dob: '', mobile: '', email: '', bloodGroup: '',
     address:          { line1: '', line2: '', city: '', state: '', pincode: '' },
     emergencyContact: { name: '', relationship: '', mobile: '' },
@@ -90,34 +93,108 @@ const PatientRegistration: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [abhaLinked, setAbhaLinked] = useState(false);
 
-  // Pre-populate from ABHA data if navigating from ABHA creation
-  useEffect(() => {
-    if (abhaData) {
-      const genderMap: Record<string, string> = { M: 'MALE', F: 'FEMALE', O: 'OTHER', MALE: 'MALE', FEMALE: 'FEMALE', OTHER: 'OTHER' };
-      const dob = abhaData.yearOfBirth
-        ? `${abhaData.yearOfBirth}-${String(abhaData.monthOfBirth || '01').padStart(2, '0')}-${String(abhaData.dayOfBirth || '01').padStart(2, '0')}`
-        : abhaData.dob || '';
+  // Pre-populate from ABHA data if navigating from ABHA creation/verification
+  const populateFromAbha = (data: any) => {
+    if (!data) return;
 
-      setFormData(prev => ({
-        ...prev,
-        firstName: abhaData.firstName || abhaData.name?.split(' ')[0] || '',
-        middleName: abhaData.middleName || '',
-        lastName: abhaData.lastName || abhaData.name?.split(' ').slice(-1)[0] || '',
-        gender: genderMap[abhaData.gender?.toUpperCase()] || abhaData.gender || '',
-        dob,
-        mobile: abhaData.mobile || '',
-        email: abhaData.email || '',
+    const genderMap: Record<string, string> = {
+      M: 'MALE', F: 'FEMALE', O: 'OTHER',
+      MALE: 'MALE', FEMALE: 'FEMALE', OTHER: 'OTHER',
+    };
+
+    // Parse name — ABDM may return split or combined
+    const nameParts = data.name?.split(' ').filter(Boolean) || [];
+    const firstName = [data.firstName, data.middleName].filter(Boolean).join(' ')
+      || nameParts.slice(0, -1).join(' ')
+      || nameParts[0]
+      || '';
+    const lastName = data.lastName
+      || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : '')
+      || '';
+
+    // Parse DOB — ABDM V3 returns day/month/year separately or dob as string
+    let dob = '';
+    if (data.yearOfBirth) {
+      const y = data.yearOfBirth;
+      const m = String(data.monthOfBirth || '01').padStart(2, '0');
+      const d = String(data.dayOfBirth || '01').padStart(2, '0');
+      dob = `${y}-${m}-${d}`;
+    } else if (data.dob) {
+      // Could be DD-MM-YYYY or YYYY-MM-DD
+      if (/^\d{2}-\d{2}-\d{4}$/.test(data.dob)) {
+        const [dd, mm, yyyy] = data.dob.split('-');
+        dob = `${yyyy}-${mm}-${dd}`;
+      } else {
+        dob = data.dob;
+      }
+    } else if (data.dateOfBirth) {
+      dob = data.dateOfBirth;
+    }
+
+    // Build address from all available ABDM fields
+    const addrParts = [
+      data.address || data.addressLine || '',
+      data.villageOrTownName || data.townName || data.villageName || '',
+      data.subdistrictName || data.subDistrictName || '',
+    ].filter(Boolean);
+    const line1 = addrParts.join(', ');
+
+    setFormData(prev => ({
+      ...prev,
+      firstName,
+      lastName,
+      gender: genderMap[data.gender?.toUpperCase()] || data.gender || '',
+      dob,
+      mobile: data.mobile || data.phoneNumber || '',
+      email: data.email || data.emailId || '',
+      bloodGroup: data.bloodGroup || '',
+      address: {
+        line1,
+        line2: prev.address.line2,
+        city: data.districtName || data.district || data.city || '',
+        state: data.stateName || data.state || '',
+        pincode: data.pincode || data.pinCode || '',
+      },
+      emergencyContact: prev.emergencyContact,
+      abhaNumber: data.ABHANumber || data.abhaNumber || data.healthIdNumber || '',
+    }));
+    setAbhaLinked(true);
+  };
+
+  useEffect(() => {
+    if (abhaData) populateFromAbha(abhaData);
+    if (editPatient) {
+      const addr = typeof editPatient.address === 'object' && editPatient.address
+        ? editPatient.address
+        : {};
+      const ec = typeof editPatient.emergencyContact === 'object' && editPatient.emergencyContact
+        ? editPatient.emergencyContact
+        : {};
+      setFormData({
+        firstName: editPatient.firstName || '',
+        lastName: editPatient.lastName || '',
+        gender: editPatient.gender || '',
+        dob: editPatient.dob ? new Date(editPatient.dob).toISOString().split('T')[0] : '',
+        mobile: editPatient.mobile || '',
+        email: editPatient.email || '',
+        bloodGroup: editPatient.bloodGroup || '',
         address: {
-          line1: abhaData.address || abhaData.addressLine || '',
-          line2: '',
-          city: abhaData.districtName || abhaData.district || '',
-          state: abhaData.stateName || abhaData.state || '',
-          pincode: abhaData.pincode || abhaData.pinCode || '',
+          line1: addr.line1 || addr.line || addr.addressLine || '',
+          line2: addr.line2 || '',
+          city: addr.city || addr.district || '',
+          state: addr.state || '',
+          pincode: addr.pincode || addr.pinCode || '',
         },
-        emergencyContact: prev.emergencyContact,
-        abhaNumber: abhaData.ABHANumber || abhaData.abhaNumber || '',
-      }));
-      setAbhaLinked(true);
+        emergencyContact: {
+          name: ec.name || '',
+          relationship: ec.relationship || '',
+          mobile: ec.mobile || '',
+        },
+        abhaNumber: editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber || '',
+      });
+      if (editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber) {
+        setAbhaLinked(true);
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -136,6 +213,9 @@ const PatientRegistration: React.FC = () => {
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [specFilter, setSpecFilter]         = useState('');
   const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [dynamicSlots, setDynamicSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotDuration, setSlotDuration] = useState(30);
 
   const specializations = useMemo(() => {
     const s = new Set<string>(allDoctors.map(d => d.specialization).filter(Boolean));
@@ -174,30 +254,37 @@ const PatientRegistration: React.FC = () => {
       : (formData as any)[field];
     let error: string | undefined;
     switch (field) {
-      case 'firstName': case 'lastName':
+      case 'firstName': case 'lastName': {
         const nr = validate(value, { required: true, pattern: validationPatterns.name,
           message: field === 'firstName' ? 'First name is required' : 'Last name is required' });
         if (!nr.isValid) error = nr.error;
-        else if (value && !validationPatterns.name.test(value)) error = validationMessages.name;
         break;
+      }
       case 'mobile':        { const r = validateMobile(value);   if (!r.isValid) error = r.error; break; }
       case 'email':         { const r = validateEmail(value);    if (!r.isValid) error = r.error; break; }
       case 'dob':           { const r = validateAge(value);      if (!r.isValid) error = r.error; break; }
       case 'gender':        { const r = validate(value, { required: true, message: 'Gender is required' }); if (!r.isValid) error = r.error; break; }
       case 'address.pincode': if (value) { const r = validatePincode(value); if (!r.isValid) error = r.error; } break;
       case 'emergencyContact.mobile': if (value) { const r = validateMobile(value); if (!r.isValid) error = r.error; } break;
-      case 'abhaNumber':    if (value) { const r = validateABHANumber(value); if (!r.isValid) error = r.error; } break;
     }
     if (error) setErrors(prev => ({ ...prev, [field]: error! }));
     else setErrors(prev => { const e = { ...prev }; delete e[field]; return e; });
   };
 
   const handleNext = () => {
-    if (activeStep === 0 && (!formData.firstName || !formData.lastName || !formData.gender || !formData.dob)) {
-      toast.error('Please fill all required fields'); return;
+    if (activeStep === 0) {
+      const errs: Record<string, string> = {};
+      if (!formData.firstName.trim()) errs.firstName = 'First name is required';
+      if (!formData.lastName.trim()) errs.lastName = 'Last name is required';
+      if (!formData.gender) errs.gender = 'Gender is required';
+      if (!formData.dob) errs.dob = 'Date of birth is required';
+      else { const a = validateAge(formData.dob); if (!a.isValid) errs.dob = a.error!; }
+      if (Object.keys(errs).length > 0) { setErrors(prev => ({ ...prev, ...errs })); toast.error('Please fix all required fields'); return; }
     }
-    if (activeStep === 1 && !formData.mobile) {
-      toast.error('Mobile number is required'); return;
+    if (activeStep === 1) {
+      if (!formData.mobile) { setErrors(prev => ({ ...prev, mobile: 'Mobile number is required' })); toast.error('Mobile number is required'); return; }
+      const m = validateMobile(formData.mobile);
+      if (!m.isValid) { setErrors(prev => ({ ...prev, mobile: m.error! })); toast.error('Please enter a valid mobile number'); return; }
     }
     setActiveStep(prev => prev + 1);
   };
@@ -207,7 +294,11 @@ const PatientRegistration: React.FC = () => {
     try {
       setLoading(true);
       const response: any = await abhaService.loginSearch(formData.abhaNumber.replace(/-/g, ''));
-      if (response.data) { setAbhaLinked(true); toast.success('ABHA found and linked!'); }
+      const data = response?.data?.data || response?.data || response;
+      if (data) {
+        populateFromAbha(data);
+        toast.success('ABHA found! Details auto-filled.');
+      }
     } catch { toast.error('ABHA not found'); }
     finally { setLoading(false); }
   };
@@ -229,54 +320,140 @@ const PatientRegistration: React.FC = () => {
     const errs: Record<string, string> = {};
     if (!apptData.doctorId)                    errs.doctorId = 'Please select a doctor';
     if (!apptData.date)                        errs.date     = 'Date is required';
+    else {
+      const selDate = new Date(apptData.date);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (selDate < today) errs.date = 'Date cannot be in the past';
+    }
     if (!apptData.time)                        errs.time     = 'Time is required';
+    else if (dynamicSlots.length > 0 && !dynamicSlots.includes(apptData.time))
+      errs.time = 'Selected slot is no longer available';
     if (!apptData.reason || apptData.reason.trim().length < 5) errs.reason = 'Reason must be at least 5 characters';
     setApptErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   // ── Final submit ──────────────────────────────────────────────────────────
+  const VALID_GENDERS = ['MALE', 'FEMALE', 'OTHER'];
+  const VALID_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
   const handleSubmit = async () => {
-    if (!apptIsValid()) { toast.error('Please fix appointment fields'); return; }
+    if (loading) return;
+
+    const patientErrs: Record<string, string> = {};
+
+    // Required: firstName
+    if (!formData.firstName.trim()) patientErrs.firstName = 'First name is required';
+
+    // Required: lastName
+    if (!formData.lastName.trim()) patientErrs.lastName = 'Last name is required';
+
+    // Required: gender — must be in enum
+    if (!formData.gender || !VALID_GENDERS.includes(formData.gender))
+      patientErrs.gender = 'Please select a valid gender';
+
+    // Required: dob — must be valid date, not in the future
+    if (!formData.dob) patientErrs.dob = 'Date of birth is required';
+    else {
+      const dobDate = new Date(formData.dob);
+      if (isNaN(dobDate.getTime())) patientErrs.dob = 'Invalid date format';
+      else if (dobDate > new Date()) patientErrs.dob = 'Date of birth cannot be in the future';
+    }
+
+    // Required: mobile — Indian mobile format
+    if (!formData.mobile) patientErrs.mobile = 'Mobile number is required';
+    else { const m = validateMobile(formData.mobile); if (!m.isValid) patientErrs.mobile = m.error!; }
+
+    // Optional: email — if provided must be valid
+    if (formData.email) { const e = validateEmail(formData.email); if (!e.isValid) patientErrs.email = e.error!; }
+
+    // Optional: bloodGroup — if provided must be in enum
+    if (formData.bloodGroup && !VALID_BLOOD_GROUPS.includes(formData.bloodGroup))
+      patientErrs.bloodGroup = 'Invalid blood group';
+
+    // Optional: pincode — if provided must be 6 digits
+    if (formData.address.pincode) { const p = validatePincode(formData.address.pincode); if (!p.isValid) patientErrs['address.pincode'] = p.error!; }
+
+    if (Object.keys(patientErrs).length > 0) {
+      setErrors(patientErrs);
+      toast.error('Please fix patient information errors');
+      const firstErrField = Object.keys(patientErrs)[0];
+      if (['firstName', 'lastName', 'gender', 'dob', 'bloodGroup'].includes(firstErrField)) setActiveStep(0);
+      else if (['mobile', 'email', 'address.pincode'].includes(firstErrField)) setActiveStep(1);
+      return;
+    }
+    if (!isEditMode && !apptIsValid()) { toast.error('Please fix appointment fields'); setActiveStep(3); return; }
     try {
       setLoading(true);
 
-      // 1. Register patient
-      const patientRes: any = await patientService.createPatient({
-        firstName: formData.firstName,
-        middleName: formData.middleName,
-        lastName: formData.lastName,
+      const patientPayload: any = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
         gender: formData.gender,
         dob: formData.dob,
         mobile: formData.mobile,
-        email: formData.email,
-        bloodGroup: formData.bloodGroup,
         address: formData.address,
         emergencyContact: formData.emergencyContact,
-        abhaId: abhaLinked ? formData.abhaNumber : undefined,
-      });
+      };
+      if (formData.email?.trim())      patientPayload.email = formData.email.trim();
+      if (formData.bloodGroup)         patientPayload.bloodGroup = formData.bloodGroup;
+      if (abhaLinked && formData.abhaNumber) patientPayload.abhaId = formData.abhaNumber;
 
-      const newPatientId: string = patientRes.data?.data?.id ?? patientRes.data?.id ?? patientRes.data?.data?.data?.id;
-
-      // 2. Optionally create appointment
-      if (scheduleAppt && newPatientId) {
-        await appointmentService.createAppointment({
-          patientId: newPatientId,
-          doctorId:  apptData.doctorId,
-          date:      apptData.date,
-          time:      apptData.time,
-          type:      apptData.type,
-          reason:    apptData.reason,
-          notes:     apptData.notes,
-        });
-        toast.success('Patient registered & appointment scheduled!');
-        navigate('/app/appointments');
+      if (isEditMode) {
+        await patientService.updatePatient(editPatient.id, patientPayload);
+        toast.success('Patient updated successfully!');
+        navigate(`/app/patients/${editPatient.id}`);
       } else {
-        toast.success('Patient registered successfully!');
-        navigate('/app/patients');
+        const patientRes: any = await patientService.createPatient(patientPayload);
+        const newPatientId: string = patientRes.data?.data?.id ?? patientRes.data?.id ?? patientRes.data?.data?.data?.id;
+
+        if (scheduleAppt && newPatientId) {
+          try {
+            await appointmentService.createAppointment({
+              patientId: newPatientId,
+              doctorId:  apptData.doctorId,
+              date:      apptData.date,
+              time:      apptData.time,
+              type:      apptData.type,
+              reason:    apptData.reason,
+              notes:     apptData.notes,
+            });
+            toast.success('Patient registered & appointment scheduled!');
+            navigate('/app/appointments');
+          } catch (apptErr: any) {
+            const msg = apptErr.response?.data?.message || 'Failed to schedule appointment';
+            toast.warning(`Patient registered successfully, but appointment failed: ${msg}. You can schedule from the Appointments page.`);
+            navigate('/app/patients');
+          }
+        } else {
+          toast.success('Patient registered successfully!');
+          navigate('/app/patients');
+        }
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to register patient');
+      const res = error.response?.data;
+      const fieldErrors = res?.errors || res?.error;
+      if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+        const mapped: Record<string, string> = {};
+        const stepFields: Record<string, number> = {
+          firstName: 0, lastName: 0, gender: 0, dob: 0, bloodGroup: 0,
+          mobile: 1, email: 1, 'address.pincode': 1,
+        };
+        let firstStep = activeStep;
+        fieldErrors.forEach((e: any) => {
+          const field = e.field || e.path || 'unknown';
+          mapped[field] = e.message || e.msg || 'Invalid value';
+          if (stepFields[field] !== undefined && stepFields[field] < firstStep) {
+            firstStep = stepFields[field];
+          }
+        });
+        setErrors(mapped);
+        setActiveStep(firstStep);
+        const messages = fieldErrors.map((e: any) => e.message || e.msg).filter(Boolean);
+        toast.error(messages.join(', ') || 'Validation failed');
+      } else {
+        toast.error(res?.message || (isEditMode ? 'Failed to update patient' : 'Failed to register patient'));
+      }
     } finally {
       setLoading(false);
     }
@@ -284,15 +461,49 @@ const PatientRegistration: React.FC = () => {
 
   const todayDate = new Date().toISOString().split('T')[0];
 
+  // Fetch available slots from API when doctor + date are selected
+  useEffect(() => {
+    if (!apptData.doctorId || !apptData.date) {
+      setDynamicSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSlots(true);
+    appointmentService.getAvailableSlots(apptData.doctorId, apptData.date)
+      .then((res: any) => {
+        if (cancelled) return;
+        const data = res.data || res;
+        setDynamicSlots(data.slots || []);
+        if (data.slotDuration) setSlotDuration(data.slotDuration);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const now = new Date();
+        const cm = now.getHours() * 60 + now.getMinutes();
+        const fb = apptData.date === todayDate
+          ? FALLBACK_SLOTS.filter(s => { const [h, m] = s.split(':').map(Number); return h * 60 + m > cm; })
+          : FALLBACK_SLOTS;
+        setDynamicSlots(fb);
+      })
+      .finally(() => { if (!cancelled) setLoadingSlots(false); });
+    return () => { cancelled = true; };
+  }, [apptData.doctorId, apptData.date]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (apptData.time && dynamicSlots.length > 0 && !dynamicSlots.includes(apptData.time)) {
+      setApptData(p => ({ ...p, time: dynamicSlots[0] || '' }));
+    }
+  }, [dynamicSlots]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
       <Paper elevation={0} sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <PersonAdd sx={{ fontSize: 40 }} />
           <Box>
-            <Typography variant="h4" fontWeight="bold">New Patient Registration</Typography>
+            <Typography variant="h4" fontWeight="bold">{isEditMode ? 'Edit Patient' : 'New Patient Registration'}</Typography>
             <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-              Register a new patient and optionally schedule an appointment
+              {isEditMode ? 'Update patient information' : 'Register a new patient and optionally schedule an appointment'}
             </Typography>
           </Box>
         </Box>
@@ -324,16 +535,12 @@ const PatientRegistration: React.FC = () => {
                 </Typography>
                 <Divider sx={{ mb: 3 }} />
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <TextField fullWidth label="First Name" required value={formData.firstName}
                   onChange={e => handleChange('firstName', e.target.value)}
                   onBlur={() => validateField('firstName')} error={!!errors.firstName} helperText={errors.firstName} />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField fullWidth label="Middle Name" value={formData.middleName}
-                  onChange={e => handleChange('middleName', e.target.value)} />
-              </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={6}>
                 <TextField fullWidth label="Last Name" required value={formData.lastName}
                   onChange={e => handleChange('lastName', e.target.value)}
                   onBlur={() => validateField('lastName')} error={!!errors.lastName} helperText={errors.lastName} />
@@ -405,7 +612,11 @@ const PatientRegistration: React.FC = () => {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField fullWidth label="Pincode" value={formData.address.pincode}
-                  onChange={e => handleChange('address.pincode', e.target.value)} />
+                  onChange={e => handleChange('address.pincode', e.target.value)}
+                  onBlur={() => validateField('address.pincode')}
+                  error={!!errors['address.pincode']}
+                  helperText={errors['address.pincode']}
+                  inputProps={{ maxLength: 6 }} />
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="subtitle2" gutterBottom sx={{ mt: 2, fontWeight: 600 }}>Emergency Contact</Typography>
@@ -420,7 +631,11 @@ const PatientRegistration: React.FC = () => {
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField fullWidth label="Contact Mobile" value={formData.emergencyContact.mobile}
-                  onChange={e => handleChange('emergencyContact.mobile', e.target.value)} />
+                  onChange={e => handleChange('emergencyContact.mobile', e.target.value)}
+                  onBlur={() => validateField('emergencyContact.mobile')}
+                  error={!!errors['emergencyContact.mobile']}
+                  helperText={errors['emergencyContact.mobile']}
+                  inputProps={{ maxLength: 10 }} />
               </Grid>
             </Grid>
           )}
@@ -445,19 +660,22 @@ const PatientRegistration: React.FC = () => {
                 <TextField fullWidth label="ABHA Number" value={formData.abhaNumber}
                   onChange={e => handleChange('abhaNumber', e.target.value)}
                   placeholder="14-1234-5678-9012"
+                  disabled={!!abhaData && abhaLinked}
                   InputProps={{
-                    endAdornment: (
+                    endAdornment: !abhaLinked ? (
                       <InputAdornment position="end">
                         <IconButton onClick={searchAbha} disabled={loading}><Search /></IconButton>
                       </InputAdornment>
-                    ),
+                    ) : undefined,
                   }} />
               </Grid>
-              <Grid item xs={12} md={4}>
-                <Button fullWidth variant="outlined" size="large" onClick={searchAbha} disabled={loading} sx={{ height: 56 }}>
-                  {loading ? <CircularProgress size={24} /> : 'Search ABHA'}
-                </Button>
-              </Grid>
+              {!abhaLinked && (
+                <Grid item xs={12} md={4}>
+                  <Button fullWidth variant="outlined" size="large" onClick={searchAbha} disabled={loading} sx={{ height: 56 }}>
+                    {loading ? <CircularProgress size={24} /> : 'Search ABHA'}
+                  </Button>
+                </Grid>
+              )}
               {abhaLinked && (
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
@@ -581,9 +799,18 @@ const PatientRegistration: React.FC = () => {
                       <TextField fullWidth select label="Time Slot" required
                         value={apptData.time} onChange={e => setApptData(p => ({ ...p, time: e.target.value }))}
                         onBlur={() => validateApptField('time')}
-                        error={!!apptErrors.time} helperText={apptErrors.time}
-                        InputProps={{ startAdornment: <InputAdornment position="start"><AccessTime /></InputAdornment> }}>
-                        {timeSlots.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                        error={!!apptErrors.time}
+                        disabled={loadingSlots || dynamicSlots.length === 0}
+                        helperText={
+                          !apptData.doctorId || !apptData.date ? 'Select doctor and date first'
+                            : loadingSlots ? 'Loading slots...'
+                            : dynamicSlots.length === 0 ? 'No slots available — try another date'
+                            : (apptErrors.time || `${dynamicSlots.length} slot(s) · ${slotDuration} min`)
+                        }
+                        InputProps={{ startAdornment: <InputAdornment position="start">{loadingSlots ? <CircularProgress size={20} /> : <AccessTime />}</InputAdornment> }}>
+                        {dynamicSlots.length === 0
+                          ? <MenuItem disabled value="">No slots available</MenuItem>
+                          : dynamicSlots.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
                       </TextField>
                     </Grid>
 
@@ -630,7 +857,7 @@ const PatientRegistration: React.FC = () => {
                 <Button variant="contained" onClick={handleSubmit} disabled={loading}
                   startIcon={loading ? <CircularProgress size={20} /> : (scheduleAppt ? <EventAvailable /> : <CheckCircle />)}
                   sx={{ minWidth: 180, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                  {loading ? 'Saving…' : scheduleAppt ? 'Register & Schedule' : 'Register Patient'}
+                  {loading ? 'Saving…' : isEditMode ? 'Update Patient' : scheduleAppt ? 'Register & Schedule' : 'Register Patient'}
                 </Button>
               ) : (
                 <Button variant="contained" onClick={handleNext} endIcon={<ArrowForward />}

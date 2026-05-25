@@ -47,6 +47,10 @@ class PaymentService {
   async getPaymentStats(hospitalId?: string) {
     return api.get('/api/v1/payments/stats', { params: { hospitalId } });
   }
+
+  async getConsolidatedBilling(params?: { hospitalId?: string; patientId?: string }) {
+    return api.get('/api/v1/payments/consolidated', { params });
+  }
 }
 
 const paymentService = new PaymentService();

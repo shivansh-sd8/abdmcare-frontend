@@ -167,6 +167,68 @@ const VitalsBanner: React.FC<{ patientId?: string }> = ({ patientId }) => {
   );
 };
 
+// ─── Patient History Panel ─────────────────────────────────────────────────────
+
+const PatientHistoryPanel: React.FC<{ patientId?: string; currentEncounterId?: string }> = ({ patientId, currentEncounterId }) => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!patientId) return;
+    setLoading(true);
+    encounterService.getAllEncounters({ patientId, limit: 10 })
+      .then((res: any) => {
+        const data = res.data?.data || res.data || [];
+        const list = Array.isArray(data) ? data : (data.encounters || data.data || []);
+        setHistory(list.filter((e: any) => e.id !== currentEncounterId).slice(0, 5));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [patientId, currentEncounterId]);
+
+  if (loading) return <Box sx={{ p: 1.5 }}><CircularProgress size={16} /></Box>;
+  if (history.length === 0) return null;
+
+  return (
+    <Box sx={{
+      width: 260, flexShrink: 0, borderLeft: '1px solid', borderColor: 'divider',
+      overflowY: 'auto', p: 1.5, bgcolor: isDark ? 'rgba(255,255,255,0.02)' : '#fafbfc',
+      display: { xs: 'none', lg: 'block' },
+    }}>
+      <Typography variant="caption" fontWeight={700} color="#1a3c6e" display="block" mb={1}
+        sx={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        Past Visits ({history.length})
+      </Typography>
+      {history.map((h: any, idx: number) => (
+        <Paper key={h.id || idx} elevation={0} sx={{
+          p: 1, mb: 1, borderRadius: 1.5,
+          border: '1px solid', borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+          bgcolor: isDark ? 'rgba(255,255,255,0.03)' : 'white',
+        }}>
+          <Typography variant="caption" color="text.secondary" fontSize={10}>
+            {h.visitDate ? new Date(h.visitDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+            {h.type ? ` · ${h.type}` : ''}
+          </Typography>
+          {(h.finalDiagnosis || h.diagnosis) && (
+            <Typography variant="body2" fontSize={11} fontWeight={600} color="#1a3c6e" sx={{ mt: 0.25 }}>
+              {h.finalDiagnosis || h.diagnosis}
+            </Typography>
+          )}
+          {h.chiefComplaint && (
+            <Typography variant="caption" color="text.secondary" fontSize={10} display="block" sx={{ mt: 0.25 }}>
+              CC: {h.chiefComplaint.substring(0, 60)}{h.chiefComplaint.length > 60 ? '...' : ''}
+            </Typography>
+          )}
+          <Chip label={h.status?.replace(/_/g, ' ')} size="small"
+            sx={{ height: 16, fontSize: 9, mt: 0.5, bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f0f4f8' }} />
+        </Paper>
+      ))}
+    </Box>
+  );
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved }) => {
@@ -531,7 +593,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
 
         {/* ═══ TAB 0: CLINICAL NOTES ══════════════════════════════════════════ */}
         {tab === 0 && (
-          <Box sx={{ p: 2.5, overflowY: 'auto', width: '100%' }}>
+          <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <Box sx={{ p: 2.5, overflowY: 'auto', flex: 1 }}>
           <Grid container spacing={2}>
               {/* Chief Complaint */}
             <Grid item xs={12}>
@@ -610,6 +673,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                 Encounter status is <strong>{encounter?.status}</strong>. You can still edit and save.
               </Alert>
             )}
+          </Box>
+          <PatientHistoryPanel patientId={encounter?.patient?.id || encounter?.patientId} currentEncounterId={encounter?.id} />
           </Box>
         )}
 

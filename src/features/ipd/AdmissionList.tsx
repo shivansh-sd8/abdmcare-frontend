@@ -9,7 +9,7 @@ import {
 import {
   Add, Refresh, Print, LocalHospital, Bed as BedIcon,
   CheckCircle, ExitToApp, CurrencyRupee, AccountBalance,
-  PhoneAndroid, Money, Visibility,
+  PhoneAndroid, Money, Visibility, VerifiedUser,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format, differenceInDays } from 'date-fns';
@@ -20,11 +20,22 @@ import { useSelector } from 'react-redux';
 import IPDAdmissionDetail from './IPDAdmissionDetail';
 
 const STATUS_COLOR: Record<string, 'default'|'success'|'error'|'warning'|'info'> = {
-  ADMITTED:    'info',
-  DISCHARGED:  'success',
-  TRANSFERRED: 'warning',
-  ABSCONDED:   'error',
+  ADMITTED:         'success',
+  DISCHARGE_READY:  'warning',
+  DISCHARGED:       'default',
+  TRANSFERRED:      'info',
+  ABSCONDED:        'error',
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  ADMITTED:        'In Treatment',
+  DISCHARGE_READY: 'Discharge Ready',
+  DISCHARGED:      'Discharged',
+  TRANSFERRED:     'Transferred',
+  ABSCONDED:       'Absconded',
+};
+
+const DISCHARGE_ROLES = ['RECEPTIONIST', 'ADMIN', 'BILLING', 'SUPERADMIN', 'SUPER_ADMIN'];
 
 const PAY_STATUS_COLOR: Record<string, 'default'|'success'|'warning'|'error'> = {
   PAID:    'success',
@@ -46,6 +57,7 @@ interface Admission {
   paymentStatus?: string;
   admittedAt: string;
   dischargedAt?: string;
+  dischargeReadyAt?: string;
   admissionReason?: string;
   diagnosis?: string;
   dailyCharges: number;
@@ -168,6 +180,8 @@ const AdmissionList: React.FC = () => {
         diagnosis:       admitForm.diagnosis,
         dailyCharges:    admitForm.dailyCharges,
         advancePaid:     admitForm.advancePaid,
+        advanceMethod:   admitForm.advancePaymentMethod || undefined,
+        advanceTransactionRef: admitForm.advanceTransactionRef || undefined,
         notes:           admitForm.notes,
         encounterId:     admitForm.encounterId || undefined,
       });
@@ -185,6 +199,10 @@ const AdmissionList: React.FC = () => {
   };
 
   const openDischargeDialog = async (adm: Admission) => {
+    if (adm.status === 'ADMITTED') {
+      toast.error('Doctor must mark patient as discharge-ready first');
+      return;
+    }
     // Fetch itemized bill from backend
     let bill: any = null;
     try {
@@ -249,6 +267,21 @@ const AdmissionList: React.FC = () => {
     });
   };
 
+  const userRole = (authUser?.role || JSON.parse(localStorage.getItem('user') || '{}').role || '').toUpperCase();
+  const isDoctor = userRole === 'DOCTOR';
+  const canDischarge = DISCHARGE_ROLES.includes(userRole);
+
+  const handleMarkDischargeReady = async (admissionId: string) => {
+    try {
+      setSaving(true);
+      await ipdService.markDischargeReady(admissionId);
+      toast.success('Patient marked as discharge-ready');
+      loadAdmissions();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to mark discharge ready');
+    } finally { setSaving(false); }
+  };
+
   const selectedWardBeds = wards
     .find((w) => w.id === admitForm.wardId)
     ?.beds.filter((b) => b.status === 'AVAILABLE') || [];
@@ -284,8 +317,8 @@ const AdmissionList: React.FC = () => {
       {/* Status filter tabs */}
       <Paper sx={{ mb: 2 }}>
         <Tabs value={statusFilter} onChange={(_, v) => setStatusFilter(v)} variant="scrollable">
-          {['', 'ADMITTED', 'DISCHARGED', 'TRANSFERRED'].map((s) => (
-            <Tab key={s} label={s || 'All'} value={s} />
+          {['', 'ADMITTED', 'DISCHARGE_READY', 'DISCHARGED', 'TRANSFERRED'].map((s) => (
+            <Tab key={s} label={STATUS_LABEL[s] || 'All'} value={s} />
           ))}
         </Tabs>
       </Paper>
@@ -352,7 +385,12 @@ const AdmissionList: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip label={adm.status} color={STATUS_COLOR[adm.status] || 'default'} size="small" />
+                      <Chip label={STATUS_LABEL[adm.status] || adm.status} color={STATUS_COLOR[adm.status] || 'default'} size="small" />
+                      {adm.dischargeReadyAt && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Ready since {format(new Date(adm.dischargeReadyAt), 'dd MMM yyyy')}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -361,7 +399,14 @@ const AdmissionList: React.FC = () => {
                             <Visibility fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        {adm.status === 'ADMITTED' && (
+                        {adm.status === 'ADMITTED' && isDoctor && (
+                          <Tooltip title="Mark Discharge Ready">
+                            <IconButton size="small" sx={{ color: 'warning.main' }} onClick={() => handleMarkDischargeReady(adm.id)}>
+                              <VerifiedUser fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {adm.status === 'DISCHARGE_READY' && canDischarge && (
                           <Tooltip title="Discharge & Collect Payment">
                             <IconButton size="small" color="warning" onClick={() => openDischargeDialog(adm)}>
                               <ExitToApp fontSize="small" />

@@ -4,7 +4,7 @@ import {
   Grid, Paper, Tabs, Tab, InputAdornment, Chip, Divider, Alert, IconButton,
   CircularProgress, ToggleButtonGroup, ToggleButton, Avatar, Dialog, DialogTitle,
   DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText,
-  MenuItem, Select, FormControl, InputLabel,
+  MenuItem, Select, FormControl, InputLabel, alpha, useTheme,
 } from '@mui/material';
 import {
   Search, QrCode, Phone, CreditCard, HealthAndSafety, CheckCircle,
@@ -14,6 +14,8 @@ import {
 import { toast } from 'react-toastify';
 import { useNavigate, useLocation } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
+import ScanAndShare from './ScanAndShare';
+import PatientCheckIn from './PatientCheckIn';
 
 const AADHAAR_STEPS = ['Enter Aadhaar', 'Verify OTP', 'ABHA Created', 'ABHA Address', 'Complete'];
 const DL_STEPS = ['Enter Mobile', 'Verify OTP', 'DL Details', 'ABHA Created', 'ABHA Address', 'Complete'];
@@ -28,9 +30,11 @@ type VerifyMethod = 'abha-number' | 'mobile' | 'aadhaar' | 'abha-address';
 const AbhaManagement: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
   const routeState = location.state as any;
 
-  const [tabValue, setTabValue] = useState(routeState?.mode === 'link' ? 1 : 0);
+  const initialTab = routeState?.mode === 'link' ? 1 : routeState?.tab === 'scan' ? 2 : routeState?.tab === 'checkin' ? 3 : 0;
+  const [tabValue, setTabValue] = useState(initialTab);
   const [enrollMethod, setEnrollMethod] = useState<'aadhaar' | 'dl'>('aadhaar');
   const [activeStep, setActiveStep] = useState(0);
   const [txnId, setTxnId] = useState('');
@@ -470,8 +474,21 @@ const AbhaManagement: React.FC = () => {
     try {
       const res: any = await abhaService.getQrCode(xToken);
       const qrData = res?.data || res;
-      if (typeof qrData === 'string') window.open(`data:image/png;base64,${qrData}`, '_blank');
-      else toast.info('QR code data received');
+      if (typeof qrData === 'string' && qrData.length > 100) {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(`<html><body style="display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;margin:0"><img src="data:image/png;base64,${qrData}" style="max-width:400px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15)" /></body></html>`);
+          win.document.title = 'ABHA QR Code';
+        }
+      } else if (qrData && typeof qrData === 'object' && qrData.pngBytes) {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(`<html><body style="display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;margin:0"><img src="data:image/png;base64,${qrData.pngBytes}" style="max-width:400px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15)" /></body></html>`);
+          win.document.title = 'ABHA QR Code';
+        }
+      } else {
+        toast.info('QR code format not supported for display');
+      }
     } catch { toast.error('Failed to load QR code'); }
   };
 
@@ -502,96 +519,93 @@ const AbhaManagement: React.FC = () => {
     const dob = profile.dayOfBirth && profile.monthOfBirth && profile.yearOfBirth
       ? `${profile.dayOfBirth}/${profile.monthOfBirth}/${profile.yearOfBirth}` : profile.dob || '—';
 
+    const InfoField = ({ label, value, copyable }: { label: string; value: string; copyable?: boolean }) => (
+      <Box sx={{ mb: 0.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography variant="body1" fontWeight={600}>{value || '—'}</Typography>
+          {copyable && value && <IconButton size="small" onClick={() => handleCopy(value)} sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}><ContentCopy sx={{ fontSize: 14 }} /></IconButton>}
+        </Box>
+      </Box>
+    );
+
     return (
-      <Card sx={{ border: '2px solid', borderColor: 'success.main' }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <CheckCircle color="success" sx={{ mr: 1 }} />
-            <Typography variant="h6" fontWeight={600} color="success.main">ABHA Profile</Typography>
-          </Box>
-          <Divider sx={{ my: 2 }} />
-          <Grid container spacing={2}>
-            {profile.profilePhoto && (
-              <Grid item xs={12}>
-                <Avatar src={`data:image/jpeg;base64,${profile.profilePhoto}`} sx={{ width: 64, height: 64 }} />
-              </Grid>
-            )}
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">ABHA Number</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" fontWeight={600}>{abhaNum || '—'}</Typography>
-                {abhaNum && <IconButton size="small" onClick={() => handleCopy(abhaNum)}><ContentCopy fontSize="small" /></IconButton>}
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">ABHA Address</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" fontWeight={600}>{abhaAddr || '—'}</Typography>
-                {abhaAddr && <IconButton size="small" onClick={() => handleCopy(abhaAddr)}><ContentCopy fontSize="small" /></IconButton>}
-              </Box>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">Name</Typography>
-              <Typography fontWeight={500}>{name || '—'}</Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">Mobile</Typography>
-              <Typography fontWeight={500}>{profile.mobile || '—'}</Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">Gender</Typography>
-              <Typography fontWeight={500}>{profile.gender || '—'}</Typography>
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <Typography variant="caption" color="text.secondary">Date of Birth</Typography>
-              <Typography fontWeight={500}>{dob}</Typography>
-            </Grid>
-            {profile.email && (
-              <Grid item xs={12} sm={6}>
-                <Typography variant="caption" color="text.secondary">Email</Typography>
-                <Typography fontWeight={500}>{profile.email}</Typography>
-              </Grid>
-            )}
-            {profile.address && (
-              <Grid item xs={12}>
-                <Typography variant="caption" color="text.secondary">Address</Typography>
-                <Typography fontWeight={500}>{profile.address}</Typography>
-              </Grid>
-            )}
+      <Paper elevation={0} sx={{ border: `1px solid ${alpha('#22c55e', 0.3)}`, borderRadius: 3, overflow: 'hidden' }}>
+        <Box sx={{ px: 3, py: 1.5, bgcolor: alpha('#22c55e', 0.06), display: 'flex', alignItems: 'center', gap: 1, borderBottom: `1px solid ${alpha('#22c55e', 0.15)}` }}>
+          <CheckCircle sx={{ color: '#16a34a', fontSize: 22 }} />
+          <Typography variant="subtitle1" fontWeight={700} color="#16a34a">Verified ABHA Profile</Typography>
+          {profile.profilePhoto && (
+            <Avatar src={`data:image/jpeg;base64,${profile.profilePhoto}`} sx={{ width: 36, height: 36, ml: 'auto' }} />
+          )}
+        </Box>
+        <Box sx={{ p: 3 }}>
+          <Grid container spacing={2.5}>
+            <Grid item xs={12} sm={6}><InfoField label="ABHA Number" value={abhaNum} copyable /></Grid>
+            <Grid item xs={12} sm={6}><InfoField label="ABHA Address" value={abhaAddr} copyable /></Grid>
+            <Grid item xs={12} sm={6}><InfoField label="Name" value={name} /></Grid>
+            <Grid item xs={12} sm={6}><InfoField label="Mobile" value={profile.mobile} /></Grid>
+            <Grid item xs={12} sm={6}><InfoField label="Gender" value={profile.gender === 'M' ? 'Male' : profile.gender === 'F' ? 'Female' : profile.gender === 'O' ? 'Other' : profile.gender} /></Grid>
+            <Grid item xs={12} sm={6}><InfoField label="Date of Birth" value={dob} /></Grid>
+            {profile.email && <Grid item xs={12} sm={6}><InfoField label="Email" value={profile.email} /></Grid>}
+            {profile.address && <Grid item xs={12}><InfoField label="Address" value={profile.address} /></Grid>}
           </Grid>
 
           {cardImageUrl && (
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>ABHA Card</Typography>
-              <Box component="img" src={cardImageUrl} alt="ABHA Card" sx={{ maxWidth: '100%', maxHeight: 300, borderRadius: 2, border: '1px solid', borderColor: 'divider' }} />
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textAlign: 'center' }}>ABHA Card</Typography>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {/* Front — top half of the image */}
+                <Box sx={{
+                  width: 380, height: 240, borderRadius: 2, overflow: 'hidden',
+                  border: '1px solid', borderColor: 'divider', flexShrink: 0,
+                }}>
+                  <Box component="img" src={cardImageUrl} alt="ABHA Card Front"
+                    sx={{ width: '100%', height: '200%', objectFit: 'cover', objectPosition: 'top' }} />
+                </Box>
+                {/* Back — bottom half of the image, shift up by container height */}
+                <Box sx={{
+                  width: 380, height: 240, borderRadius: 2, overflow: 'hidden',
+                  border: '1px solid', borderColor: 'divider', flexShrink: 0,
+                }}>
+                  <Box component="img" src={cardImageUrl} alt="ABHA Card Back"
+                    sx={{ width: '100%', height: '200%', objectFit: 'cover', objectPosition: 'top', marginTop: '-240px' }} />
+                </Box>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 8, mt: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">Front</Typography>
+                <Typography variant="caption" color="text.secondary">Back</Typography>
+              </Box>
             </Box>
           )}
 
           {showActions && (
-            <Box sx={{ display: 'flex', gap: 2, mt: 3, flexWrap: 'wrap' }}>
-              <Button variant="outlined" size="small" startIcon={<CreditCard />} onClick={() => fetchAbhaCard()}>View Card</Button>
-              <Button variant="outlined" size="small" startIcon={<Download />} onClick={handleDownloadCard}>Download Card</Button>
-              <Button variant="outlined" size="small" startIcon={<QrCode />} onClick={handleViewQrCode}>QR Code</Button>
+            <Divider sx={{ my: 2.5 }} />
+          )}
+          {showActions && (
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <Button variant="outlined" size="small" startIcon={<CreditCard />} onClick={() => fetchAbhaCard()} sx={{ borderRadius: 2 }}>View Card</Button>
+              <Button variant="outlined" size="small" startIcon={<Download />} onClick={handleDownloadCard} sx={{ borderRadius: 2 }}>Download</Button>
+              <Button variant="outlined" size="small" startIcon={<QrCode />} onClick={handleViewQrCode} sx={{ borderRadius: 2 }}>QR Code</Button>
               {xToken && (
                 <Button variant="outlined" size="small" startIcon={<Edit />} onClick={() => {
                   setProfileUpdates({});
                   setShowProfileDialog(true);
-                }}>Update Profile</Button>
+                }} sx={{ borderRadius: 2 }}>Update Profile</Button>
               )}
               {linkedPatientId && abhaNum && (
                 <Button variant="contained" size="small" color="success" startIcon={<HealthAndSafety />}
-                  onClick={() => handleLinkToPatient(abhaNum, linkedPatientId, abhaAddr)}>
+                  onClick={() => handleLinkToPatient(abhaNum, linkedPatientId, abhaAddr)} sx={{ borderRadius: 2 }}>
                   Link to {linkedPatientName || 'Patient'}
                 </Button>
               )}
               <Button variant="contained" color="primary" size="small" startIcon={<PersonAdd />}
-                onClick={() => navigate('/app/patients/new', { state: { abhaData: profile } })}>
+                onClick={() => navigate('/app/patients/new', { state: { abhaData: profile } })} sx={{ borderRadius: 2 }}>
                 Register as Patient
               </Button>
             </Box>
           )}
-        </CardContent>
-      </Card>
+        </Box>
+      </Paper>
     );
   };
 
@@ -647,22 +661,48 @@ const AbhaManagement: React.FC = () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>ABHA Management</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Create, verify and manage ABHA numbers (ABDM V3)
-            {linkedPatientName && <Chip size="small" label={`Linking for: ${linkedPatientName}`} color="primary" sx={{ ml: 1 }} />}
-          </Typography>
+    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+      {/* Header */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 3, mb: 3, borderRadius: 3,
+          background: `linear-gradient(135deg, ${theme.palette.mode === 'dark' ? '#064e3b' : '#059669'} 0%, ${theme.palette.mode === 'dark' ? '#1e3a5f' : '#0d9488'} 100%)`,
+          color: '#fff',
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <HealthAndSafety sx={{ fontSize: 40, opacity: 0.9 }} />
+            <Box>
+              <Typography variant="h4" fontWeight="bold">ABHA Management</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
+                Create, verify and manage Ayushman Bharat Health Accounts
+                {linkedPatientName && <Chip size="small" label={`Linking for: ${linkedPatientName}`} sx={{ ml: 1, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }} />}
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            icon={<HealthAndSafety sx={{ color: '#fff !important' }} />}
+            label="ABDM V3"
+            sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
+          />
         </Box>
-        <Chip icon={<HealthAndSafety />} label="ABDM V3 M1" color="success" variant="outlined" />
-      </Box>
+      </Paper>
 
-      <Paper sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Paper elevation={0} sx={{ borderRadius: 2.5, border: `1px solid ${theme.palette.divider}`, overflow: 'hidden', mb: 3 }}>
+        <Tabs
+          value={tabValue} onChange={(_, v) => setTabValue(v)}
+          variant="scrollable" scrollButtons="auto"
+          sx={{
+            borderBottom: `1px solid ${theme.palette.divider}`, px: 1,
+            '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 52 },
+          }}
+        >
           <Tab label="Create ABHA" icon={<HealthAndSafety />} iconPosition="start" />
           <Tab label="Verify / Search" icon={<Search />} iconPosition="start" />
+          <Tab label="Scan & Share" icon={<QrCode />} iconPosition="start" />
+          <Tab label="Patient Check-In" icon={<PersonAdd />} iconPosition="start" />
         </Tabs>
 
         {/* ══════════════════════════════════════════════════════════════════ */}
@@ -843,23 +883,23 @@ const AbhaManagement: React.FC = () => {
 
                 {renderProfileCard(createdAbha, false)}
 
-                <Box sx={{ display: 'flex', gap: 2, mt: 3, alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 2, mt: 3, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {(createdAbha?.phrAddress?.length > 0 || createdAbha?.preferredAbhaAddress) && (
+                    <Chip label={`ABHA Address: ${createdAbha?.preferredAbhaAddress || createdAbha?.phrAddress?.[0]}`} color="primary" variant="outlined" sx={{ fontSize: '0.9rem', py: 2, mr: 'auto' }} />
+                  )}
+                  <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadCard} sx={{ borderRadius: 2 }}>Download Card</Button>
                   {(createdAbha?.phrAddress?.length > 0 || createdAbha?.preferredAbhaAddress) ? (
-                    <>
-                      <Chip label={`ABHA Address: ${createdAbha?.preferredAbhaAddress || createdAbha?.phrAddress?.[0]}`} color="primary" variant="outlined" sx={{ fontSize: '0.9rem', py: 2 }} />
-                      <Button variant="contained" onClick={() => setActiveStep(steps.length - 1)}>
-                        Continue
-                      </Button>
-                    </>
+                    <Button variant="contained" onClick={() => setActiveStep(steps.length - 1)} sx={{ borderRadius: 2, px: 4 }}>
+                      Continue
+                    </Button>
                   ) : (
                     <Button variant="contained" onClick={() => {
                       setActiveStep(enrollMethod === 'aadhaar' ? 3 : 4);
                       handleFetchAbhaAddressSuggestions();
-                    }} startIcon={<AlternateEmail />}>
+                    }} startIcon={<AlternateEmail />} sx={{ borderRadius: 2 }}>
                       Create ABHA Address
                     </Button>
                   )}
-                  <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadCard}>Download Card</Button>
                 </Box>
               </Box>
             )}
@@ -1019,6 +1059,20 @@ const AbhaManagement: React.FC = () => {
             {verifiedProfile && renderProfileCard(verifiedProfile)}
           </Box>
         </TabPanel>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* SCAN & SHARE TAB                                                  */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        <TabPanel value={tabValue} index={2}>
+          <ScanAndShare />
+        </TabPanel>
+
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        {/* PATIENT CHECK-IN TAB                                              */}
+        {/* ══════════════════════════════════════════════════════════════════ */}
+        <TabPanel value={tabValue} index={3}>
+          <PatientCheckIn />
+        </TabPanel>
       </Paper>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -1032,26 +1086,43 @@ const AbhaManagement: React.FC = () => {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+            Only profile photo can be updated via ABDM. Name, date of birth, and gender are linked to your Aadhaar and cannot be modified here.
+          </Alert>
+          <Grid container spacing={2}>
             <Grid item xs={12}>
-              <TextField fullWidth label="Name" defaultValue={verifiedProfile?.name || createdAbha?.name}
-                onChange={(e) => setProfileUpdates(prev => ({ ...prev, name: e.target.value }))} />
+              <TextField fullWidth label="Name" value={verifiedProfile?.name || createdAbha?.name || ''} disabled
+                helperText="Linked to Aadhaar — cannot be changed" />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
-                <InputLabel>Gender</InputLabel>
-                <Select defaultValue={verifiedProfile?.gender || createdAbha?.gender || ''}
-                  label="Gender" onChange={(e) => setProfileUpdates(prev => ({ ...prev, gender: e.target.value as string }))}>
-                  <MenuItem value="M">Male</MenuItem>
-                  <MenuItem value="F">Female</MenuItem>
-                  <MenuItem value="O">Other</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField fullWidth label="Gender"
+                value={verifiedProfile?.gender === 'M' ? 'Male' : verifiedProfile?.gender === 'F' ? 'Female' : verifiedProfile?.gender || ''}
+                disabled helperText="Linked to Aadhaar" />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth label="Date of Birth" type="date" InputLabelProps={{ shrink: true }}
-                defaultValue={verifiedProfile?.dob || ''}
-                onChange={(e) => setProfileUpdates(prev => ({ ...prev, dob: e.target.value }))} />
+              <TextField fullWidth label="Date of Birth" value={verifiedProfile?.dob || createdAbha?.dob || ''}
+                disabled helperText="Linked to Aadhaar" />
+            </Grid>
+            <Grid item xs={12}>
+              <Button variant="outlined" component="label" fullWidth startIcon={<Edit />}>
+                Upload New Profile Photo
+                <input type="file" hidden accept="image/*" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 100 * 1024) { toast.error('Photo must be under 100KB'); return; }
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const base64 = (reader.result as string).split(',')[1];
+                    setProfileUpdates({ profilePhoto: base64 });
+                  };
+                  reader.readAsDataURL(file);
+                }} />
+              </Button>
+              {profileUpdates.profilePhoto && (
+                <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
+                  Photo selected — ready to upload
+                </Typography>
+              )}
             </Grid>
           </Grid>
         </DialogContent>
@@ -1059,7 +1130,7 @@ const AbhaManagement: React.FC = () => {
           <Button onClick={() => setShowProfileDialog(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleUpdateProfile} disabled={loading || Object.keys(profileUpdates).length === 0}
             startIcon={loading ? <CircularProgress size={16} /> : <Save />}>
-            {loading ? 'Saving...' : 'Save Changes'}
+            {loading ? 'Uploading...' : 'Update Photo'}
           </Button>
         </DialogActions>
       </Dialog>

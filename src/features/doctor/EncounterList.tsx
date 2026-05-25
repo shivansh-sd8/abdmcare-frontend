@@ -295,7 +295,7 @@ const EncounterList: React.FC = () => {
                       >
                         {/* Patient */}
                         <TableCell sx={{ pl: 2 }}>
-                          <Typography variant="body2" fontWeight={600}>
+                          <Typography variant="body2" fontWeight={600} sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }} onClick={() => enc.patient?.id && navigate(`/app/patients/${enc.patient.id}`)}>
                             {enc.patient?.firstName} {enc.patient?.lastName}
                           </Typography>
                           {enc.patient?.uhid && (
@@ -391,7 +391,7 @@ const EncounterList: React.FC = () => {
                                       diagnosis:   enc.finalDiagnosis || enc.diagnosis || '',
                                       reason:      enc.chiefComplaint || '',
                                     }).toString();
-                                    navigate(`/ipd?${qs}`);
+                                    navigate(`/app/ipd?${qs}`);
                                   }}>
                                   <AdmitIcon sx={{ fontSize: 16 }} />
                                 </IconButton>

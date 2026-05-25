@@ -26,6 +26,10 @@ class EncounterService {
     return api.get(`/api/v1/encounters/${id}`);
   }
 
+  async getEncounterFull(id: string) {
+    return api.get(`/api/v1/encounters/${id}/full`);
+  }
+
   async updateEncounter(id: string, data: UpdateEncounterData) {
     return api.put(`/api/v1/encounters/${id}`, data);
   }
@@ -48,6 +52,14 @@ class EncounterService {
 
   async getEncounterStats() {
     return api.get('/api/v1/encounters/stats');
+  }
+
+  async collectPayment(id: string, data: { paymentMethod: string; paymentCollected: number; transactionRef?: string }) {
+    return api.patch(`/api/v1/encounters/${id}/collect-payment`, data);
+  }
+
+  async applyDiscount(id: string, data: { amount: number; reason?: string }) {
+    return api.patch(`/api/v1/encounters/${id}/discount`, data);
   }
 }
 

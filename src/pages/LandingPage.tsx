@@ -174,11 +174,16 @@ const LandingPage: React.FC = () => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate('/app/dashboard', { replace: true });
+      return;
+    }
     setVisible(true);
     const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [navigate]);
 
   const modules: ModuleCardProps[] = [
     {

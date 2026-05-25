@@ -36,6 +36,18 @@ const ipdService = {
   // ── Bill preview ─────────────────────────────────────────────────────────
   getAdmissionBill: (admissionId: string) =>
     api.get(`/api/v1/ipd/admissions/${admissionId}/bill`),
+
+  // ── Discharge summary data (for PDF generation) ────────────────────────
+  getDischargeSummary: (admissionId: string) =>
+    api.get(`/api/v1/ipd/admissions/${admissionId}/discharge-summary`),
+
+  // ── Discount (admin-only) ──────────────────────────────────────────────
+  applyDiscount: (admissionId: string, data: { amount: number; reason?: string }) =>
+    api.patch(`/api/v1/ipd/admissions/${admissionId}/discount`, data),
+
+  // ── Collect partial payment during stay ────────────────────────────────
+  collectPayment: (admissionId: string, data: { amount: number; paymentMethod: string; transactionRef?: string }) =>
+    api.patch(`/api/v1/ipd/admissions/${admissionId}/collect-payment`, data),
 };
 
 export default ipdService;

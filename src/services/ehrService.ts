@@ -8,6 +8,10 @@ class EhrService {
   getPatientEHR(patientId: string) {
     return api.get(`/api/v1/ehr/patients/${patientId}`);
   }
+
+  getPatientProfile(patientId: string) {
+    return api.get(`/api/v1/ehr/patients/${patientId}/profile`);
+  }
 }
 
 export default new EhrService();

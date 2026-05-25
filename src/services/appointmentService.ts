@@ -59,6 +59,10 @@ class AppointmentService {
   async getAppointmentStats() {
     return api.get('/api/v1/appointments/stats');
   }
+
+  async getAvailableSlots(doctorId: string, date: string) {
+    return api.get('/api/v1/appointments/slots', { params: { doctorId, date } });
+  }
 }
 
 const appointmentService = new AppointmentService();

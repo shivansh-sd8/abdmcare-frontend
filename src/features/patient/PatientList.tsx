@@ -218,13 +218,13 @@ const PatientList: React.FC = () => {
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Tooltip title="View Details">
-            <IconButton size="small" color="primary">
+          <Tooltip title="View Profile">
+            <IconButton size="small" color="primary" onClick={() => navigate(`/app/patients/${params.row.id}`)}>
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Edit">
-            <IconButton size="small" color="primary">
+            <IconButton size="small" color="primary" onClick={() => navigate('/app/patients/new', { state: { editPatient: params.row } })}>
               <Edit fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -382,7 +382,7 @@ const PatientList: React.FC = () => {
       >
         <MenuItem onClick={() => {
           handleMenuClose();
-          navigate('/app/ehr', { state: { patientId: selectedPatient?.id } });
+          navigate(`/app/patients/${selectedPatient?.id}`);
         }}>
           <Visibility fontSize="small" sx={{ mr: 1 }} />
           View Full Profile

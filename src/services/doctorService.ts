@@ -42,6 +42,22 @@ class DoctorService {
   async getDoctorStats() {
     return api.get('/api/v1/doctors/stats');
   }
+
+  async getDoctorProfile(id: string) {
+    return api.get(`/api/v1/doctors/${id}/profile`);
+  }
+
+  async getSchedule(id: string) {
+    return api.get(`/api/v1/doctors/${id}/schedule`);
+  }
+
+  async updateSchedule(id: string, data: any) {
+    return api.put(`/api/v1/doctors/${id}/schedule`, data);
+  }
+
+  async getDoctorAvailability(id: string, date?: string) {
+    return api.get(`/api/v1/doctors/${id}/availability`, { params: { date } });
+  }
 }
 
 const doctorService = new DoctorService();

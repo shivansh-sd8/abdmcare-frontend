@@ -44,10 +44,12 @@ const appointmentTypes = [
   { value: 'SECOND_OPINION', label: 'Second Opinion', description: 'Consultation for second opinion' },
 ];
 
-const timeSlots = [
+// Fallback slots used only if API fails
+const FALLBACK_SLOTS = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
   '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
   '16:00', '16:30', '17:00', '17:30', '18:00', '18:30',
+  '19:00', '19:30', '20:00', '20:30', '21:00',
 ];
 
 const ScheduleAppointment: React.FC = () => {
@@ -58,6 +60,9 @@ const ScheduleAppointment: React.FC = () => {
   const [searchingDoctors, setSearchingDoctors] = useState(false);
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [allDoctors, setAllDoctors] = useState<any[]>([]);
+  const [dynamicSlots, setDynamicSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotDuration, setSlotDuration] = useState(30);
 
   const [formData, setFormData] = useState({
     patientId: '',
@@ -91,6 +96,43 @@ const ScheduleAppointment: React.FC = () => {
       setSelectedPatient(preselected);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const todayDate = new Date().toISOString().split('T')[0];
+
+  // Fetch available slots from API when doctor + date are selected
+  useEffect(() => {
+    if (!formData.doctorId || !formData.date) {
+      setDynamicSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSlots(true);
+    appointmentService.getAvailableSlots(formData.doctorId, formData.date)
+      .then((res: any) => {
+        if (cancelled) return;
+        const data = res.data || res;
+        setDynamicSlots(data.slots || []);
+        if (data.slotDuration) setSlotDuration(data.slotDuration);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fallback: use static slots filtered for today
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const fallback = formData.date === todayDate
+          ? FALLBACK_SLOTS.filter(s => { const [h, m] = s.split(':').map(Number); return h * 60 + m > currentMinutes; })
+          : FALLBACK_SLOTS;
+        setDynamicSlots(fallback);
+      })
+      .finally(() => { if (!cancelled) setLoadingSlots(false); });
+    return () => { cancelled = true; };
+  }, [formData.doctorId, formData.date]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (formData.time && dynamicSlots.length > 0 && !dynamicSlots.includes(formData.time)) {
+      handleChange('time', dynamicSlots[0] || '');
+    }
+  }, [dynamicSlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRecentPatients = async () => {
     try {
@@ -223,21 +265,18 @@ const ScheduleAppointment: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    const fields = ['patientId', 'doctorId', 'date', 'time', 'type', 'reason'];
+    const fields = ['patientId', 'doctorId', 'date', 'time', 'reason'];
     fields.forEach(validateField);
 
     const newErrors: Record<string, string> = {};
-    
     if (!formData.patientId) newErrors.patientId = 'Please select a patient';
     if (!formData.doctorId) newErrors.doctorId = 'Please select a doctor';
     if (!formData.date) newErrors.date = 'Appointment date is required';
     if (!formData.time) newErrors.time = 'Please select a time slot';
-    if (!formData.type) newErrors.type = 'Please select appointment type';
     if (!formData.reason || formData.reason.trim().length < 5) {
       newErrors.reason = 'Please provide reason (minimum 5 characters)';
     }
 
-    // Validate date is not in past
     if (formData.date) {
       const selectedDate = new Date(formData.date);
       const today = new Date();
@@ -245,6 +284,10 @@ const ScheduleAppointment: React.FC = () => {
       if (selectedDate < today) {
         newErrors.date = 'Date cannot be in the past';
       }
+    }
+
+    if (formData.time && dynamicSlots.length > 0 && !dynamicSlots.includes(formData.time)) {
+      newErrors.time = 'Selected slot is no longer available';
     }
 
     setErrors(newErrors);
@@ -512,20 +555,28 @@ const ScheduleAppointment: React.FC = () => {
                 onChange={(e) => handleChange('time', e.target.value)}
                 onBlur={() => handleBlur('time')}
                 error={!!errors.time}
-                helperText={errors.time || 'Select time slot'}
+                helperText={
+                  !formData.doctorId || !formData.date ? 'Select doctor and date first'
+                    : loadingSlots ? 'Loading available slots...'
+                    : dynamicSlots.length === 0 ? 'No slots available — try another date'
+                    : (errors.time || `${dynamicSlots.length} slot(s) available · ${slotDuration} min each`)
+                }
+                disabled={loadingSlots || dynamicSlots.length === 0}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <AccessTime />
+                      {loadingSlots ? <CircularProgress size={20} /> : <AccessTime />}
                     </InputAdornment>
                   ),
                 }}
               >
-                {timeSlots.map((slot) => (
-                  <MenuItem key={slot} value={slot}>
-                    {slot}
-                  </MenuItem>
-                ))}
+                {dynamicSlots.length === 0
+                  ? <MenuItem disabled value="">No slots available</MenuItem>
+                  : dynamicSlots.map((slot) => (
+                    <MenuItem key={slot} value={slot}>
+                      {slot}
+                    </MenuItem>
+                  ))}
               </TextField>
             </Grid>
 

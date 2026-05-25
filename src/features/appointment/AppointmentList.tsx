@@ -27,6 +27,7 @@ import {
   Print as PrintIcon,
   Visibility as ViewIcon,
   Hotel as AdmitIcon,
+  AccountCircle as ProfileIcon,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
@@ -353,35 +354,52 @@ const AppointmentList: React.FC = () => {
     },
     {
       field: 'notes',
-      headerName: 'Notes',
-      width: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="caption" color="text.secondary" noWrap>
-          {params.row.notes || '-'}
-        </Typography>
-      ),
+      headerName: 'Reason / Notes',
+      width: 180,
+      renderCell: (params: GridRenderCellParams) => {
+        const raw = params.row.notes || '';
+        const reason = raw.split('\n---\n')[0] || '-';
+        return (
+          <Typography variant="caption" color="text.secondary" noWrap title={raw}>
+            {reason}
+          </Typography>
+        );
+      },
     },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 160,
+      width: 220,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => {
-        const canCheckIn = params.row.status === 'SCHEDULED' && !params.row.checkedInAt && !params.row.opdCardNumber;
-        const canAdmit   = ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED'].includes(params.row.status) ||
-                           !!params.row.opdCardNumber;
+        const status = (params.row.status || '').toUpperCase();
+        const isTerminal = ['COMPLETED', 'CANCELLED'].includes(status);
+        const canCheckIn = status === 'SCHEDULED' && !params.row.checkedInAt && !params.row.opdCardNumber;
+        const canAdmit   = !isTerminal &&
+                           (['CHECKED_IN', 'IN_PROGRESS'].includes(status) || !!params.row.opdCardNumber);
         
         return (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
             {canCheckIn && (permissions.isReceptionist || permissions.isAdmin) && (
-              <IconButton
+              <Button
+                variant="contained"
                 size="small"
-                color="primary"
+                startIcon={<CheckCircle sx={{ fontSize: 16 }} />}
                 onClick={() => handleCheckIn(params.row)}
-                title="Check-In Patient"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1.5,
+                  bgcolor: '#50C878',
+                  '&:hover': { bgcolor: '#3DA863' },
+                  boxShadow: '0 2px 6px rgba(80,200,120,0.35)',
+                }}
               >
-                <CheckCircle fontSize="small" />
-              </IconButton>
+                Check-In
+              </Button>
             )}
             {canAdmit && (permissions.isReceptionist || permissions.isAdmin || permissions.isDoctor) && (
               <Tooltip title="Admit to IPD">
@@ -398,7 +416,7 @@ const AppointmentList: React.FC = () => {
                       diagnosis:   p.encounter?.diagnosis || p.encounter?.provisionalDiagnosis || '',
                       reason:      p.notes || p.reason || '',
                     }).toString();
-                    navigate(`/ipd?${qs}`);
+                    navigate(`/app/ipd?${qs}`);
                   }}
                 >
                   <AdmitIcon fontSize="small" />
@@ -429,6 +447,18 @@ const AppointmentList: React.FC = () => {
                   </IconButton>
                 </Tooltip>
               </>
+            )}
+            {/* For completed / cancelled — show patient profile with all documents */}
+            {isTerminal && params.row.patientId && (
+              <Tooltip title="View Patient Profile & All Documents">
+                <IconButton
+                  size="small"
+                  sx={{ color: '#4A90E2' }}
+                  onClick={() => navigate(`/app/patients/${params.row.patientId}`)}
+                >
+                  <ProfileIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
           </Box>
         );
