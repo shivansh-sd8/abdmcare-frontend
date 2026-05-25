@@ -68,6 +68,8 @@ const HospitalManagement: React.FC = () => {
     totalBeds: '', icuBeds: '', emergencyBeds: '', operationTheaters: '',
     plan: 'FREE', defaultOpdCharge: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
 
   // ── Schedule dialog state ────────────────────────────────────────────────
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -169,8 +171,98 @@ const HospitalManagement: React.FC = () => {
     { label: 'Total Users', value: allHospitals.reduce((s, h) => s + (h._count?.users || 0), 0), icon: <People />, color: '#7c3aed' },
   ], [allHospitals]);
 
+  // ── Client-side validation ───────────────────────────────────────────────
+  const validateField = (field: string, value: string): string => {
+    switch (field) {
+      case 'name':
+        if (!value.trim()) return 'Hospital name is required';
+        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        return '';
+      case 'email':
+        if (!value.trim()) return 'Email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Invalid email address';
+        return '';
+      case 'phone':
+        if (!value.trim()) return 'Phone number is required';
+        if (!/^[6-9]\d{9}$/.test(value)) return 'Must be a valid 10-digit Indian number';
+        return '';
+      case 'alternatePhone':
+        if (value && !/^[6-9]\d{9}$/.test(value)) return 'Must be a valid 10-digit Indian number';
+        return '';
+      case 'ownerPhone':
+        if (value && !/^[6-9]\d{9}$/.test(value)) return 'Must be a valid 10-digit Indian number';
+        return '';
+      case 'ownerEmail':
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Invalid email address';
+        return '';
+      case 'website':
+        if (value && !/^https?:\/\/.+/.test(value)) return 'Must start with http:// or https://';
+        return '';
+      case 'addressLine1':
+        if (!value.trim()) return 'Address is required';
+        if (value.trim().length < 3) return 'Address must be at least 3 characters';
+        return '';
+      case 'city':
+        if (!value.trim()) return 'City is required';
+        return '';
+      case 'state':
+        if (!value.trim()) return 'State is required';
+        return '';
+      case 'pincode':
+        if (!value.trim()) return 'Pincode is required';
+        if (!/^\d{6}$/.test(value)) return 'Must be exactly 6 digits';
+        return '';
+      case 'gstNumber':
+        if (value && !/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(value.toUpperCase()))
+          return 'Invalid GST (e.g. 22AAAAA0000A1Z5)';
+        return '';
+      case 'panNumber':
+        if (value && !/^[A-Z]{5}\d{4}[A-Z]$/.test(value.toUpperCase()))
+          return 'Invalid PAN (e.g. ABCDE1234F)';
+        return '';
+      case 'establishedYear': {
+        if (!value) return '';
+        const yr = parseInt(value);
+        if (isNaN(yr) || yr < 1800 || yr > new Date().getFullYear())
+          return `Must be between 1800 and ${new Date().getFullYear()}`;
+        return '';
+      }
+      default:
+        return '';
+    }
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    const error = validateField(field, value);
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      if (error) next[field] = error;
+      else delete next[field];
+      return next;
+    });
+  };
+
+  const validateAll = (): boolean => {
+    const requiredFields = editingHospital
+      ? ['name', 'email', 'phone', 'addressLine1', 'city', 'state', 'pincode']
+      : ['name', 'email', 'phone', 'addressLine1', 'city', 'state', 'pincode'];
+    const allFields = [
+      ...requiredFields, 'alternatePhone', 'ownerPhone', 'ownerEmail',
+      'website', 'gstNumber', 'panNumber', 'establishedYear',
+    ];
+    const errors: Record<string, string> = {};
+    for (const f of allFields) {
+      const err = validateField(f, (formData as any)[f] || '');
+      if (err) errors[f] = err;
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // ── Dialog handlers ──────────────────────────────────────────────────────
   const handleOpenDialog = (hospital?: Hospital) => {
+    setFieldErrors({});
     if (hospital) {
       setEditingHospital(hospital);
       const h = hospital as any;
@@ -182,10 +274,11 @@ const HospitalManagement: React.FC = () => {
         city: hospital.city || '', state: hospital.state || '', pincode: hospital.pincode || '',
         landmark: h.landmark || '', registrationNumber: h.registrationNumber || '',
         gstNumber: h.gstNumber || '', panNumber: h.panNumber || '',
-        licenseNumber: h.licenseNumber || '', establishedYear: h.establishedYear || '',
+        licenseNumber: h.licenseNumber || '', establishedYear: h.establishedYear ? String(h.establishedYear) : '',
         ownerName: h.ownerName || '', ownerEmail: h.ownerEmail || '', ownerPhone: h.ownerPhone || '',
-        totalBeds: h.totalBeds || '', icuBeds: h.icuBeds || '',
-        emergencyBeds: h.emergencyBeds || '', operationTheaters: h.operationTheaters || '',
+        totalBeds: h.totalBeds ? String(h.totalBeds) : '', icuBeds: h.icuBeds ? String(h.icuBeds) : '',
+        emergencyBeds: h.emergencyBeds ? String(h.emergencyBeds) : '',
+        operationTheaters: h.operationTheaters ? String(h.operationTheaters) : '',
         plan: hospital.plan || 'FREE',
         defaultOpdCharge: h.defaultOpdCharge ? String(h.defaultOpdCharge) : '',
       });
@@ -203,24 +296,60 @@ const HospitalManagement: React.FC = () => {
     }
     setOpenDialog(true);
   };
-  const handleCloseDialog = () => { setOpenDialog(false); setEditingHospital(null); };
+  const handleCloseDialog = () => { setOpenDialog(false); setEditingHospital(null); setFieldErrors({}); };
 
   const handleSubmit = async () => {
+    if (!validateAll()) {
+      toast.error('Please fix the highlighted errors before submitting');
+      return;
+    }
+
+    setSubmitting(true);
     try {
+      // Only send non-empty optional fields
+      const payload: any = {};
+      for (const [key, val] of Object.entries(formData)) {
+        if (val !== '' && val !== null && val !== undefined) {
+          payload[key] = val;
+        }
+      }
+      if (payload.defaultOpdCharge) payload.defaultOpdCharge = parseFloat(payload.defaultOpdCharge);
+      if (payload.establishedYear) payload.establishedYear = parseInt(payload.establishedYear);
+      if (payload.totalBeds) payload.totalBeds = parseInt(payload.totalBeds);
+      if (payload.icuBeds) payload.icuBeds = parseInt(payload.icuBeds);
+      if (payload.emergencyBeds) payload.emergencyBeds = parseInt(payload.emergencyBeds);
+      if (payload.operationTheaters) payload.operationTheaters = parseInt(payload.operationTheaters);
+
       if (editingHospital) {
-        await hospitalService.updateHospital(editingHospital.id, {
-          ...formData,
-          defaultOpdCharge: formData.defaultOpdCharge ? parseFloat(formData.defaultOpdCharge) : undefined,
-        });
+        delete payload.code;
+        await hospitalService.updateHospital(editingHospital.id, payload);
         toast.success('Hospital updated successfully');
       } else {
-        await hospitalService.createHospital(formData);
+        await hospitalService.createHospital(payload);
         toast.success('Hospital created successfully');
       }
       handleCloseDialog();
       fetchHospitals();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to save hospital');
+      const resp = error.response?.data;
+
+      // Parse field-level validation errors from backend (422)
+      if (resp?.errors && Array.isArray(resp.errors)) {
+        const backendErrors: Record<string, string> = {};
+        const messages: string[] = [];
+        for (const e of resp.errors) {
+          if (e.field && e.field !== 'unknown') {
+            backendErrors[e.field] = e.message;
+          }
+          messages.push(e.message);
+        }
+        setFieldErrors(prev => ({ ...prev, ...backendErrors }));
+        toast.error(messages.join(' • ') || 'Validation failed');
+      } else {
+        toast.error(resp?.message || 'Failed to save hospital');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -529,51 +658,152 @@ const HospitalManagement: React.FC = () => {
         <DialogContent dividers sx={{ maxHeight: '70vh' }}>
           <Grid container spacing={2} sx={{ pt: 1 }}>
             <SectionTitle title="Basic Information" />
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Hospital Name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="Hospital Code" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} disabled={!!editingHospital} helperText="Auto-generated if empty" /></Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="Hospital Name" required
+                value={formData.name} onChange={(e) => handleFieldChange('name', e.target.value)}
+                error={!!fieldErrors.name} helperText={fieldErrors.name} />
+            </Grid>
             <Grid item xs={12} sm={3}>
-              <TextField fullWidth size="small" select label="Type" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} SelectProps={{ native: true }}>
+              <TextField fullWidth size="small" label="Hospital Code"
+                value={formData.code} onChange={(e) => handleFieldChange('code', e.target.value)}
+                disabled={!!editingHospital} helperText="Auto-generated if empty" />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" select label="Type" value={formData.type}
+                onChange={(e) => handleFieldChange('type', e.target.value)} SelectProps={{ native: true }}>
                 {['HOSPITAL', 'CLINIC', 'NURSING_HOME', 'DIAGNOSTIC_CENTER', 'POLYCLINIC', 'SPECIALTY_CENTER', 'MULTI_SPECIALTY', 'SUPER_SPECIALTY'].map((t) => (
-                  <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).replace(/ /g, ' ')}</option>
+                  <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
                 ))}
               </TextField>
             </Grid>
 
             <SectionTitle title="Contact Information" />
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Email" required type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="Phone" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="Alt. Phone" value={formData.alternatePhone} onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Website" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} /></Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="Email" required type="email"
+                value={formData.email} onChange={(e) => handleFieldChange('email', e.target.value)}
+                error={!!fieldErrors.email} helperText={fieldErrors.email} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="Phone" required
+                value={formData.phone} onChange={(e) => handleFieldChange('phone', e.target.value)}
+                error={!!fieldErrors.phone} helperText={fieldErrors.phone}
+                inputProps={{ maxLength: 10 }} placeholder="9876543210" />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="Alt. Phone"
+                value={formData.alternatePhone} onChange={(e) => handleFieldChange('alternatePhone', e.target.value)}
+                error={!!fieldErrors.alternatePhone} helperText={fieldErrors.alternatePhone}
+                inputProps={{ maxLength: 10 }} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="Website" placeholder="https://example.com"
+                value={formData.website} onChange={(e) => handleFieldChange('website', e.target.value)}
+                error={!!fieldErrors.website} helperText={fieldErrors.website} />
+            </Grid>
 
             <SectionTitle title="Address" />
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Address Line 1" required value={formData.addressLine1} onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="Address Line 2" value={formData.addressLine2} onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="City" required value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="State" required value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="Pincode" required value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} inputProps={{ maxLength: 6 }} /></Grid>
-            <Grid item xs={12} sm={3}><TextField fullWidth size="small" label="Landmark" value={formData.landmark} onChange={(e) => setFormData({ ...formData, landmark: e.target.value })} /></Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="Address Line 1" required
+                value={formData.addressLine1} onChange={(e) => handleFieldChange('addressLine1', e.target.value)}
+                error={!!fieldErrors.addressLine1} helperText={fieldErrors.addressLine1} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="Address Line 2"
+                value={formData.addressLine2} onChange={(e) => handleFieldChange('addressLine2', e.target.value)} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="City" required
+                value={formData.city} onChange={(e) => handleFieldChange('city', e.target.value)}
+                error={!!fieldErrors.city} helperText={fieldErrors.city} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="State" required
+                value={formData.state} onChange={(e) => handleFieldChange('state', e.target.value)}
+                error={!!fieldErrors.state} helperText={fieldErrors.state} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="Pincode" required
+                value={formData.pincode} onChange={(e) => handleFieldChange('pincode', e.target.value)}
+                error={!!fieldErrors.pincode} helperText={fieldErrors.pincode}
+                inputProps={{ maxLength: 6 }} placeholder="110001" />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth size="small" label="Landmark"
+                value={formData.landmark} onChange={(e) => handleFieldChange('landmark', e.target.value)} />
+            </Grid>
 
             <SectionTitle title="Legal & Registration" />
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="Registration Number" value={formData.registrationNumber} onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="License Number" value={formData.licenseNumber} onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="Established Year" type="number" value={formData.establishedYear} onChange={(e) => setFormData({ ...formData, establishedYear: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="GST Number" value={formData.gstNumber} onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={6}><TextField fullWidth size="small" label="PAN Number" value={formData.panNumber} onChange={(e) => setFormData({ ...formData, panNumber: e.target.value })} /></Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="Registration Number"
+                value={formData.registrationNumber} onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
+                error={!!fieldErrors.registrationNumber} helperText={fieldErrors.registrationNumber} />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="License Number"
+                value={formData.licenseNumber} onChange={(e) => handleFieldChange('licenseNumber', e.target.value)} />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="Established Year" type="number"
+                value={formData.establishedYear} onChange={(e) => handleFieldChange('establishedYear', e.target.value)}
+                error={!!fieldErrors.establishedYear} helperText={fieldErrors.establishedYear}
+                placeholder={`e.g. ${new Date().getFullYear() - 10}`} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="GST Number" placeholder="22AAAAA0000A1Z5"
+                value={formData.gstNumber} onChange={(e) => handleFieldChange('gstNumber', e.target.value.toUpperCase())}
+                error={!!fieldErrors.gstNumber} helperText={fieldErrors.gstNumber}
+                inputProps={{ maxLength: 15, style: { textTransform: 'uppercase' } }} />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="PAN Number" placeholder="ABCDE1234F"
+                value={formData.panNumber} onChange={(e) => handleFieldChange('panNumber', e.target.value.toUpperCase())}
+                error={!!fieldErrors.panNumber} helperText={fieldErrors.panNumber}
+                inputProps={{ maxLength: 10, style: { textTransform: 'uppercase' } }} />
+            </Grid>
 
             <SectionTitle title="Owner / Director" />
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="Owner Name" value={formData.ownerName} onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="Owner Email" type="email" value={formData.ownerEmail} onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })} /></Grid>
-            <Grid item xs={12} sm={4}><TextField fullWidth size="small" label="Owner Phone" value={formData.ownerPhone} onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })} /></Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="Owner Name"
+                value={formData.ownerName} onChange={(e) => handleFieldChange('ownerName', e.target.value)} />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="Owner Email" type="email"
+                value={formData.ownerEmail} onChange={(e) => handleFieldChange('ownerEmail', e.target.value)}
+                error={!!fieldErrors.ownerEmail} helperText={fieldErrors.ownerEmail} />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField fullWidth size="small" label="Owner Phone"
+                value={formData.ownerPhone} onChange={(e) => handleFieldChange('ownerPhone', e.target.value)}
+                error={!!fieldErrors.ownerPhone} helperText={fieldErrors.ownerPhone}
+                inputProps={{ maxLength: 10 }} />
+            </Grid>
 
             <SectionTitle title="Facility Details" />
-            <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Total Beds" value={formData.totalBeds} onChange={(e) => setFormData({ ...formData, totalBeds: e.target.value })} /></Grid>
-            <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="ICU Beds" value={formData.icuBeds} onChange={(e) => setFormData({ ...formData, icuBeds: e.target.value })} /></Grid>
-            <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Emergency Beds" value={formData.emergencyBeds} onChange={(e) => setFormData({ ...formData, emergencyBeds: e.target.value })} /></Grid>
-            <Grid item xs={6} sm={3}><TextField fullWidth size="small" type="number" label="Operation Theaters" value={formData.operationTheaters} onChange={(e) => setFormData({ ...formData, operationTheaters: e.target.value })} /></Grid>
+            <Grid item xs={6} sm={3}>
+              <TextField fullWidth size="small" type="number" label="Total Beds"
+                value={formData.totalBeds} onChange={(e) => handleFieldChange('totalBeds', e.target.value)}
+                inputProps={{ min: 0 }} />
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <TextField fullWidth size="small" type="number" label="ICU Beds"
+                value={formData.icuBeds} onChange={(e) => handleFieldChange('icuBeds', e.target.value)}
+                inputProps={{ min: 0 }} />
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <TextField fullWidth size="small" type="number" label="Emergency Beds"
+                value={formData.emergencyBeds} onChange={(e) => handleFieldChange('emergencyBeds', e.target.value)}
+                inputProps={{ min: 0 }} />
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <TextField fullWidth size="small" type="number" label="Operation Theaters"
+                value={formData.operationTheaters} onChange={(e) => handleFieldChange('operationTheaters', e.target.value)}
+                inputProps={{ min: 0 }} />
+            </Grid>
 
             <SectionTitle title="Subscription & Pricing" />
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" select label="Plan" value={formData.plan} onChange={(e) => setFormData({ ...formData, plan: e.target.value })} SelectProps={{ native: true }}>
+              <TextField fullWidth size="small" select label="Plan" value={formData.plan}
+                onChange={(e) => handleFieldChange('plan', e.target.value)} SelectProps={{ native: true }}>
                 <option value="FREE">Free (14-day trial)</option>
                 <option value="BASIC">Basic — ₹2,999/month</option>
                 <option value="PROFESSIONAL">Professional — ₹9,999/month</option>
@@ -581,16 +811,22 @@ const HospitalManagement: React.FC = () => {
               </TextField>
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" label="Default OPD Fee (₹)" type="number" placeholder="e.g. 300" helperText="Fallback when doctor has no individual fee"
-                value={formData.defaultOpdCharge} onChange={(e) => setFormData({ ...formData, defaultOpdCharge: e.target.value })}
+              <TextField fullWidth size="small" label="Default OPD Fee (₹)" type="number" placeholder="e.g. 300"
+                helperText={fieldErrors.defaultOpdCharge || 'Fallback when doctor has no individual fee'}
+                error={!!fieldErrors.defaultOpdCharge}
+                value={formData.defaultOpdCharge} onChange={(e) => handleFieldChange('defaultOpdCharge', e.target.value)}
                 InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
               />
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={handleCloseDialog} sx={{ borderRadius: 2 }}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" sx={{ borderRadius: 2, px: 3 }}>{editingHospital ? 'Update Hospital' : 'Create Hospital'}</Button>
+          <Button onClick={handleCloseDialog} sx={{ borderRadius: 2 }} disabled={submitting}>Cancel</Button>
+          <Button onClick={handleSubmit} variant="contained" disabled={submitting}
+            sx={{ borderRadius: 2, px: 3 }}
+            startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}>
+            {submitting ? 'Saving...' : (editingHospital ? 'Update Hospital' : 'Create Hospital')}
+          </Button>
         </DialogActions>
       </Dialog>
 
