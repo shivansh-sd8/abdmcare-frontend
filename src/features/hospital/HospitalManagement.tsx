@@ -3,14 +3,16 @@ import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Grid, Chip, IconButton, InputAdornment, MenuItem, Paper, Stack,
   Tooltip, alpha, useTheme, Collapse, FormControl, InputLabel, Select,
-  Switch, FormControlLabel, CircularProgress,
+  Switch, FormControlLabel, CircularProgress, Alert,
 } from '@mui/material';
 import {
   Add, Edit, Delete, Search, CheckCircle, LocalHospital, FilterList,
   Clear, Business, People, MedicalServices, CreditCard, Schedule, Save,
+  HealthAndSafety,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import hospitalService from '../../services/hospitalService';
+import hipService from '../../services/hipService';
 import { toast } from 'react-toastify';
 
 interface Hospital {
@@ -67,7 +69,9 @@ const HospitalManagement: React.FC = () => {
     establishedYear: '', ownerName: '', ownerEmail: '', ownerPhone: '',
     totalBeds: '', icuBeds: '', emergencyBeds: '', operationTheaters: '',
     plan: 'FREE', defaultOpdCharge: '',
+    hipId: '', hiuId: '',
   });
+  const [abdmRegistering, setAbdmRegistering] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -281,6 +285,7 @@ const HospitalManagement: React.FC = () => {
         operationTheaters: h.operationTheaters ? String(h.operationTheaters) : '',
         plan: hospital.plan || 'FREE',
         defaultOpdCharge: h.defaultOpdCharge ? String(h.defaultOpdCharge) : '',
+        hipId: hospital.hipId || '', hiuId: h.hiuId || '',
       });
     } else {
       setEditingHospital(null);
@@ -292,6 +297,7 @@ const HospitalManagement: React.FC = () => {
         establishedYear: '', ownerName: '', ownerEmail: '', ownerPhone: '',
         totalBeds: '', icuBeds: '', emergencyBeds: '', operationTheaters: '',
         plan: 'FREE', defaultOpdCharge: '',
+        hipId: '', hiuId: '',
       });
     }
     setOpenDialog(true);
@@ -370,6 +376,26 @@ const HospitalManagement: React.FC = () => {
         toast.success('Hospital activated');
         fetchHospitals();
       } catch { toast.error('Failed to activate hospital'); }
+    }
+  };
+
+  const handleAbdmRegister = async (hospital: Hospital) => {
+    if (!hospital.hipId) {
+      toast.error('Set a HIP ID first (Edit → ABDM Integration section)');
+      return;
+    }
+    if (!window.confirm(`Register "${hospital.name}" as HIP with ABDM?\nHIP ID: ${hospital.hipId}`)) return;
+
+    setAbdmRegistering(true);
+    try {
+      await hipService.registerHipService();
+      toast.success('Hospital registered with ABDM successfully!');
+      fetchHospitals();
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.message || 'Failed to register with ABDM';
+      toast.error(msg);
+    } finally {
+      setAbdmRegistering(false);
     }
   };
 
@@ -481,15 +507,36 @@ const HospitalManagement: React.FC = () => {
       },
     },
     {
+      field: 'abdmEnabled',
+      headerName: 'ABDM',
+      width: 100,
+      renderCell: (params) => {
+        if (params.value) {
+          return <Chip icon={<HealthAndSafety sx={{ fontSize: 14 }} />} label="Active" size="small" sx={{ bgcolor: alpha('#16a34a', 0.1), color: '#16a34a', fontWeight: 600, fontSize: '0.7rem' }} />;
+        }
+        if (params.row.hipId) {
+          return <Chip label="Pending" size="small" sx={{ bgcolor: alpha('#d97706', 0.1), color: '#d97706', fontWeight: 600, fontSize: '0.7rem' }} />;
+        }
+        return <Chip label="—" size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />;
+      },
+    },
+    {
       field: 'actions',
       headerName: '',
-      width: 130,
+      width: 170,
       sortable: false,
       disableColumnMenu: true,
       renderCell: (params) => {
         const isSuspended = params.row.status === 'SUSPENDED' || params.row.status === 'EXPIRED';
         return (
           <Stack direction="row" spacing={0.5}>
+            {params.row.hipId && !params.row.abdmEnabled && (
+              <Tooltip title="Register with ABDM">
+                <IconButton size="small" onClick={() => handleAbdmRegister(params.row)} sx={{ color: '#059669' }} disabled={abdmRegistering}>
+                  {abdmRegistering ? <CircularProgress size={16} /> : <HealthAndSafety fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Schedule"><IconButton size="small" onClick={() => handleOpenSchedule(params.row)} sx={{ color: '#6366f1' }}><Schedule fontSize="small" /></IconButton></Tooltip>
             <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpenDialog(params.row)} sx={{ color: 'text.secondary' }}><Edit fontSize="small" /></IconButton></Tooltip>
             {isSuspended ? (
@@ -818,6 +865,36 @@ const HospitalManagement: React.FC = () => {
                 InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
               />
             </Grid>
+
+            <SectionTitle title="ABDM Integration" />
+            {editingHospital?.abdmEnabled && (
+              <Grid item xs={12}>
+                <Alert severity="success" icon={<HealthAndSafety />} sx={{ borderRadius: 2 }}>
+                  This hospital is registered with ABDM. HIP ID: <strong>{editingHospital.hipId}</strong>
+                </Alert>
+              </Grid>
+            )}
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HIP ID (ABDM)"
+                placeholder="e.g. IN0710000123"
+                value={formData.hipId} onChange={(e) => handleFieldChange('hipId', e.target.value)}
+                helperText="Health Information Provider ID from ABDM/NHA"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HIU ID (ABDM)"
+                placeholder="e.g. IN0710000123-HIU"
+                value={formData.hiuId} onChange={(e) => handleFieldChange('hiuId', e.target.value)}
+                helperText="Health Information User ID from ABDM/NHA"
+              />
+            </Grid>
+            {editingHospital && formData.hipId && !editingHospital.abdmEnabled && (
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  Save the HIP ID first, then click "Register with ABDM" from the hospital list to activate ABDM integration.
+                </Alert>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>

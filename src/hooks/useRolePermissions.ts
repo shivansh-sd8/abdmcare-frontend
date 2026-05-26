@@ -78,7 +78,7 @@ export const useRolePermissions = (): UserPermissions => {
     return userData ? JSON.parse(userData) : {};
   }, []);
 
-  const validRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST', 'BILLING_STAFF', 'RADIOLOGIST'];
+  const validRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST'];
   const role: UserRole | null = validRoles.includes(user.role as UserRole) ? (user.role as UserRole) : null;
   const userId = user.id || '';
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
@@ -118,7 +118,7 @@ export const useRolePermissions = (): UserPermissions => {
     canViewVitals: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role) : false,
     canOrderInvestigation: role ? canOrderInvestigation(role) : false,
     canViewInvestigations: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'].includes(role) : false,
-    canUpdateInvestigationStatus: role ? ['DOCTOR', 'LAB_TECHNICIAN', 'RADIOLOGIST', 'ADMIN', 'SUPER_ADMIN'].includes(role) : false,
+    canUpdateInvestigationStatus: role ? ['DOCTOR', 'LAB_TECHNICIAN', 'ADMIN', 'SUPER_ADMIN'].includes(role) : false,
     
     // System permissions
     canManageUsers: role ? canManageUsers(role) : false,

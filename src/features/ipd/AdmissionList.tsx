@@ -235,10 +235,28 @@ const AdmissionList: React.FC = () => {
     } finally { setSaving(false); }
   };
 
-  const handlePrintBill = (adm: Admission) => {
+  const handlePrintBill = async (adm: Admission) => {
     const admittedAt    = new Date(adm.admittedAt);
     const dischargedAt  = adm.dischargedAt ? new Date(adm.dischargedAt) : new Date();
     const days          = Math.max(1, differenceInDays(dischargedAt, admittedAt));
+
+    let bill: any = null;
+    try {
+      const res = await ipdService.getAdmissionBill(adm.id) as any;
+      bill = res?.data;
+    } catch {}
+
+    const labTests = (bill?.labItems || []).map((i: any) => ({ name: i.testName || 'Lab Test', amount: Number(i.amount || 0) }));
+    const medicines = (bill?.rxItems || []).filter((r: any) => r.status === 'DISPENSED').flatMap((r: any) => {
+      const meds = Array.isArray(r.medications) ? r.medications : [];
+      return meds.map((m: any) => ({ name: m.name || m.medicineName || 'Medicine', qty: m.quantity || 1, rate: Number(m.price || 0), amount: Number(m.price || 0) * (m.quantity || 1) }));
+    });
+    const hasItemizedMeds = medicines.some((m: any) => m.amount > 0);
+    if (!hasItemizedMeds && (bill?.medicineCharges || 0) > 0) {
+      medicines.length = 0;
+      medicines.push({ name: 'Pharmacy Charges', amount: bill.medicineCharges });
+    }
+
     generateIPDBill({
       hospital: { name: authUser?.hospitalName || 'MediSync Hospital' },
       patient: {
@@ -259,10 +277,12 @@ const AdmissionList: React.FC = () => {
         diagnosis:       adm.diagnosis,
         admissionReason: adm.admissionReason,
         dailyCharges:    adm.dailyCharges,
-        days,
+        days:            bill?.days || days,
         advancePaid:     adm.advancePaid,
-        totalAmount:     adm.totalAmount || days * adm.dailyCharges,
+        totalAmount:     bill?.total || adm.totalAmount || days * adm.dailyCharges,
         notes:           adm.notes,
+        labTests:        labTests.length > 0 ? labTests : undefined,
+        medicines:       medicines.length > 0 ? medicines : undefined,
       },
     });
   };

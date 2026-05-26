@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -27,88 +27,97 @@ import {
   CalendarToday,
   Description,
   Visibility,
+  Block,
+  AccessTime,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import consentService from '../../services/consentService';
 import { toast } from 'react-toastify';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
+
+const POLL_INTERVAL_MS = 10_000;
+
+const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactElement }> = {
+  GRANTED:   { color: '#50C878', icon: <CheckCircle fontSize="small" /> },
+  REQUESTED: { color: '#F39C12', icon: <HourglassEmpty fontSize="small" /> },
+  DENIED:    { color: '#E74C3C', icon: <Cancel fontSize="small" /> },
+  EXPIRED:   { color: '#95A5A6', icon: <AccessTime fontSize="small" /> },
+  REVOKED:   { color: '#E74C3C', icon: <Block fontSize="small" /> },
+};
+
+function getStatusConfig(status: string) {
+  return STATUS_CONFIG[status?.toUpperCase()] || { color: '#4A90E2', icon: <VerifiedUser fontSize="small" /> };
+}
 
 const ConsentManagement: React.FC = () => {
   const [consents, setConsents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState({
-    total: 0,
-    granted: 0,
-    requested: 0,
-    expired: 0,
-  });
+  const [stats, setStats] = useState({ total: 0, granted: 0, requested: 0, expired: 0 });
 
-  useEffect(() => {
-    fetchConsents();
-    fetchStats();
+  // Track previous statuses for change detection
+  const prevStatusMap = useRef<Record<string, string>>({});
+
+  const computeStats = useCallback((data: any[]) => {
+    setStats({
+      total: data.length,
+      granted: data.filter((c: any) => c.status === 'GRANTED').length,
+      requested: data.filter((c: any) => c.status === 'REQUESTED').length,
+      expired: data.filter((c: any) => c.status === 'EXPIRED').length,
+    });
   }, []);
 
-  const fetchConsents = async () => {
+  const fetchConsents = useCallback(async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const response = await consentService.getAllConsents();
-      const data = response as any;
-      setConsents(data.data || []);
-    } catch (error: any) {
-      toast.error('Failed to load consents');
-      console.error('Error fetching consents:', error);
+      const data = (response as any).data || [];
+
+      // Detect status changes and show toast notifications
+      const prevMap = prevStatusMap.current;
+      for (const consent of data) {
+        const prev = prevMap[consent.id];
+        if (prev === 'REQUESTED' && consent.status === 'GRANTED') {
+          toast.success(`Consent ${consent.consentId} has been GRANTED`);
+        } else if (prev === 'REQUESTED' && consent.status === 'DENIED') {
+          toast.error(`Consent ${consent.consentId} has been DENIED`);
+        }
+      }
+
+      // Update prev map
+      const newMap: Record<string, string> = {};
+      for (const c of data) newMap[c.id] = c.status;
+      prevStatusMap.current = newMap;
+
+      setConsents(data);
+      computeStats(data);
+    } catch {
+      if (!isBackground) toast.error('Failed to load consents');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
-  };
+  }, [computeStats]);
 
-  const fetchStats = async () => {
+  useEffect(() => {
+    fetchConsents(false);
+  }, [fetchConsents]);
+
+  // Auto-poll while any consent is in REQUESTED state
+  useEffect(() => {
+    const hasRequested = consents.some(c => c.status === 'REQUESTED');
+    if (!hasRequested) return;
+
+    const intervalId = setInterval(() => fetchConsents(true), POLL_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [consents, fetchConsents]);
+
+  const handleCancelConsent = async (consentId: string) => {
     try {
-      const response = await consentService.getAllConsents();
-      const data = response as any;
-      const allConsents = data.data || [];
-      
-      setStats({
-        total: allConsents.length,
-        granted: allConsents.filter((c: any) => c.status === 'GRANTED').length,
-        requested: allConsents.filter((c: any) => c.status === 'REQUESTED').length,
-        expired: allConsents.filter((c: any) => c.status === 'EXPIRED').length,
-      });
-    } catch (error: any) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'GRANTED':
-        return '#50C878';
-      case 'REQUESTED':
-        return '#F39C12';
-      case 'EXPIRED':
-        return '#95A5A6';
-      case 'REVOKED':
-        return '#E74C3C';
-      case 'DENIED':
-        return '#E74C3C';
-      default:
-        return '#4A90E2';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'GRANTED':
-        return <CheckCircle fontSize="small" />;
-      case 'REQUESTED':
-        return <HourglassEmpty fontSize="small" />;
-      case 'EXPIRED':
-      case 'REVOKED':
-      case 'DENIED':
-        return <Cancel fontSize="small" />;
-      default:
-        return <VerifiedUser fontSize="small" />;
+      await consentService.revokeConsent(consentId);
+      toast.success('Consent request cancelled');
+      fetchConsents(false);
+    } catch {
+      toast.error('Failed to cancel consent request');
     }
   };
 
@@ -150,32 +159,42 @@ const ConsentManagement: React.FC = () => {
           icon={<Description />}
           label={params.row.purpose || 'Care Management'}
           size="small"
-          sx={{
-            bgcolor: alpha('#9B59B6', 0.1),
-            color: '#9B59B6',
-            fontWeight: 500,
-          }}
+          sx={{ bgcolor: alpha('#9B59B6', 0.1), color: '#9B59B6', fontWeight: 500 }}
         />
       ),
     },
     {
       field: 'status',
       headerName: 'Status',
-      width: 130,
+      width: 140,
       renderCell: (params: GridRenderCellParams) => {
         const status = params.row.status || 'REQUESTED';
-        const color = getStatusColor(status);
+        const cfg = getStatusConfig(status);
         return (
           <Chip
-            icon={getStatusIcon(status)}
+            icon={cfg.icon}
             label={status}
             size="small"
-            sx={{
-              bgcolor: alpha(color, 0.1),
-              color: color,
-              fontWeight: 500,
-            }}
+            sx={{ bgcolor: alpha(cfg.color, 0.1), color: cfg.color, fontWeight: 500 }}
           />
+        );
+      },
+    },
+    {
+      field: 'elapsed',
+      headerName: 'Elapsed',
+      width: 140,
+      renderCell: (params: GridRenderCellParams) => {
+        if (params.row.status !== 'REQUESTED') return <Typography variant="body2" color="text.secondary">—</Typography>;
+        const created = params.row.createdAt ? new Date(params.row.createdAt) : null;
+        if (!created) return <Typography variant="body2" color="text.secondary">—</Typography>;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <AccessTime sx={{ fontSize: 14, color: '#F39C12' }} />
+            <Typography variant="body2" color="warning.main" fontWeight={500}>
+              {formatDistanceToNow(created, { addSuffix: false })}
+            </Typography>
+          </Box>
         );
       },
     },
@@ -205,17 +224,37 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 80,
+      width: 120,
       sortable: false,
-      renderCell: () => (
-        <Tooltip title="View Details">
-          <IconButton size="small" color="primary">
-            <Visibility fontSize="small" />
-          </IconButton>
-        </Tooltip>
+      renderCell: (params: GridRenderCellParams) => (
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Tooltip title="View Details">
+            <IconButton size="small" color="primary">
+              <Visibility fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {params.row.status === 'REQUESTED' && (
+            <Tooltip title="Cancel Request">
+              <IconButton size="small" color="error" onClick={() => handleCancelConsent(params.row.id)}>
+                <Cancel fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
       ),
     },
   ];
+
+  const filteredConsents = consents.filter((c) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      c.consentId?.toLowerCase().includes(q) ||
+      c.patient?.firstName?.toLowerCase().includes(q) ||
+      c.patient?.lastName?.toLowerCase().includes(q) ||
+      c.purpose?.toLowerCase().includes(q)
+    );
+  });
 
   const statsCards = [
     { label: 'Total Consents', value: stats.total, color: '#4A90E2', icon: <VerifiedUser /> },
@@ -226,10 +265,10 @@ const ConsentManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ 
-        display: 'flex', 
+      <Box sx={{
+        display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between', 
+        justifyContent: 'space-between',
         alignItems: { xs: 'flex-start', sm: 'center' },
         mb: 4,
         gap: 2,
@@ -240,6 +279,15 @@ const ConsentManagement: React.FC = () => {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Manage patient consent requests and permissions
+            {consents.some(c => c.status === 'REQUESTED') && (
+              <Chip
+                label="Auto-refreshing"
+                size="small"
+                color="warning"
+                variant="outlined"
+                sx={{ ml: 1, height: 20, fontSize: 11 }}
+              />
+            )}
           </Typography>
         </Box>
         <Button
@@ -247,9 +295,7 @@ const ConsentManagement: React.FC = () => {
           startIcon={<Add />}
           sx={{
             background: 'linear-gradient(135deg, #50C878 0%, #45B369 100%)',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)',
-            },
+            '&:hover': { background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)' },
           }}
         >
           New Consent Request
@@ -320,33 +366,26 @@ const ConsentManagement: React.FC = () => {
         />
       </Paper>
 
-      <Paper sx={{ 
-        height: { xs: 400, sm: 500, md: 600 }, 
-        width: '100%', 
-        borderRadius: 3, 
+      <Paper sx={{
+        height: { xs: 400, sm: 500, md: 600 },
+        width: '100%',
+        borderRadius: 3,
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
         overflow: 'auto',
       }}>
         <DataGrid
-          rows={consents}
+          rows={filteredConsents}
           loading={loading}
           columns={columns}
           initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 10 },
-            },
+            pagination: { paginationModel: { page: 0, pageSize: 10 } },
           }}
           pageSizeOptions={[10, 25, 50]}
           checkboxSelection
           disableRowSelectionOnClick
           sx={{
-            '& .MuiDataGrid-cell': {
-              py: 2,
-            },
-            '& .MuiDataGrid-columnHeaders': {
-              bgcolor: 'action.hover',
-              fontWeight: 600,
-            },
+            '& .MuiDataGrid-cell': { py: 2 },
+            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
           }}
         />
       </Paper>

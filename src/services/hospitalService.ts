@@ -58,6 +58,8 @@ interface UpdateHospitalDTO {
   isActive?: boolean;
   plan?: string;
   defaultOpdCharge?: number;
+  hipId?: string;
+  hiuId?: string;
 }
 
 class HospitalService {

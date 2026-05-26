@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -83,7 +83,7 @@ const MainLayout: React.FC = () => {
   const { mode, toggleTheme } = useThemeMode();
   const isDark = mode === 'dark';
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = useMemo(() => JSON.parse(localStorage.getItem('user') || '{}'), []);
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
   const userRole = user.role as UserRole | undefined;
 
@@ -144,8 +144,6 @@ const MainLayout: React.FC = () => {
       RECEPTIONIST: 'Receptionist',
       LAB_TECHNICIAN: 'Lab Technician',
       PHARMACIST: 'Pharmacist',
-      BILLING_STAFF: 'Billing',
-      RADIOLOGIST: 'Radiologist',
     };
     return roleLabels[role] || role;
   };
@@ -447,7 +445,13 @@ const MainLayout: React.FC = () => {
       >
         <Toolbar sx={{ minHeight: '56px !important' }} />
         <Box sx={{ mt: 2, width: '100%', maxWidth: '1400px', mx: 'auto' }}>
-          <Outlet />
+          <Suspense fallback={
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+              <Box sx={{ width: 32, height: 32, border: '3px solid', borderColor: 'divider', borderTopColor: 'primary.main', borderRadius: '50%', animation: 'spin 0.8s linear infinite', '@keyframes spin': { to: { transform: 'rotate(360deg)' } } }} />
+            </Box>
+          }>
+            <Outlet />
+          </Suspense>
         </Box>
       </Box>
     </Box>

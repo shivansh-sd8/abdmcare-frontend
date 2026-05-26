@@ -35,6 +35,7 @@ export interface IPDBillData {
     advancePaid: number;
     totalAmount: number;
     notes?: string;
+    consultationFee?: number;
     medicines?: Array<{ name: string; qty?: number; rate?: number; amount?: number }>;
     labTests?: Array<{ name: string; amount?: number }>;
     procedures?: Array<{ name: string; amount?: number }>;
@@ -184,6 +185,12 @@ export function generateIPDBill(data: IPDBillData): void {
   tableRow2('Ward / Bed Rent', `₹${admission.dailyCharges} × ${admission.days} day(s)`, true);
   tableRow2('', `₹${(admission.dailyCharges * admission.days).toLocaleString('en-IN')}`);
 
+  // Consultation fee (from OPD encounter if carried over)
+  if ((admission.consultationFee || 0) > 0) {
+    tableHeader('CONSULTATION FEE');
+    tableRow2('Doctor Consultation', `₹${admission.consultationFee!.toLocaleString('en-IN')}`, true);
+  }
+
   // Medicines
   if (admission.medicines && admission.medicines.length > 0) {
     tableHeader('MEDICINES / PHARMACY');
@@ -213,11 +220,13 @@ export function generateIPDBill(data: IPDBillData): void {
   checkY(40);
 
   const wardTotal   = admission.dailyCharges * admission.days;
+  const consFee     = admission.consultationFee || 0;
   const medTotal    = (admission.medicines || []).reduce((s, m) => s + (m.amount || 0), 0);
   const labTotal    = (admission.labTests  || []).reduce((s, t) => s + (t.amount || 0), 0);
   const procTotal   = (admission.procedures || []).reduce((s, p) => s + (p.amount || 0), 0);
-  const grossTotal  = wardTotal + medTotal + labTotal + procTotal;
-  const balance     = Math.max(0, admission.totalAmount - admission.advancePaid);
+  const itemizedTotal = wardTotal + consFee + medTotal + labTotal + procTotal;
+  const grossTotal  = admission.totalAmount > 0 ? admission.totalAmount : itemizedTotal;
+  const balance     = Math.max(0, grossTotal - admission.advancePaid);
 
   doc.setFillColor(26, 60, 110);
   doc.rect(M, y, CW, 7, 'F');

@@ -70,8 +70,6 @@ const roleColorMap: Record<string, { bg: string; fg: string }> = {
   RECEPTIONIST:   { bg: '#0891b2', fg: '#fff' },
   LAB_TECHNICIAN: { bg: '#7c3aed', fg: '#fff' },
   PHARMACIST:     { bg: '#be185d', fg: '#fff' },
-  BILLING_STAFF:  { bg: '#64748b', fg: '#fff' },
-  RADIOLOGIST:    { bg: '#9333ea', fg: '#fff' },
 };
 
 const roleLabelMap: Record<string, string> = {
@@ -82,8 +80,6 @@ const roleLabelMap: Record<string, string> = {
   RECEPTIONIST:   'Receptionist',
   LAB_TECHNICIAN: 'Lab Technician',
   PHARMACIST:     'Pharmacist',
-  BILLING_STAFF:  'Billing Staff',
-  RADIOLOGIST:    'Radiologist',
 };
 
 const UserManagement: React.FC = () => {

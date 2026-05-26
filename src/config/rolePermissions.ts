@@ -5,9 +5,7 @@ export type UserRole =
   | 'NURSE'
   | 'RECEPTIONIST'
   | 'LAB_TECHNICIAN'
-  | 'PHARMACIST'
-  | 'BILLING_STAFF'
-  | 'RADIOLOGIST';
+  | 'PHARMACIST';
 
 export interface MenuItem {
   text: string;
@@ -34,7 +32,7 @@ export const menuGroups: MenuGroup[] = [
         text: 'Dashboard',
         path: '/app/dashboard',
         icon: 'Dashboard',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST', 'BILLING_STAFF', 'RADIOLOGIST'],
+        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST'],
       },
     ],
   },
@@ -99,7 +97,7 @@ export const menuGroups: MenuGroup[] = [
         text: 'Lab & Radiology',
         path: '/app/investigations',
         icon: 'Science',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST'],
+        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'],
       },
       {
         text: 'Pharmacy',
@@ -145,13 +143,7 @@ export const menuGroups: MenuGroup[] = [
         text: 'Billing & Payments',
         path: '/app/billing',
         icon: 'Receipt',
-        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF'],
-      },
-      {
-        text: 'Audit Logs',
-        path: '/app/audit-logs',
-        icon: 'History',
-        roles: ['SUPER_ADMIN', 'ADMIN'],
+        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN'],
       },
     ],
   },

@@ -9,6 +9,7 @@ import {
   ContentCopy, Refresh, HealthAndSafety, Search, Person, Visibility,
 } from '@mui/icons-material';
 import jsQR from 'jsqr';
+import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
@@ -243,13 +244,16 @@ const ScanAndShare: React.FC = () => {
                 display: 'inline-block', p: 4, border: '3px solid', borderColor: 'primary.main',
                 borderRadius: 3, bgcolor: 'white', mb: 3,
               }}>
-                <Box sx={{
-                  width: 250, height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  bgcolor: 'grey.100', borderRadius: 2, fontFamily: 'monospace', fontSize: 11, p: 2,
-                  wordBreak: 'break-all', textAlign: 'left',
-                }}>
-                  {JSON.stringify({ hipId: facilityQr.hipId, hipName: facilityQr.hipName, url: facilityQr.scanAndShareUrl }, null, 2)}
-                </Box>
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    hipId: facilityQr.hipId,
+                    hipName: facilityQr.hipName,
+                    url: facilityQr.scanAndShareUrl,
+                  })}
+                  size={250}
+                  level="M"
+                  includeMargin={false}
+                />
               </Box>
               <Divider sx={{ my: 2 }} />
               <Grid container spacing={2} sx={{ maxWidth: 500, mx: 'auto', textAlign: 'left' }}>

@@ -5,6 +5,7 @@ import { Box, CircularProgress } from '@mui/material';
 import MainLayout from './components/layouts/MainLayout';
 import PrivateRoute from './components/common/PrivateRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
 const AbhaManagement = React.lazy(() => import('./features/abha/AbhaManagement'));
@@ -22,7 +23,7 @@ const ConsentManagement = React.lazy(() => import('./features/consent/ConsentMan
 const Profile = React.lazy(() => import('./features/profile/Profile'));
 const Settings = React.lazy(() => import('./features/settings/Settings'));
 const Notifications = React.lazy(() => import('./features/notifications/Notifications'));
-const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
+
 const HospitalManagement = React.lazy(() => import('./features/hospital/HospitalManagement'));
 const UserManagement = React.lazy(() => import('./features/user/UserManagement'));
 const PaymentManagement = React.lazy(() => import('./features/receptionist/PaymentManagement'));
@@ -40,6 +41,7 @@ const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword')
 const SuperAdminSignup = React.lazy(() => import('./features/auth/SuperAdminSignup'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
+const QueueDisplay = React.lazy(() => import('./features/queue/QueueDisplay'));
 
 const PageLoader = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -47,16 +49,23 @@ const PageLoader = () => (
   </Box>
 );
 
+const ContentLoader = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+    <CircularProgress size={32} />
+  </Box>
+);
+
 const App: React.FC = () => {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/documentation" element={<DocumentationPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/signup" element={<SuperAdminSignup />} />
-        <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
+        <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+        <Route path="/documentation" element={<Suspense fallback={<PageLoader />}><DocumentationPage /></Suspense>} />
+        <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+        <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense>} />
+        <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SuperAdminSignup /></Suspense>} />
+        <Route path="/super-admin-signup" element={<Suspense fallback={<PageLoader />}><SuperAdminSignup /></Suspense>} />
         
         <Route
           path="/app"
@@ -103,7 +112,7 @@ const App: React.FC = () => {
             <Route 
               path="patients/:id" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN']}>
                   <PatientProfile />
                 </RoleProtectedRoute>
               } 
@@ -172,7 +181,7 @@ const App: React.FC = () => {
             <Route
               path="ehr"
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN']}>
                   <EHRList />
                 </RoleProtectedRoute>
               }
@@ -199,7 +208,7 @@ const App: React.FC = () => {
             <Route 
               path="investigations" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN']}>
                   <InvestigationQueue />
                 </RoleProtectedRoute>
               } 
@@ -217,24 +226,26 @@ const App: React.FC = () => {
             <Route 
               path="billing" 
               element={
-                <RoleProtectedRoute requiredRoles={['BILLING_STAFF', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
                   <BillingDashboard />
                 </RoleProtectedRoute>
               } 
             />
             
+            <Route
+              path="queue"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <QueueDisplay />
+                </RoleProtectedRoute>
+              }
+            />
+
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
             
-            <Route 
-              path="audit-logs" 
-              element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
-                  <AuditLogs />
-                </RoleProtectedRoute>
-              } 
-            />
+            {/* Audit logs removed — backend logging not active yet */}
             
             <Route 
               path="hospitals" 
@@ -279,6 +290,7 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 };
 
