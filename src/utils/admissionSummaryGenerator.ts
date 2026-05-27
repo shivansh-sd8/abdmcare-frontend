@@ -40,7 +40,7 @@ export interface AdmissionSummaryData {
   };
 }
 
-export function generateAdmissionSummary(data: AdmissionSummaryData): void {
+export function generateAdmissionSummary(data: AdmissionSummaryData): string {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 15;
@@ -152,5 +152,7 @@ export function generateAdmissionSummary(data: AdmissionSummaryData): void {
   doc.text(`Generated on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}`, 15, y);
   doc.text('This is a computer-generated document.', pageWidth - 15, y, { align: 'right' });
 
+  const base64 = doc.output('base64');
   doc.save(`Admission_Summary_${data.admission.admissionNumber}.pdf`);
+  return base64;
 }

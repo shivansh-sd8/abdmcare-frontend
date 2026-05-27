@@ -23,6 +23,10 @@ class ConsentService {
     return api.get(`/api/v1/consents/${consentId}/artefact`);
   }
 
+  async getConsentStatus(consentId: string) {
+    return api.get(`/api/v1/consents/${consentId}/status`);
+  }
+
   async revokeConsent(consentId: string) {
     return api.post(`/api/v1/consents/${consentId}/revoke`);
   }

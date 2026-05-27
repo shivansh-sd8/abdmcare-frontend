@@ -143,7 +143,7 @@ const wrappedText = (
 
 // ─── MAIN GENERATOR ────────────────────────────────────────────────────────
 
-export const generateOPDCardPDF = (data: OPDCardData): void => {
+export const generateOPDCardPDF = (data: OPDCardData): string => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cx = M + CW / 2;
 
@@ -632,7 +632,9 @@ export const generateOPDCardPDF = (data: OPDCardData): void => {
     cx, footerY + 7, { align: 'center' }
   );
 
+  const base64 = doc.output('base64');
   doc.save(`OPD-Card-${data.opdCardNumber}.pdf`);
+  return base64;
 };
 
 // ─── PRESCRIPTION PDF TYPES ───────────────────────────────────────────────
@@ -650,7 +652,7 @@ export interface PrescriptionPDFData {
 
 // ─── PRESCRIPTION PDF GENERATOR ───────────────────────────────────────────
 
-export const generatePrescriptionPDF = (data: PrescriptionPDFData): void => {
+export const generatePrescriptionPDF = (data: PrescriptionPDFData): string => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cx = M + CW / 2;
   let y = 10;
@@ -975,7 +977,9 @@ export const generatePrescriptionPDF = (data: PrescriptionPDFData): void => {
   doc.text('This document is computer generated. No manual signature required unless specified.', cx, footerY + 3.5, { align: 'center' });
   doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, cx, footerY + 7, { align: 'center' });
 
+  const base64 = doc.output('base64');
   doc.save(`Prescription-${data.patient.uhid}-${data.date}.pdf`);
+  return base64;
 };
 
 // ─── RECEIPT PDF TYPES ────────────────────────────────────────────────────
@@ -996,7 +1000,7 @@ export interface ReceiptPDFData {
 
 // ─── RECEIPT PDF GENERATOR ────────────────────────────────────────────────
 
-export const generateReceiptPDF = (data: ReceiptPDFData): void => {
+export const generateReceiptPDF = (data: ReceiptPDFData): string => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cx = M + CW / 2;
   let y = 10;
@@ -1218,7 +1222,9 @@ export const generateReceiptPDF = (data: ReceiptPDFData): void => {
   doc.text('This document is computer generated. No manual signature required unless specified.', cx, footerY + 3.5, { align: 'center' });
   doc.text(`Generated: ${new Date().toLocaleString('en-IN')}   ·   Receipt: ${data.receiptNumber}`, cx, footerY + 7, { align: 'center' });
 
+  const base64 = doc.output('base64');
   doc.save(`Receipt-${data.receiptNumber}.pdf`);
+  return base64;
 };
 
 // ─── VISIT SUMMARY PDF TYPES ─────────────────────────────────────────────
@@ -1243,7 +1249,7 @@ export interface VisitSummaryData {
 
 // ─── VISIT SUMMARY PDF GENERATOR ─────────────────────────────────────────
 
-export const generateVisitSummaryPDF = (data: VisitSummaryData): void => {
+export const generateVisitSummaryPDF = (data: VisitSummaryData): string => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cx = M + CW / 2;
   let y = 10;
@@ -1665,5 +1671,7 @@ export const generateVisitSummaryPDF = (data: VisitSummaryData): void => {
   doc.text('This document is computer generated. No manual signature required unless specified.', cx, footerY + 3.5, { align: 'center' });
   doc.text(`Generated: ${new Date().toLocaleString('en-IN')}   ·   Visit: ${data.visit.date}`, cx, footerY + 7, { align: 'center' });
 
+  const base64 = doc.output('base64');
   doc.save(`VisitSummary-${data.patient.uhid}-${data.visit.date}.pdf`);
+  return base64;
 };

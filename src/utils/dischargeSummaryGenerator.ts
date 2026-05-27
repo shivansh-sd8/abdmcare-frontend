@@ -98,7 +98,7 @@ export interface DischargeSummaryData {
 
 // ─── GENERATOR ────────────────────────────────────────────────────────────
 
-export const generateDischargeSummaryPDF = (data: DischargeSummaryData): void => {
+export const generateDischargeSummaryPDF = (data: DischargeSummaryData): string => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cx = M + CW / 2;
   let y = 10;
@@ -656,5 +656,7 @@ export const generateDischargeSummaryPDF = (data: DischargeSummaryData): void =>
     doc.text(footerMeta, cx, footerY + 7, { align: 'center' });
   }
 
+  const base64 = doc.output('base64');
   doc.save(`DischargeSummary-${data.patient.uhid}-${data.admission.admissionNumber}.pdf`);
+  return base64;
 };

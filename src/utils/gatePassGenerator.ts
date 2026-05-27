@@ -40,7 +40,7 @@ export interface GatePassData {
   };
 }
 
-export function generateGatePass(data: GatePassData): void {
+export function generateGatePass(data: GatePassData): string {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = 15;
@@ -153,5 +153,7 @@ export function generateGatePass(data: GatePassData): void {
   doc.setTextColor(130, 130, 130);
   doc.text('This is a computer-generated gate pass. No signature required.', pageWidth / 2, y, { align: 'center' });
 
+  const base64 = doc.output('base64');
   doc.save(`Gate_Pass_${data.admission.admissionNumber}.pdf`);
+  return base64;
 }

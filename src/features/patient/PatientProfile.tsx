@@ -10,7 +10,7 @@ import {
   Hotel, HealthAndSafety, CalendarToday, Phone, Bloodtype,
   ArrowBack, EventAvailable, TrendingUp, Home,
   ExpandMore, ExpandLess, Download, Verified, Description,
-  Assignment,
+  Assignment, CloudDownload,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import ehrService from '../../services/ehrService';
@@ -23,6 +23,9 @@ import { generateAdmissionSummary } from '../../utils/admissionSummaryGenerator'
 import { generateGatePass } from '../../utils/gatePassGenerator';
 import { generateIPDBill } from '../../utils/ipdBillGenerator';
 import { generatePatientReport } from '../../utils/patientReportGenerator';
+import documentService from '../../services/documentService';
+import FederatedRecords from '../hiu/FederatedRecords';
+import ConsentStatusChip from '../../components/ConsentStatusChip';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +107,7 @@ const PatientProfile: React.FC = () => {
           <Tab label={`Visits (${(summary?.totalEncounters || 0) + (summary?.totalAdmissions || 0)})`} icon={<Assignment sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label="Billing" icon={<Receipt sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label="ABHA & Consent" icon={<HealthAndSafety sx={{ fontSize: 18 }} />} iconPosition="start" />
+          <Tab label="ABDM Records" icon={<CloudDownload sx={{ fontSize: 18 }} />} iconPosition="start" />
         </Tabs>
 
         <Box sx={{ p: { xs: 1.5, sm: 2.5 } }}>
@@ -262,7 +266,7 @@ const PatientProfile: React.FC = () => {
                       <Box key={c.id} sx={{ mb: 1.5, p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="body2" fontWeight={600}>{c.purpose || 'Health Data Consent'}</Typography>
-                          <StatusChip status={c.status} />
+                          <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
                         </Box>
                         <Typography variant="caption" color="text.secondary">{fmtTime(c.createdAt)}</Typography>
                       </Box>
@@ -271,6 +275,11 @@ const PatientProfile: React.FC = () => {
                 </SectionCard>
               </Grid>
             </Grid>
+          </TabPanel>
+
+          {/* ═══ Tab 4: ABDM Records ═══ */}
+          <TabPanel value={tab} index={4}>
+            <FederatedRecords patientId={patient.id} />
           </TabPanel>
         </Box>
       </Paper>
@@ -419,14 +428,16 @@ const VisitsTab: React.FC<{
     try {
       const res: any = await ehrService.getPatientEHR(patient.id);
       const ehrData = res.data?.data || res.data;
-      generatePatientReport({ hospital: hospitalInfo, patient: { firstName: patient.firstName, lastName: patient.lastName, uhid: patient.uhid, dob: patient.dob, gender: patient.gender, mobile: patient.mobile, email: patient.email, bloodGroup: patient.bloodGroup, address: patient.address, createdAt: patient.createdAt, abhaRecord: patient.abhaRecord }, timeline: ehrData.timeline || [], summary: ehrData.summary || summary || {} });
+      const ehrBase64 = generatePatientReport({ hospital: hospitalInfo, patient: { firstName: patient.firstName, lastName: patient.lastName, uhid: patient.uhid, dob: patient.dob, gender: patient.gender, mobile: patient.mobile, email: patient.email, bloodGroup: patient.bloodGroup, address: patient.address, createdAt: patient.createdAt, abhaRecord: patient.abhaRecord }, timeline: ehrData.timeline || [], summary: ehrData.summary || summary || {} });
+      documentService.persistDocument({ patientId: patient.id, type: 'EHR_REPORT', content: ehrBase64 }).catch(() => {});
       toast.success('Full EHR downloaded');
     } catch { toast.error('Failed to generate EHR Report'); } finally { setEhrLoading(false); }
   };
 
   const handleOPDCard = (enc: any) => {
     try {
-      generateOPDCardPDF({ opdCardNumber: enc.encounterId || enc.id?.slice(0, 8)?.toUpperCase() || 'N/A', issueDate: enc.visitDate || new Date().toISOString(), hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '', address: patientAddr }, appointment: { doctor: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), department: enc.doctor?.specialization || '', fees: enc.totalAmount ? `₹${enc.totalAmount}` : '' }, consultation: { chiefComplaint: enc.chiefComplaint, provisionalDiagnosis: enc.diagnosis, finalDiagnosis: enc.finalDiagnosis, notes: enc.notes } });
+      const opdBase64 = generateOPDCardPDF({ opdCardNumber: enc.encounterId || enc.id?.slice(0, 8)?.toUpperCase() || 'N/A', issueDate: enc.visitDate || new Date().toISOString(), hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '', address: patientAddr }, appointment: { doctor: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), department: enc.doctor?.specialization || '', fees: enc.totalAmount ? `₹${enc.totalAmount}` : '' }, consultation: { chiefComplaint: enc.chiefComplaint, provisionalDiagnosis: enc.diagnosis, finalDiagnosis: enc.finalDiagnosis, notes: enc.notes } });
+      documentService.persistDocument({ patientId: patient.id, encounterId: enc.id, type: 'OPD_CARD', content: opdBase64 }).catch(() => {});
       toast.success('OPD Card downloaded');
     } catch { toast.error('Failed'); }
   };
@@ -435,7 +446,8 @@ const VisitsTab: React.FC<{
     const meds = rxList.flatMap((rx: any) => (rx.medications || []).map((m: any) => ({ medicineName: m.name || m.medicineName || m.drug || '', dosage: m.dosage || '', frequency: m.frequency || '', duration: m.duration || '', instructions: m.instructions || '' })));
     if (meds.length === 0) { toast.info('No medications to export'); return; }
     try {
-      generatePrescriptionPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '' }, doctor: { name: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), specialization: enc.doctor?.specialization }, diagnosis: enc.finalDiagnosis || enc.diagnosis, prescriptions: meds, date: enc.visitDate || new Date().toISOString() });
+      const rxBase64 = generatePrescriptionPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '' }, doctor: { name: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), specialization: enc.doctor?.specialization }, diagnosis: enc.finalDiagnosis || enc.diagnosis, prescriptions: meds, date: enc.visitDate || new Date().toISOString() });
+      documentService.persistDocument({ patientId: patient.id, encounterId: enc.id, type: 'PRESCRIPTION', content: rxBase64 }).catch(() => {});
       toast.success('Prescription downloaded');
     } catch { toast.error('Failed'); }
   };
@@ -444,7 +456,8 @@ const VisitsTab: React.FC<{
     const enc = visit.encounter;
     const meds = visit.prescriptions.flatMap((rx: any) => (rx.medications || []).map((m: any) => ({ medicineName: m.name || m.medicineName || m.drug || '', dosage: m.dosage || '', frequency: m.frequency || '', duration: m.duration || '', instructions: m.instructions || '' })));
     try {
-      generateVisitSummaryPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '' }, doctor: { name: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), specialization: enc.doctor?.specialization }, visit: { date: enc.visitDate || new Date().toISOString(), department: enc.doctor?.specialization, chiefComplaint: enc.chiefComplaint, diagnosis: enc.finalDiagnosis || enc.diagnosis, notes: enc.notes, followUpDate: enc.followUpDate }, vitals: visit.vitals[0] || undefined, prescriptions: meds.length > 0 ? meds : undefined, investigations: visit.investigations.map((i: any) => ({ testName: i.testName, status: i.status })), billing: enc.totalAmount ? { total: Number(enc.totalAmount || 0), paid: Number(enc.paymentCollected || 0), balance: Math.max(0, Number(enc.totalAmount || 0) - Number(enc.paymentCollected || 0)), method: enc.paymentMethod } : undefined });
+      const vsBase64 = generateVisitSummaryPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '' }, doctor: { name: `Dr. ${enc.doctor?.firstName || ''} ${enc.doctor?.lastName || ''}`.trim(), specialization: enc.doctor?.specialization }, visit: { date: enc.visitDate || new Date().toISOString(), department: enc.doctor?.specialization, chiefComplaint: enc.chiefComplaint, diagnosis: enc.finalDiagnosis || enc.diagnosis, notes: enc.notes, followUpDate: enc.followUpDate }, vitals: visit.vitals[0] || undefined, prescriptions: meds.length > 0 ? meds : undefined, investigations: visit.investigations.map((i: any) => ({ testName: i.testName, status: i.status })), billing: enc.totalAmount ? { total: Number(enc.totalAmount || 0), paid: Number(enc.paymentCollected || 0), balance: Math.max(0, Number(enc.totalAmount || 0) - Number(enc.paymentCollected || 0)), method: enc.paymentMethod } : undefined });
+      documentService.persistDocument({ patientId: patient.id, encounterId: enc.id, type: 'VISIT_SUMMARY', content: vsBase64 }).catch(() => {});
       toast.success('Visit Summary downloaded');
     } catch { toast.error('Failed'); }
   };
@@ -457,7 +470,8 @@ const VisitsTab: React.FC<{
     if (Number(enc.scanCharges || 0) > 0) items.push({ description: 'Scans', amount: Number(enc.scanCharges) });
     if (items.length === 0 && Number(enc.totalAmount || 0) > 0) items.push({ description: 'Consultation', amount: Number(enc.totalAmount) });
     try {
-      generateReceiptPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid }, receiptNumber: enc.encounterId || `RCP-${enc.id?.slice(0, 8) || Date.now()}`, date: fmt(enc.visitDate), items, totalAmount: Number(enc.totalAmount || 0), amountPaid: Number(enc.paymentCollected || 0), balance: Math.max(0, Number(enc.totalAmount || 0) - Number(enc.paymentCollected || 0)), paymentMethod: enc.paymentMethod || 'CASH' });
+      const rcptBase64 = generateReceiptPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid }, receiptNumber: enc.encounterId || `RCP-${enc.id?.slice(0, 8) || Date.now()}`, date: fmt(enc.visitDate), items, totalAmount: Number(enc.totalAmount || 0), amountPaid: Number(enc.paymentCollected || 0), balance: Math.max(0, Number(enc.totalAmount || 0) - Number(enc.paymentCollected || 0)), paymentMethod: enc.paymentMethod || 'CASH' });
+      documentService.persistDocument({ patientId: patient.id, encounterId: enc.id, type: 'RECEIPT', content: rcptBase64 }).catch(() => {});
       toast.success('Receipt downloaded');
     } catch { toast.error('Failed'); }
   };
@@ -465,7 +479,8 @@ const VisitsTab: React.FC<{
   const handleLabReport = (inv: any) => {
     try {
       const params = Array.isArray(inv.results?.parameters) ? inv.results.parameters : [];
-      generateLabReport({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender, mobile: patient.mobile }, doctor: { name: `Dr. ${inv.doctor?.firstName || ''} ${inv.doctor?.lastName || ''}`.trim(), department: inv.doctor?.specialization }, report: { reportId: inv.id?.slice(0, 8)?.toUpperCase() || 'N/A', testName: inv.testName || 'Investigation', testType: inv.testType || 'LAB', orderedAt: inv.orderedAt || new Date().toISOString(), reportedAt: inv.completedAt || inv.updatedAt || new Date().toISOString(), sampleCollectedAt: inv.sampleCollectedAt, parameters: params.map((p: any) => ({ name: p.name || p.parameterName || '', value: p.value || p.result || '', unit: p.unit || '', referenceRange: p.referenceRange || p.normalRange || '', flag: p.flag || 'N' })), notes: inv.results?.notes || inv.notes } });
+      const labBase64 = generateLabReport({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender, mobile: patient.mobile }, doctor: { name: `Dr. ${inv.doctor?.firstName || ''} ${inv.doctor?.lastName || ''}`.trim(), department: inv.doctor?.specialization }, report: { reportId: inv.id?.slice(0, 8)?.toUpperCase() || 'N/A', testName: inv.testName || 'Investigation', testType: inv.testType || 'LAB', orderedAt: inv.orderedAt || new Date().toISOString(), reportedAt: inv.completedAt || inv.updatedAt || new Date().toISOString(), sampleCollectedAt: inv.sampleCollectedAt, parameters: params.map((p: any) => ({ name: p.name || p.parameterName || '', value: p.value || p.result || '', unit: p.unit || '', referenceRange: p.referenceRange || p.normalRange || '', flag: p.flag || 'N' })), notes: inv.results?.notes || inv.notes } });
+      documentService.persistDocument({ patientId: patient.id, encounterId: inv.encounterId, type: 'LAB_REPORT', content: labBase64 }).catch(() => {});
       toast.success('Lab Report downloaded');
     } catch { toast.error('Failed'); }
   };
@@ -480,9 +495,10 @@ const VisitsTab: React.FC<{
       try { const res: any = await ipdService.getAdmissionBill(adm.id); bill = res?.data; } catch {}
     }
 
+    let docBase64: string | undefined;
     try {
       if (type === 'admission') {
-        generateAdmissionSummary({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge, address: patientAddr, bloodGroup: patient.bloodGroup }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, admissionReason: adm.admissionReason, dailyCharges: Number(adm.dailyCharges || adm.ward?.dailyCharges || 0), advancePaid: advance, notes: adm.notes } });
+        docBase64 = generateAdmissionSummary({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge, address: patientAddr, bloodGroup: patient.bloodGroup }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, admissionReason: adm.admissionReason, dailyCharges: Number(adm.dailyCharges || adm.ward?.dailyCharges || 0), advancePaid: advance, notes: adm.notes } });
       } else if (type === 'bill') {
         const labTests = (bill?.labItems || []).map((i: any) => ({ name: i.testName || 'Lab Test', amount: Number(i.amount || 0) }));
         const medicines: Array<{ name: string; qty?: number; rate?: number; amount?: number }> = [];
@@ -494,12 +510,16 @@ const VisitsTab: React.FC<{
           medicines.length = 0;
           medicines.push({ name: 'Pharmacy Charges', amount: bill.medicineCharges });
         }
-        generateIPDBill({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt, wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, admissionReason: adm.admissionReason, dailyCharges: Number(adm.dailyCharges || adm.ward?.dailyCharges || 0), days: bill?.days || days, advancePaid: advance, totalAmount: bill?.total || total, notes: adm.notes, consultationFee: bill?.consultationFee || 0, labTests: labTests.length > 0 ? labTests : undefined, medicines: medicines.length > 0 ? medicines : undefined } });
+        docBase64 = generateIPDBill({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt, wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, admissionReason: adm.admissionReason, dailyCharges: Number(adm.dailyCharges || adm.ward?.dailyCharges || 0), days: bill?.days || days, advancePaid: advance, totalAmount: bill?.total || total, notes: adm.notes, consultationFee: bill?.consultationFee || 0, labTests: labTests.length > 0 ? labTests : undefined, medicines: medicines.length > 0 ? medicines : undefined } });
       } else if (type === 'discharge') {
         const realBilling = bill ? { wardCharges: bill.wardCharges, consultationFee: bill.consultationFee || 0, labCharges: bill.labCharges || 0, medicineCharges: bill.medicineCharges || 0, totalAmount: bill.total || total, advancePaid: advance, amountCollected: dischargePaid, balance: Math.max(0, (bill.total || total) - advance - dischargePaid) } : { wardCharges: Number(adm.dailyCharges || 0) * days, consultationFee: 0, labCharges: 0, medicineCharges: 0, totalAmount: total, advancePaid: advance, amountCollected: dischargePaid, balance: Math.max(0, total - advance - dischargePaid) };
-        generateDischargeSummaryPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '', address: patientAddr, bloodGroup: patient.bloodGroup }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt || new Date().toISOString(), ward: adm.ward?.name || '—', bed: adm.bed?.bedNumber, days, admissionReason: adm.admissionReason, diagnosis: adm.diagnosis }, doctors: (visit.rounds || []).reduce((acc: any[], r: any) => { const nm = `Dr. ${r.doctor?.firstName || ''} ${r.doctor?.lastName || ''}`.trim(); if (!acc.find((d: any) => d.name === nm)) acc.push({ name: nm, specialization: r.doctor?.specialization }); return acc; }, []), rounds: (visit.rounds || []).map((r: any) => ({ date: r.visitDate || r.createdAt, doctor: `Dr. ${r.doctor?.firstName || ''} ${r.doctor?.lastName || ''}`.trim(), notes: r.notes, diagnosis: r.finalDiagnosis || r.diagnosis })), investigations: visit.investigations.map((i: any) => ({ testName: i.testName, result: typeof i.results === 'string' ? i.results : i.results?.notes || '', date: i.orderedAt, status: i.status })), medications: visit.prescriptions.flatMap((rx: any) => (rx.medications || []).map((m: any) => ({ name: m.name || m.medicineName || m.drug || '', dosage: m.dosage || '', frequency: m.frequency || '', duration: m.duration || '', instructions: m.instructions || '' }))), billing: realBilling });
+        docBase64 = generateDischargeSummaryPDF({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, age: patientAge, gender: patient.gender || '', mobile: patient.mobile || '', address: patientAddr, bloodGroup: patient.bloodGroup }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt || new Date().toISOString(), ward: adm.ward?.name || '—', bed: adm.bed?.bedNumber, days, admissionReason: adm.admissionReason, diagnosis: adm.diagnosis }, doctors: (visit.rounds || []).reduce((acc: any[], r: any) => { const nm = `Dr. ${r.doctor?.firstName || ''} ${r.doctor?.lastName || ''}`.trim(); if (!acc.find((d: any) => d.name === nm)) acc.push({ name: nm, specialization: r.doctor?.specialization }); return acc; }, []), rounds: (visit.rounds || []).map((r: any) => ({ date: r.visitDate || r.createdAt, doctor: `Dr. ${r.doctor?.firstName || ''} ${r.doctor?.lastName || ''}`.trim(), notes: r.notes, diagnosis: r.finalDiagnosis || r.diagnosis })), investigations: visit.investigations.map((i: any) => ({ testName: i.testName, result: typeof i.results === 'string' ? i.results : i.results?.notes || '', date: i.orderedAt, status: i.status })), medications: visit.prescriptions.flatMap((rx: any) => (rx.medications || []).map((m: any) => ({ name: m.name || m.medicineName || m.drug || '', dosage: m.dosage || '', frequency: m.frequency || '', duration: m.duration || '', instructions: m.instructions || '' }))), billing: realBilling });
       } else if (type === 'gatepass') {
-        generateGatePass({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt || new Date().toISOString(), wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, days }, payment: { totalAmount: total, totalPaid: advance + dischargePaid, paymentStatus: adm.paymentStatus || 'PENDING' } });
+        docBase64 = generateGatePass({ hospital: hospitalInfo, patient: { name: patientName, uhid: patient.uhid, mobile: patient.mobile, gender: patient.gender, age: patientAge }, admission: { admissionNumber: adm.admissionNumber || 'N/A', admittedAt: adm.admittedAt, dischargedAt: adm.dischargedAt || new Date().toISOString(), wardName: adm.ward?.name || '—', bedNumber: adm.bed?.bedNumber, diagnosis: adm.diagnosis, days }, payment: { totalAmount: total, totalPaid: advance + dischargePaid, paymentStatus: adm.paymentStatus || 'PENDING' } });
+      }
+      const docTypeMap: Record<string, string> = { admission: 'ADMISSION_SUMMARY', bill: 'IPD_BILL', discharge: 'DISCHARGE_SUMMARY', gatepass: 'GATE_PASS' };
+      if (docBase64) {
+        documentService.persistDocument({ patientId: patient.id, admissionId: adm.id, type: docTypeMap[type] || type.toUpperCase(), content: docBase64 }).catch(() => {});
       }
       toast.success('Document downloaded');
     } catch { toast.error('Failed'); }
@@ -757,7 +777,10 @@ const BillingTable: React.FC<{ chargeItems: any[]; patient?: any }> = ({ chargeI
     if (visit.scan > 0) bk.push({ description: 'Scans', amount: visit.scan });
     if (visit.ward > 0) bk.push({ description: 'Ward Charges', amount: visit.ward });
     if (bk.length === 0 && visit.total > 0) bk.push({ description: visit.description, amount: visit.total });
-    generateReceiptPDF({ hospital: { name: hosp.name || 'Hospital', addressLine1: hosp.address || hosp.addressLine1, city: hosp.city, state: hosp.state, phone: hosp.phone, email: hosp.email }, patient: { name: patient ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() : 'Patient', uhid: patient?.uhid || '—' }, receiptNumber: visit.detail || `RCP-${visit.id?.slice(0, 8) || Date.now()}`, date: fmt(visit.date), items: bk, totalAmount: visit.total || 0, amountPaid: visit.paid || 0, balance: Math.max(0, (visit.total || 0) - (visit.paid || 0)), paymentMethod: visit.paymentMethod || 'CASH' });
+    const billingRcptBase64 = generateReceiptPDF({ hospital: { name: hosp.name || 'Hospital', addressLine1: hosp.address || hosp.addressLine1, city: hosp.city, state: hosp.state, phone: hosp.phone, email: hosp.email }, patient: { name: patient ? `${patient.firstName || ''} ${patient.lastName || ''}`.trim() : 'Patient', uhid: patient?.uhid || '—' }, receiptNumber: visit.detail || `RCP-${visit.id?.slice(0, 8) || Date.now()}`, date: fmt(visit.date), items: bk, totalAmount: visit.total || 0, amountPaid: visit.paid || 0, balance: Math.max(0, (visit.total || 0) - (visit.paid || 0)), paymentMethod: visit.paymentMethod || 'CASH' });
+    if (patient?.id) {
+      documentService.persistDocument({ patientId: patient.id, type: 'RECEIPT', content: billingRcptBase64 }).catch(() => {});
+    }
   };
 
   const cfg: Record<string, { color: string; bg: string; icon: string }> = { OPD: { color: '#4A90E2', bg: '#e8edf5', icon: 'OPD' }, IPD: { color: '#9B59B6', bg: '#f3e8fa', icon: 'IPD' }, PAYMENT: { color: '#95A5A6', bg: '#f0f0f0', icon: 'PAY' } };

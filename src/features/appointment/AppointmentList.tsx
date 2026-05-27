@@ -46,6 +46,7 @@ import { format } from 'date-fns';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import { toast } from 'react-toastify';
 import { generateOPDCardPDF, HospitalInfo, ConsultationInfo } from '../../utils/pdfGenerator';
+import documentService from '../../services/documentService';
 import encounterService from '../../services/encounterService';
 import OPDCardDialog from '../../components/OPDCardDialog';
 
@@ -242,7 +243,7 @@ const AppointmentList: React.FC = () => {
         } catch (_) {}
       }
 
-      generateOPDCardPDF({
+      const base64 = generateOPDCardPDF({
         opdCardNumber: appointment.opdCardNumber,
         issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'dd-MM-yyyy h:mm a'),
         hospital: hospitalInfo,
@@ -267,6 +268,9 @@ const AppointmentList: React.FC = () => {
         vitals: vitalsInfo,
         consultation: consultationInfo,
       });
+      if (appointment.patient?.id) {
+        documentService.persistDocument({ patientId: appointment.patient.id, type: 'OPD_CARD', content: base64 }).catch(() => {});
+      }
 
       toast.success('OPD Card PDF downloaded successfully');
     } catch (error) {

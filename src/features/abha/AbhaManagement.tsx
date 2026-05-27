@@ -4,7 +4,7 @@ import {
   Grid, Paper, Tabs, Tab, InputAdornment, Chip, Divider, Alert, IconButton,
   CircularProgress, ToggleButtonGroup, ToggleButton, Avatar, Dialog, DialogTitle,
   DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText,
-  MenuItem, Select, FormControl, InputLabel, alpha, useTheme,
+  MenuItem, Select, FormControl, FormControlLabel, Checkbox, InputLabel, alpha, useTheme,
 } from '@mui/material';
 import {
   Search, QrCode, Phone, CreditCard, HealthAndSafety, CheckCircle,
@@ -72,6 +72,9 @@ const AbhaManagement: React.FC = () => {
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileUpdates, setProfileUpdates] = useState<Record<string, string>>({});
 
+  // Aadhaar consent state
+  const [consentAccepted, setConsentAccepted] = useState(false);
+
   // Patient linking state (from PatientList navigation)
   const linkedPatientId = routeState?.patientId;
   const linkedPatientName = routeState?.patientName;
@@ -84,6 +87,7 @@ const AbhaManagement: React.FC = () => {
     setAbhaAddressSuggestions([]); setSelectedAbhaAddress(''); setCustomAbhaAddress('');
     setDlForm({ dlNumber: '', firstName: '', middleName: '', lastName: '', dob: '', gender: '', state: '', district: '', pinCode: '' });
     setRequiresMobileVerify(false); setMobileVerifyOtp(''); setMobileVerifySent(false);
+    setConsentAccepted(false);
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -750,10 +754,35 @@ const AbhaManagement: React.FC = () => {
                       helperText={`${mobile.length}/10`} />
                   )}
                 </Grid>
+
+                {enrollMethod === 'aadhaar' && (
+                  <Grid item xs={12}>
+                    <Paper variant="outlined" sx={{ p: 2, maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.info.main, 0.04), borderColor: alpha(theme.palette.info.main, 0.3) }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Terms & Conditions</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6, display: 'block' }}>
+                        I, hereby declare that I am voluntarily sharing my Aadhaar number and demographic information issued by UIDAI, with National Health Authority (NHA) for the sole purpose of creation of ABHA number. I understand that my ABHA number can be used and shared for purposes as may be notified by ABDM from time to time including provision of healthcare services. Further, I am aware that my personal identifiable information (Name, Address, Age, Date of Birth, Gender and Photograph) may be made available to the entities working in the National Digital Health Ecosystem (NDHE) which inter alia includes stakeholders and entities such as healthcare professionals (e.g. doctors), facilities (e.g. hospitals, laboratories) and data fiduciaries (e.g. health programmes), which are registered with or linked to the Ayushman Bharat Digital Mission (ABDM), and various processes there under.
+                        {' '}I authorize NHA to use my Aadhaar number for performing Aadhaar based authentication with UIDAI as per the provisions of the Aadhaar (Targeted Delivery of Financial and other Subsidies, Benefits and Services) Act, 2016 for the aforesaid purpose. I understand that UIDAI will share my e-KYC details, or response of "Yes" with NHA upon successful authentication.
+                        {' '}I have been duly informed about the option of using other IDs apart from Aadhaar; however, I consciously choose to use Aadhaar number for the purpose of availing benefits across the NDHE. I am aware that my personal identifiable information excluding Aadhaar number / VID number can be used and shared for purposes as mentioned above. I reserve the right to revoke the given consent at any point of time as per provisions of Aadhaar Act and Regulations.
+                      </Typography>
+                    </Paper>
+                    <FormControlLabel
+                      sx={{ mt: 1 }}
+                      control={
+                        <Checkbox
+                          checked={consentAccepted}
+                          onChange={(e) => setConsentAccepted(e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label={<Typography variant="body2">I have read and I agree to the above terms and conditions</Typography>}
+                    />
+                  </Grid>
+                )}
+
                 <Grid item xs={12}>
                   <Button variant="contained" size="large"
                     onClick={enrollMethod === 'aadhaar' ? handleGenerateAadhaarOtp : handleDlSendMobileOtp}
-                    disabled={loading || (enrollMethod === 'aadhaar' ? aadhaar.length !== 12 : mobile.length !== 10)}
+                    disabled={loading || (enrollMethod === 'aadhaar' ? (aadhaar.length !== 12 || !consentAccepted) : mobile.length !== 10)}
                     startIcon={loading ? <CircularProgress size={18} /> : <Phone />}>
                     {loading ? 'Sending...' : 'Send OTP'}
                   </Button>

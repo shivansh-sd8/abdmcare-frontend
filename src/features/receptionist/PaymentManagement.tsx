@@ -28,6 +28,7 @@ import {
 import { toast } from 'react-toastify';
 import paymentService from '../../services/paymentService';
 import { generateAdvanceSlip } from '../../utils/advanceSlipGenerator';
+import documentService from '../../services/documentService';
 import { useSelector } from 'react-redux';
 
 const PaymentManagement: React.FC = () => {
@@ -92,7 +93,7 @@ const PaymentManagement: React.FC = () => {
 
   const handlePrintReceipt = (payment: any) => {
     try {
-      generateAdvanceSlip({
+      const base64 = generateAdvanceSlip({
         hospital: {
           name: authUser?.hospitalName || 'MediSync Hospital',
         },
@@ -112,6 +113,9 @@ const PaymentManagement: React.FC = () => {
         },
         generatedBy: authUser?.name,
       });
+      if (payment.patientId) {
+        documentService.persistDocument({ patientId: payment.patientId, type: 'ADVANCE_SLIP', content: base64 }).catch(() => {});
+      }
     } catch {
       toast.error('Failed to generate receipt');
     }

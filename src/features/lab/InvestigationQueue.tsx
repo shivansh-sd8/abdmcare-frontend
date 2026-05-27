@@ -14,6 +14,7 @@ import {
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import investigationService from '../../services/investigationService';
 import { generateLabReport, LabParameter } from '../../utils/labReportGenerator';
+import documentService from '../../services/documentService';
 import { LAB_TEMPLATES, matchTemplate } from '../../utils/labTestTemplates';
 import { useSelector } from 'react-redux';
 import { format } from 'date-fns';
@@ -203,7 +204,7 @@ export default function InvestigationQueue() {
 
   const handleDownloadReport = (inv: Investigation) => {
     const results = inv.results || {};
-    generateLabReport({
+    const base64 = generateLabReport({
       hospital: {
         name:               authUser?.hospitalName || 'Hospital',
         labName:            authUser?.hospitalName ? `${authUser.hospitalName} — Pathology Lab` : 'Pathology Laboratory',
@@ -237,6 +238,9 @@ export default function InvestigationQueue() {
         notes:               results.notes || inv.notes || undefined,
       },
     });
+    if (inv.patientId) {
+      documentService.persistDocument({ patientId: inv.patientId, encounterId: inv.encounterId, type: 'LAB_REPORT', content: base64 }).catch(() => {});
+    }
   };
 
   const handleSaveStatus = async () => {

@@ -33,6 +33,7 @@ import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
 import { generateOPDCardPDF, HospitalInfo, ConsultationInfo } from '../utils/pdfGenerator';
+import documentService from '../services/documentService';
 import hospitalService from '../services/hospitalService';
 import encounterService from '../services/encounterService';
 
@@ -238,7 +239,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
         };
       }
 
-      generateOPDCardPDF({
+      const base64 = generateOPDCardPDF({
         opdCardNumber: appointment.opdCardNumber,
         issueDate: format(new Date(appointment.checkedInAt || appointment.createdAt), 'dd-MM-yyyy h:mm a'),
         hospital: hInfo,
@@ -263,6 +264,9 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
         vitals: vitalsInfo,
         consultation: consultationInfo,
       });
+      if (appointment.patient?.id) {
+        documentService.persistDocument({ patientId: appointment.patient.id, type: 'OPD_CARD', content: base64 }).catch(() => {});
+      }
 
       toast.success('OPD Card PDF downloaded');
     } catch (error) {
@@ -279,7 +283,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
       const age = patient?.dob
         ? `${new Date().getFullYear() - new Date(patient.dob).getFullYear()} yrs`
         : 'N/A';
-      generatePrescriptionPDF({
+      const rxB64 = generatePrescriptionPDF({
         hospital: { name: hospitalInfo?.name || 'Hospital', addressLine1: hospitalInfo?.addressLine1, city: hospitalInfo?.city, state: hospitalInfo?.state, phone: hospitalInfo?.phone, email: hospitalInfo?.email },
         patient: { name: `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim(), uhid: patient?.uhid || 'NA', age, gender: patient?.gender || 'NA', mobile: patient?.mobile || 'NA' },
         doctor: { name: `Dr. ${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim(), specialization: doctor?.specialization, registrationNo: doctor?.registrationNo, department: doctor?.department?.name, signatureBase64: doctor?.signatureBase64 },
@@ -289,6 +293,9 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
         followUpDate: enc?.followUpDate ? new Date(enc.followUpDate).toLocaleDateString('en-IN') : undefined,
         date: appointment?.checkedInAt ? format(new Date(appointment.checkedInAt), 'dd-MM-yyyy') : format(new Date(), 'dd-MM-yyyy'),
       });
+      if (patient?.id) {
+        documentService.persistDocument({ patientId: patient.id, encounterId: enc?.id, type: 'PRESCRIPTION', content: rxB64 }).catch(() => {});
+      }
       toast.success('Prescription PDF downloaded');
     } catch (error) {
       console.error('Prescription PDF error:', error);
@@ -302,7 +309,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
       const age = patient?.dob
         ? `${new Date().getFullYear() - new Date(patient.dob).getFullYear()} yrs`
         : 'N/A';
-      generateVisitSummaryPDF({
+      const vsB64 = generateVisitSummaryPDF({
         hospital: { name: hospitalInfo?.name || 'Hospital', addressLine1: hospitalInfo?.addressLine1, city: hospitalInfo?.city, state: hospitalInfo?.state, phone: hospitalInfo?.phone, email: hospitalInfo?.email },
         patient: { name: `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim(), uhid: patient?.uhid || 'NA', age, gender: patient?.gender || 'NA', mobile: patient?.mobile || 'NA' },
         doctor: { name: `Dr. ${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim(), specialization: doctor?.specialization, registrationNo: doctor?.registrationNo, signatureBase64: doctor?.signatureBase64 },
@@ -324,6 +331,9 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
         investigations: (enc?.labOrders || enc?.investigations || []).map((o: any) => ({ testName: o.testName, status: o.status || 'ORDERED' })),
         billing: enc?.billing ? { total: enc.billing.totalAmount, paid: enc.billing.paymentCollected, balance: enc.billing.balance, method: enc.paymentMethod } : undefined,
       });
+      if (patient?.id) {
+        documentService.persistDocument({ patientId: patient.id, encounterId: enc?.id, type: 'VISIT_SUMMARY', content: vsB64 }).catch(() => {});
+      }
       toast.success('Visit Summary PDF downloaded');
     } catch (error) {
       console.error('Visit Summary PDF error:', error);
@@ -341,7 +351,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
       if (billing.medicineCharges > 0) items.push({ description: 'Medicine / Pharmacy Charges', amount: billing.medicineCharges });
       if (billing.scanCharges > 0) items.push({ description: 'Scan / Radiology Charges', amount: billing.scanCharges });
 
-      generateReceiptPDF({
+      const rcptB64 = generateReceiptPDF({
         hospital: { name: hospitalInfo?.name || 'Hospital', addressLine1: hospitalInfo?.addressLine1, city: hospitalInfo?.city, state: hospitalInfo?.state, phone: hospitalInfo?.phone, email: hospitalInfo?.email },
         patient: { name: `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim(), uhid: patient?.uhid || 'NA' },
         receiptNumber: enc?.payments?.[0]?.receiptNumber || `RCPT-${Date.now()}`,
@@ -354,6 +364,9 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
         transactionRef: enc?.transactionRef,
         generatedBy: authUser?.name || 'System',
       });
+      if (patient?.id) {
+        documentService.persistDocument({ patientId: patient.id, encounterId: enc?.id, type: 'RECEIPT', content: rcptB64 }).catch(() => {});
+      }
       toast.success('Receipt PDF downloaded');
     } catch (error) {
       console.error('Receipt PDF error:', error);

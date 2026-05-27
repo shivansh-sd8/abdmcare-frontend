@@ -16,6 +16,7 @@ import { format, differenceInDays } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import ipdService from '../../services/ipdService';
 import { generateIPDBill } from '../../utils/ipdBillGenerator';
+import documentService from '../../services/documentService';
 import { useSelector } from 'react-redux';
 import IPDAdmissionDetail from './IPDAdmissionDetail';
 
@@ -257,7 +258,7 @@ const AdmissionList: React.FC = () => {
       medicines.push({ name: 'Pharmacy Charges', amount: bill.medicineCharges });
     }
 
-    generateIPDBill({
+    const base64 = generateIPDBill({
       hospital: { name: authUser?.hospitalName || 'MediSync Hospital' },
       patient: {
         name:   `${adm.patient.firstName} ${adm.patient.lastName}`,
@@ -285,6 +286,9 @@ const AdmissionList: React.FC = () => {
         medicines:       medicines.length > 0 ? medicines : undefined,
       },
     });
+    if (adm.patient?.id) {
+      documentService.persistDocument({ patientId: adm.patient.id, admissionId: adm.id, type: 'IPD_BILL', content: base64 }).catch(() => {});
+    }
   };
 
   const userRole = (authUser?.role || JSON.parse(localStorage.getItem('user') || '{}').role || '').toUpperCase();

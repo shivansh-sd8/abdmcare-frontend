@@ -194,7 +194,7 @@ function formatDateTime(dateStr?: string | null): string {
 
 // ─── Main generator ──────────────────────────────────────────────────────────
 
-export function generatePatientReport(data: PatientReportData): void {
+export function generatePatientReport(data: PatientReportData): string {
   const { hospital, patient, timeline, summary, generatedBy } = data;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
@@ -956,5 +956,7 @@ export function generatePatientReport(data: PatientReportData): void {
   // ── Save ──────────────────────────────────────────────────────────────────
 
   const fileName = `HealthRecord_${patient.uhid}_${format(new Date(), 'ddMMMyyyy')}.pdf`;
+  const base64 = doc.output('base64');
   doc.save(fileName);
+  return base64;
 }

@@ -43,7 +43,7 @@ export interface IPDBillData {
   generatedBy?: string;
 }
 
-export function generateIPDBill(data: IPDBillData): void {
+export function generateIPDBill(data: IPDBillData): string {
   const { hospital, patient, admission, generatedBy } = data;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
@@ -295,5 +295,7 @@ export function generateIPDBill(data: IPDBillData): void {
   }
 
   const safeDate = format(new Date(admission.admittedAt), 'ddMMMyyyy');
+  const base64 = doc.output('base64');
   doc.save(`IPDBill_${patient.uhid}_${safeDate}.pdf`);
+  return base64;
 }

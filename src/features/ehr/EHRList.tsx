@@ -17,6 +17,7 @@ import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import ehrService from '../../services/ehrService';
 import { generatePatientReport } from '../../utils/patientReportGenerator';
+import documentService from '../../services/documentService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -522,7 +523,7 @@ const PatientEHRDialog: React.FC<{
       const ehrData    = ehrRes.data?.data || ehrRes.data || {};
       const hospitalInfo = ehrData.hospital ?? {};
 
-      generatePatientReport({
+      const ehrB64 = generatePatientReport({
         hospital:    hospitalInfo,
         patient:     patient as any,
         timeline:    ehrData.timeline ?? timeline,
@@ -533,6 +534,7 @@ const PatientEHRDialog: React.FC<{
         },
         generatedBy: authUserInDialog?.name,
       });
+      documentService.persistDocument({ patientId: patient.id, type: 'EHR_REPORT', content: ehrB64 }).catch(() => {});
       toast.success('Report downloaded');
     } catch {
       toast.error('Failed to generate report');
@@ -676,7 +678,7 @@ const EHRList: React.FC = () => {
     try {
       const ehrRes   = await ehrService.getPatientEHR(patient.id) as any;
       const ehrData  = ehrRes.data?.data || ehrRes.data || {};
-      generatePatientReport({
+      const quickB64 = generatePatientReport({
         hospital:    ehrData.hospital ?? {},
         patient:     patient as any,
         timeline:    ehrData.timeline ?? [],
@@ -687,6 +689,7 @@ const EHRList: React.FC = () => {
         },
         generatedBy: authUser?.name,
       });
+      documentService.persistDocument({ patientId: patient.id, type: 'EHR_REPORT', content: quickB64 }).catch(() => {});
       toast.success('Health record downloaded');
     } catch {
       toast.error('Failed to generate report');

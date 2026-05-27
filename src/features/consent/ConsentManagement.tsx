@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import consentService from '../../services/consentService';
+import ConsentStatusChip from '../../components/ConsentStatusChip';
 import { toast } from 'react-toastify';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -167,18 +168,13 @@ const ConsentManagement: React.FC = () => {
       field: 'status',
       headerName: 'Status',
       width: 140,
-      renderCell: (params: GridRenderCellParams) => {
-        const status = params.row.status || 'REQUESTED';
-        const cfg = getStatusConfig(status);
-        return (
-          <Chip
-            icon={cfg.icon}
-            label={status}
-            size="small"
-            sx={{ bgcolor: alpha(cfg.color, 0.1), color: cfg.color, fontWeight: 500 }}
-          />
-        );
-      },
+      renderCell: (params: GridRenderCellParams) => (
+        <ConsentStatusChip
+          consentId={params.row.id}
+          initialStatus={params.row.status || 'REQUESTED'}
+          onStatusChange={() => fetchConsents(true)}
+        />
+      ),
     },
     {
       field: 'elapsed',

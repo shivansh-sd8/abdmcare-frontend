@@ -35,7 +35,7 @@ export interface AdvanceSlipData {
   generatedBy?: string;
 }
 
-export function generateAdvanceSlip(data: AdvanceSlipData): void {
+export function generateAdvanceSlip(data: AdvanceSlipData): string {
   const { hospital, patient, payment, generatedBy } = data;
   const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
 
@@ -205,5 +205,7 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   }
 
   const filename = `AdvanceSlip_${patient.uhid}_${format(new Date(), 'ddMMMyyyy')}.pdf`;
+  const base64 = doc.output('base64');
   doc.save(filename);
+  return base64;
 }

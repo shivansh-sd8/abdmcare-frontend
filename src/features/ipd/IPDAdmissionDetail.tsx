@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import { format, differenceInDays } from 'date-fns';
 import { useSelector } from 'react-redux';
 import ipdService from '../../services/ipdService';
+import documentService from '../../services/documentService';
 
 interface Medicine {
   medicineName: string;
@@ -496,7 +497,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                 onClick={async () => {
                   try {
                     const { generateAdmissionSummary } = await import('../../utils/admissionSummaryGenerator');
-                    generateAdmissionSummary({
+                    const admB64 = generateAdmissionSummary({
                       hospital: { name: 'Hospital' },
                       patient: {
                         name: `${admission.patient.firstName} ${admission.patient.lastName}`,
@@ -518,6 +519,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                         notes: admission.notes,
                       },
                     });
+                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId, admissionId, type: 'ADMISSION_SUMMARY', content: admB64 }).catch(() => {});
                     toast.success('Admission Summary PDF downloaded');
                   } catch (e: any) {
                     console.error('Admission summary error:', e);
@@ -536,7 +538,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                   try {
                     const { generateGatePass } = await import('../../utils/gatePassGenerator');
                     const gBill = billData;
-                    generateGatePass({
+                    const gpB64 = generateGatePass({
                       hospital: { name: 'Hospital' },
                       patient: {
                         name: `${admission.patient.firstName} ${admission.patient.lastName}`,
@@ -560,6 +562,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                         paymentStatus: admission.paymentStatus || 'PENDING',
                       },
                     });
+                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId, admissionId, type: 'GATE_PASS', content: gpB64 }).catch(() => {});
                     toast.success('Gate Pass PDF downloaded');
                   } catch (e: any) {
                     console.error('Gate pass error:', e);
@@ -581,7 +584,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                     const { generateDischargeSummaryPDF } = await import('../../utils/dischargeSummaryGenerator');
                     const p = data.patient;
                     const age = p.dob ? `${new Date().getFullYear() - new Date(p.dob).getFullYear()} yrs` : 'N/A';
-                    generateDischargeSummaryPDF({
+                    const dsB64 = generateDischargeSummaryPDF({
                       hospital: { name: data.hospital?.name || 'Hospital', addressLine1: data.hospital?.addressLine1, city: data.hospital?.city, state: data.hospital?.state, phone: data.hospital?.phone, email: data.hospital?.email },
                       patient: { name: `${p.firstName} ${p.lastName}`, uhid: p.uhid, age, gender: p.gender || 'N/A', mobile: p.mobile || '', address: [p.addressLine1, p.city, p.state, p.pincode].filter(Boolean).join(', '), bloodGroup: p.bloodGroup },
                       admission: data.admission,
@@ -591,6 +594,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                       medications: data.medications || [],
                       billing: data.billing,
                     });
+                    documentService.persistDocument({ patientId: admission?.patient?.id || admission?.patientId || p.id, admissionId, type: 'DISCHARGE_SUMMARY', content: dsB64 }).catch(() => {});
                     toast.success('Discharge Summary PDF downloaded');
                   } catch (e: any) {
                     console.error('Discharge summary error:', e);
