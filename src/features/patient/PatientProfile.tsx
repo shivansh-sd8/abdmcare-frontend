@@ -3,14 +3,15 @@ import {
   Box, Typography, Paper, Tabs, Tab, Grid, Card, CardContent, Chip, Avatar,
   Table, TableBody, TableCell, TableHead, TableRow, Button,
   Skeleton, Alert, IconButton, Tooltip, alpha, Divider, LinearProgress,
-  CircularProgress, Collapse,
+  CircularProgress, Collapse, Dialog, DialogTitle, DialogContent, DialogActions,
+  FormControl, InputLabel, Select, MenuItem, TextField, FormGroup, FormControlLabel, Checkbox,
 } from '@mui/material';
 import {
   Person, LocalHospital, MonitorHeart, Receipt,
   Hotel, HealthAndSafety, CalendarToday, Phone, Bloodtype,
   ArrowBack, EventAvailable, TrendingUp, Home,
   ExpandMore, ExpandLess, Download, Verified, Description,
-  Assignment, CloudDownload,
+  Assignment, CloudDownload, Link as LinkIcon, AddCircleOutline,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import ehrService from '../../services/ehrService';
@@ -26,6 +27,8 @@ import { generatePatientReport } from '../../utils/patientReportGenerator';
 import documentService from '../../services/documentService';
 import FederatedRecords from '../hiu/FederatedRecords';
 import ConsentStatusChip from '../../components/ConsentStatusChip';
+import hipService from '../../services/hipService';
+import consentService from '../../services/consentService';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +41,57 @@ const fmt = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-di
 const fmtTime = (d: any) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const currency = (n: any) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
 
+// ── Care Contexts Section (direct API, not via encounters join) ───────────────
+
+const CareContextsSection: React.FC<{ patientId: string; refreshKey: any }> = ({ patientId, refreshKey }) => {
+  const [contexts, setContexts] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setLoading(true);
+    hipService.getCareContexts(patientId)
+      .then((res: any) => {
+        // api.get() unwraps response.data, so res = { success, message, data: [...] }
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        setContexts(list);
+      })
+      .catch(() => setContexts([]))
+      .finally(() => setLoading(false));
+  }, [patientId, refreshKey]);
+
+  if (loading) return <Box sx={{ p: 2 }}><CircularProgress size={20} /></Box>;
+
+  return (
+    <SectionCard title="Linked Care Contexts">
+      {contexts.length === 0
+        ? <EmptyState icon={<LinkIcon />} message="No care contexts yet — click 'Link Care Contexts' above" small />
+        : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {contexts.map((cc: any) => (
+              <Box key={cc.careContextId} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>{cc.display}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{cc.careContextId}</Typography>
+                  <Typography variant="caption" color="text.secondary">HIP: {cc.hipId}</Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  label={cc.linkStatus}
+                  color={cc.linkStatus === 'LINKED' ? 'success' : cc.linkStatus === 'FAILED' ? 'error' : 'warning'}
+                  variant={cc.linkStatus === 'LINKED' ? 'filled' : 'outlined'}
+                />
+              </Box>
+            ))}
+          </Box>
+        )
+      }
+    </SectionCard>
+  );
+};
+
 // ── Main Component ───────────────────────────────────────────────────────────
+
+const HI_TYPES = ['OPConsultation', 'Prescription', 'DiagnosticReport', 'DischargeSummary', 'ImmunizationRecord', 'HealthDocumentRecord'];
 
 const PatientProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,12 +100,81 @@ const PatientProfile: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
 
+  // Link Care Contexts dialog
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkingLoading, setLinkingLoading] = useState(false);
+
+  // Request Consent dialog
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(false);
+  const [consentForm, setConsentForm] = useState({
+    purpose: 'CAREMGT',
+    hiTypes: ['OPConsultation', 'Prescription', 'DiagnosticReport'],
+    dateRangeFrom: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dateRangeTo: new Date(Date.now() - 60 * 1000).toISOString().split('T')[0], // yesterday-safe: today minus 1 min
+  });
+
   useEffect(() => { if (id) fetchProfile(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchProfile = async () => {
     try { setLoading(true); const res: any = await ehrService.getPatientProfile(id!); setData(res.data?.data || res.data); }
     catch { toast.error('Failed to load patient profile'); }
     finally { setLoading(false); }
+  };
+
+  const handleLinkCareContexts = async () => {
+    const patient = data?.patient;
+    if (!patient) return;
+    setLinkingLoading(true);
+    try {
+      const allEncounters = data?.encounters || [];
+      const unlinked = allEncounters.filter((e: any) => !e.careContext || e.careContext?.linkStatus !== 'LINKED');
+      if (unlinked.length === 0) { toast.info('All encounters are already linked'); setLinkDialogOpen(false); return; }
+      const careContexts = unlinked.map((e: any) => ({
+        encounterId: e.id,
+        display: `${e.type === 'IPD' ? 'IPD' : 'OPD'} Visit — ${fmt(e.visitDate || e.createdAt)}`,
+      }));
+      const res = await hipService.addCareContexts(patient.id, careContexts);
+      const msg = res?.data?.message || '';
+      if (msg.toLowerCase().includes('awaiting') || msg.toLowerCase().includes('pending')) {
+        toast.info(`${careContexts.length} care context(s) registered — ABDM confirmation pending`);
+      } else {
+        toast.success(msg || `${careContexts.length} care context(s) linked to ABDM`);
+      }
+      setLinkDialogOpen(false);
+      fetchProfile();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to link care contexts');
+    } finally {
+      setLinkingLoading(false);
+    }
+  };
+
+  const handleRequestConsent = async () => {
+    const patient = data?.patient;
+    if (!patient) return;
+    const abhaId = patient.abhaRecord?.abhaAddress || patient.abhaAddress
+      || patient.abhaRecord?.abhaNumber || patient.abhaNumber || patient.abhaId;
+    if (!abhaId) { toast.error('Patient has no ABHA — cannot request consent'); return; }
+    setConsentLoading(true);
+    try {
+      await consentService.createConsentRequest({
+        patientAbhaId: abhaId,
+        purpose: consentForm.purpose,
+        hiTypes: consentForm.hiTypes,
+        dateRangeFrom: consentForm.dateRangeFrom,
+        dateRangeTo: consentForm.dateRangeTo,
+        requesterName: 'Doctor',
+        requesterId: 'DOCTOR',
+      });
+      toast.success('Consent request sent — patient will be notified on ABHA app');
+      setConsentDialogOpen(false);
+      fetchProfile();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send consent request');
+    } finally {
+      setConsentLoading(false);
+    }
   };
 
   if (loading) return <Box sx={{ p: 3 }}><Skeleton variant="rectangular" height={80} sx={{ mb: 2, borderRadius: 2 }} /><Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} /></Box>;
@@ -242,6 +364,35 @@ const PatientProfile: React.FC = () => {
 
           {/* ═══ Tab 3: ABHA & Consent ═══ */}
           <TabPanel value={tab} index={3}>
+            {/* Action Bar */}
+            <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                startIcon={<LinkIcon />}
+                size="small"
+                disabled={!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord}
+                onClick={() => setLinkDialogOpen(true)}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+              >
+                Link Care Contexts
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<AddCircleOutline />}
+                size="small"
+                color="primary"
+                disabled={!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord}
+                onClick={() => setConsentDialogOpen(true)}
+                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+              >
+                Request Consent
+              </Button>
+              {(!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord) && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                  Patient needs ABHA number to use ABDM features
+                </Typography>
+              )}
+            </Box>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <SectionCard title="ABHA Record">
@@ -265,7 +416,9 @@ const PatientProfile: React.FC = () => {
                     consents.map((c: any) => (
                       <Box key={c.id} sx={{ mb: 1.5, p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" fontWeight={600}>{c.purpose || 'Health Data Consent'}</Typography>
+                          <Typography variant="body2" fontWeight={600}>{
+                            ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string,string>)[c.purpose] || c.purpose || 'Health Data Consent'
+                          }</Typography>
                           <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
                         </Box>
                         <Typography variant="caption" color="text.secondary">{fmtTime(c.createdAt)}</Typography>
@@ -273,6 +426,11 @@ const PatientProfile: React.FC = () => {
                     ))
                   )}
                 </SectionCard>
+              </Grid>
+
+              {/* Care Contexts */}
+              <Grid item xs={12}>
+                <CareContextsSection patientId={patient.id} refreshKey={linkDialogOpen} />
               </Grid>
             </Grid>
           </TabPanel>
@@ -283,6 +441,123 @@ const PatientProfile: React.FC = () => {
           </TabPanel>
         </Box>
       </Paper>
+
+      {/* ── Link Care Contexts Dialog ── */}
+      <Dialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <LinkIcon color="primary" />
+            Link Care Contexts to ABDM
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This will link all unlinked visits/encounters for <strong>{patient.firstName} {patient.lastName}</strong> to their ABDM profile (ABHA: {patient.abhaRecord?.abhaNumber || patient.abhaNumber || patient.abhaRecord?.abhaAddress || patient.abhaAddress || patient.abhaId}).
+          </Alert>
+          <Typography variant="body2" color="text.secondary">
+            Linked care contexts allow the patient to share their health records stored here with any HIU (doctor/app) via ABDM consent flow.
+          </Typography>
+          <Box sx={{ mt: 2, p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>
+              Unlinked encounters: {(data?.encounters || []).filter((e: any) => !e.careContext || e.careContext?.linkStatus !== 'LINKED').length}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setLinkDialogOpen(false)} disabled={linkingLoading}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleLinkCareContexts}
+            disabled={linkingLoading}
+            startIcon={linkingLoading ? <CircularProgress size={16} /> : <LinkIcon />}
+          >
+            {linkingLoading ? 'Linking…' : 'Link Now'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Request Consent Dialog ── */}
+      <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AddCircleOutline color="primary" />
+            Request Health Data Consent
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            A consent request will be sent to <strong>{patient.firstName} {patient.lastName}</strong> on their ABHA app. They must approve it before data can be fetched.
+          </Alert>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Purpose</InputLabel>
+            <Select
+              value={consentForm.purpose}
+              label="Purpose"
+              onChange={(e) => setConsentForm(f => ({ ...f, purpose: e.target.value }))}
+            >
+              <MenuItem value="CAREMGT">Care Management</MenuItem>
+              <MenuItem value="BTG">Break the Glass</MenuItem>
+              <MenuItem value="PUBHLTH">Public Health</MenuItem>
+              <MenuItem value="HPAYMT">Healthcare Payment</MenuItem>
+              <MenuItem value="DSRCH">Disease Specific Healthcare Research</MenuItem>
+              <MenuItem value="PATRQT">Patient Requested</MenuItem>
+            </Select>
+          </FormControl>
+          <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Health Information Types
+          </Typography>
+          <FormGroup row sx={{ mb: 2 }}>
+            {HI_TYPES.map(t => (
+              <FormControlLabel
+                key={t}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={consentForm.hiTypes.includes(t)}
+                    onChange={(e) => setConsentForm(f => ({
+                      ...f,
+                      hiTypes: e.target.checked ? [...f.hiTypes, t] : f.hiTypes.filter(x => x !== t),
+                    }))}
+                  />
+                }
+                label={<Typography variant="caption">{t}</Typography>}
+              />
+            ))}
+          </FormGroup>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="From Date"
+              type="date"
+              size="small"
+              fullWidth
+              value={consentForm.dateRangeFrom}
+              onChange={(e) => setConsentForm(f => ({ ...f, dateRangeFrom: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="To Date"
+              type="date"
+              size="small"
+              fullWidth
+              value={consentForm.dateRangeTo}
+              onChange={(e) => setConsentForm(f => ({ ...f, dateRangeTo: e.target.value }))}
+              inputProps={{ max: new Date().toISOString().split('T')[0] }}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConsentDialogOpen(false)} disabled={consentLoading}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleRequestConsent}
+            disabled={consentLoading || consentForm.hiTypes.length === 0}
+            startIcon={consentLoading ? <CircularProgress size={16} /> : <AddCircleOutline />}
+          >
+            {consentLoading ? 'Sending…' : 'Send Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

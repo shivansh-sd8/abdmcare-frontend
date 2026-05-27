@@ -53,6 +53,10 @@ class HipService {
   async addCareContexts(patientId: string, careContexts: Array<{ encounterId: string; display: string }>) {
     return api.post(`${HIP_BASE}/patients/${patientId}/care-contexts`, { careContexts });
   }
+
+  async getCareContexts(patientId: string) {
+    return api.get(`${HIP_BASE}/patients/${patientId}/care-contexts`);
+  }
 }
 
 const hipService = new HipService();
