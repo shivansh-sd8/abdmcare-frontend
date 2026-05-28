@@ -127,9 +127,9 @@ const ConsentManagement: React.FC = () => {
       field: 'consentId',
       headerName: 'Consent ID',
       flex: 1,
-      minWidth: 150,
+      minWidth: 120,
       renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" fontWeight="500" color="primary">
+        <Typography variant="body2" fontWeight="500" color="primary" noWrap>
           {params.row.consentId}
         </Typography>
       ),
@@ -138,7 +138,7 @@ const ConsentManagement: React.FC = () => {
       field: 'patient',
       headerName: 'Patient',
       flex: 1,
-      minWidth: 180,
+      minWidth: 140,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Avatar sx={{ bgcolor: '#4A90E2', width: 36, height: 36 }}>
@@ -154,7 +154,7 @@ const ConsentManagement: React.FC = () => {
       field: 'purpose',
       headerName: 'Purpose',
       flex: 1,
-      minWidth: 150,
+      minWidth: 120,
       renderCell: (params: GridRenderCellParams) => (
         <Chip
           icon={<Description />}
@@ -167,7 +167,7 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'status',
       headerName: 'Status',
-      width: 140,
+      width: 120,
       renderCell: (params: GridRenderCellParams) => (
         <ConsentStatusChip
           consentId={params.row.id}
@@ -179,7 +179,7 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'elapsed',
       headerName: 'Elapsed',
-      width: 140,
+      width: 110,
       renderCell: (params: GridRenderCellParams) => {
         if (params.row.status !== 'REQUESTED') return <Typography variant="body2" color="text.secondary">—</Typography>;
         const created = params.row.createdAt ? new Date(params.row.createdAt) : null;
@@ -197,7 +197,7 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'createdAt',
       headerName: 'Created',
-      width: 130,
+      width: 110,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <CalendarToday sx={{ fontSize: 14, color: 'text.secondary' }} />
@@ -210,7 +210,7 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'expiresAt',
       headerName: 'Expires',
-      width: 130,
+      width: 110,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2" color="text.secondary">
           {params.row.expiresAt ? format(new Date(params.row.expiresAt), 'MMM dd, yyyy') : '-'}
@@ -220,7 +220,7 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 90,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -260,7 +260,7 @@ const ConsentManagement: React.FC = () => {
   ];
 
   return (
-    <Box>
+    <Box sx={{ overflow: 'hidden', maxWidth: '100%' }}>
       <Box sx={{
         display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
@@ -367,7 +367,8 @@ const ConsentManagement: React.FC = () => {
         width: '100%',
         borderRadius: 3,
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'auto',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
       }}>
         <DataGrid
           rows={filteredConsents}
@@ -377,7 +378,6 @@ const ConsentManagement: React.FC = () => {
             pagination: { paginationModel: { page: 0, pageSize: 10 } },
           }}
           pageSizeOptions={[10, 25, 50]}
-          checkboxSelection
           disableRowSelectionOnClick
           sx={{
             '& .MuiDataGrid-cell': { py: 2 },

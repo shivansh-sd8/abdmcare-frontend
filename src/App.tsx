@@ -35,6 +35,7 @@ const AdmissionList = React.lazy(() => import('./features/ipd/AdmissionList'));
 const WardManager = React.lazy(() => import('./features/ipd/WardManager'));
 const InvestigationQueue = React.lazy(() => import('./features/lab/InvestigationQueue'));
 const PrescriptionQueue = React.lazy(() => import('./features/pharmacy/PrescriptionQueue'));
+const MedicineList = React.lazy(() => import('./features/pharmacy/MedicineList'));
 const BillingDashboard = React.lazy(() => import('./features/billing/BillingDashboard'));
 const Login = React.lazy(() => import('./features/auth/Login'));
 const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword'));
@@ -219,6 +220,14 @@ const App: React.FC = () => {
               element={
                 <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
                   <PrescriptionQueue />
+                </RoleProtectedRoute>
+              } 
+            />
+            <Route 
+              path="pharmacy/medicines" 
+              element={
+                <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
+                  <MedicineList />
                 </RoleProtectedRoute>
               } 
             />

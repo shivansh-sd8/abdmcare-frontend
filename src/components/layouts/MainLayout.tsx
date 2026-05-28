@@ -39,6 +39,8 @@ import {
   LocalPharmacy,
   MeetingRoom,
   Receipt,
+  Inventory,
+  Hotel,
   DarkMode,
   LightMode,
   ExpandLess,
@@ -69,6 +71,8 @@ const getIconComponent = (iconName: string) => {
     LocalPharmacy: <LocalPharmacy />,
     MeetingRoom: <MeetingRoom />,
     Receipt: <Receipt />,
+    Inventory: <Inventory />,
+    Hotel: <Hotel />,
   };
   return iconMap[iconName] || <Dashboard />;
 };
@@ -441,7 +445,7 @@ const MainLayout: React.FC = () => {
 
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: { xs: 2, sm: 3, md: 4 }, pt: 0, minHeight: '100vh', bgcolor: 'background.default', width: '100%' }}
+        sx={{ flexGrow: 1, p: { xs: 2, sm: 3, md: 4 }, pt: 0, minHeight: '100vh', bgcolor: 'background.default', width: { xs: '100%', sm: `calc(100% - ${drawerWidth}px)` }, overflow: 'hidden' }}
       >
         <Toolbar sx={{ minHeight: '56px !important' }} />
         <Box sx={{ mt: 2, width: '100%', maxWidth: '1400px', mx: 'auto' }}>

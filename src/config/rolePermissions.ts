@@ -100,9 +100,15 @@ export const menuGroups: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'],
       },
       {
-        text: 'Pharmacy',
+        text: 'Dispense Queue',
         path: '/app/pharmacy',
         icon: 'LocalPharmacy',
+        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'Pharmacy Manager',
+        path: '/app/pharmacy/medicines',
+        icon: 'Inventory',
         roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
       },
     ],
@@ -117,9 +123,9 @@ export const menuGroups: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
       },
       {
-        text: 'Ward Manager',
+        text: 'Ward & Bed Manager',
         path: '/app/ward-manager',
-        icon: 'MeetingRoom',
+        icon: 'Hotel',
         roles: ['SUPER_ADMIN', 'ADMIN', 'NURSE'],
       },
     ],

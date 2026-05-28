@@ -11,6 +11,10 @@ const ipdService = {
     api.post(`/api/v1/ipd/wards/${wardId}/beds`, { bedNumber }),
   updateBedStatus: (bedId: string, status: string) =>
     api.put(`/api/v1/ipd/beds/${bedId}/status`, { status }),
+  deleteBed: (bedId: string) =>
+    api.delete(`/api/v1/ipd/beds/${bedId}`),
+  deleteWard: (wardId: string) =>
+    api.delete(`/api/v1/ipd/wards/${wardId}`),
 
   // ── Admissions ───────────────────────────────────────────────────────────
   listAdmissions: (params?: { status?: string; wardId?: string; page?: number; limit?: number }) =>
@@ -48,6 +52,18 @@ const ipdService = {
   // ── Collect partial payment during stay ────────────────────────────────
   collectPayment: (admissionId: string, data: { amount: number; paymentMethod: string; transactionRef?: string }) =>
     api.patch(`/api/v1/ipd/admissions/${admissionId}/collect-payment`, data),
+
+  // ── Bed Management (Admin) ────────────────────────────────────────────────
+  bulkCreateBeds: (wardId: string, data: any) =>
+    api.post(`/api/v1/ipd/wards/${wardId}/beds/bulk`, data),
+  updateBedDetails: (bedId: string, data: any) =>
+    api.put(`/api/v1/ipd/beds/${bedId}/details`, data),
+  transferBed: (data: any) =>
+    api.post('/api/v1/ipd/beds/transfer', data),
+  getTransferHistory: (admissionId: string) =>
+    api.get(`/api/v1/ipd/admissions/${admissionId}/transfers`),
+  getBedAnalytics: () =>
+    api.get('/api/v1/ipd/analytics/beds'),
 };
 
 export default ipdService;
