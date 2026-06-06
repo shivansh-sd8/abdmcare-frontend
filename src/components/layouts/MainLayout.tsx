@@ -96,7 +96,9 @@ const MainLayout: React.FC = () => {
       const fetchHospitalName = async () => {
         try {
           const response: any = await api.get(`/api/v1/hospitals/${user.hospitalId}`);
-          setHospitalName(response.data?.name || '');
+          const hospital = response.data || {};
+          setHospitalName(hospital.name || '');
+          localStorage.setItem('hospital', JSON.stringify(hospital));
         } catch (err) {
           console.error('Error fetching hospital:', err);
         }

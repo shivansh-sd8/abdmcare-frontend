@@ -141,6 +141,25 @@ const PatientProfile: React.FC = () => {
       } else {
         toast.success(msg || `${careContexts.length} care context(s) linked to ABDM`);
       }
+
+      // Notify ABDM about newly linked care contexts
+      const abhaAddr = patient.abhaRecord?.abhaAddress || patient.abhaAddress || '';
+      const patientRef = patient.uhid || patient.id;
+      if (abhaAddr) {
+        for (const cc of careContexts) {
+          try {
+            await hipService.linkContextNotify({
+              abhaAddress: abhaAddr,
+              careContextReference: cc.encounterId,
+              patientReference: patientRef,
+              hiTypes: ['OPConsultation', 'Prescription', 'DiagnosticReport'],
+            });
+          } catch {
+            // Non-critical — notification may fail silently
+          }
+        }
+      }
+
       setLinkDialogOpen(false);
       fetchProfile();
     } catch (err: any) {

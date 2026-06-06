@@ -15,6 +15,24 @@ import {
   Avatar,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormControlLabel,
+  Checkbox,
+  FormGroup,
+  CircularProgress,
+  Divider,
+  Alert,
+  Autocomplete,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
 } from '@mui/material';
 import {
   Add,
@@ -29,9 +47,11 @@ import {
   Visibility,
   Block,
   AccessTime,
+  Close,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import consentService from '../../services/consentService';
+import patientService from '../../services/patientService';
 import ConsentStatusChip from '../../components/ConsentStatusChip';
 import { toast } from 'react-toastify';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -50,22 +70,87 @@ function getStatusConfig(status: string) {
   return STATUS_CONFIG[status?.toUpperCase()] || { color: '#4A90E2', icon: <VerifiedUser fontSize="small" /> };
 }
 
+const HI_TYPES = ['OPConsultation', 'Prescription', 'DiagnosticReport', 'DischargeSummary', 'ImmunizationRecord', 'HealthDocumentRecord'];
+
+const PURPOSE_LABELS: Record<string, string> = {
+  CAREMGT: 'Care Management',
+  BTG: 'Break the Glass',
+  PUBHLTH: 'Public Health',
+  HPAYMT: 'Healthcare Payment',
+  DSRCH: 'Disease Specific Research',
+  PATRQT: 'Patient Requested',
+  CARE_MANAGEMENT: 'Care Management',
+  BREAK_THE_GLASS: 'Break the Glass',
+  PUBLIC_HEALTH: 'Public Health',
+  DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research',
+};
+
 const ConsentManagement: React.FC = () => {
   const [consents, setConsents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({ total: 0, granted: 0, requested: 0, expired: 0 });
 
+  // New Consent Request dialog state
+  const [newConsentOpen, setNewConsentOpen] = useState(false);
+  const [newConsentLoading, setNewConsentLoading] = useState(false);
+  const [newConsentForm, setNewConsentForm] = useState({
+    patientAbhaId: '',
+    purpose: 'CAREMGT',
+    hiTypes: ['OPConsultation', 'Prescription', 'DiagnosticReport'] as string[],
+    dateRangeFrom: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dateRangeTo: new Date().toISOString().split('T')[0],
+    requesterName: '',
+    requesterId: '',
+  });
+
+  // Patient search state for autocomplete
+  const [patientOptions, setPatientOptions] = useState<any[]>([]);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const patientSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePatientSearch = useCallback((query: string) => {
+    if (patientSearchTimer.current) clearTimeout(patientSearchTimer.current);
+    if (!query || query.length < 2) { setPatientOptions([]); return; }
+    patientSearchTimer.current = setTimeout(async () => {
+      setPatientSearchLoading(true);
+      try {
+        const res = await patientService.searchPatients({ search: query, abhaLinked: true, limit: 20 }) as any;
+        const patients = res?.data?.patients || res?.data || res?.patients || [];
+        setPatientOptions(Array.isArray(patients) ? patients : []);
+      } catch { setPatientOptions([]); }
+      finally { setPatientSearchLoading(false); }
+    }, 350);
+  }, []);
+
+  // View Details dialog state
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [selectedConsent, setSelectedConsent] = useState<any>(null);
+  const [artefactData, setArtefactData] = useState<any>(null);
+
   // Track previous statuses for change detection
   const prevStatusMap = useRef<Record<string, string>>({});
 
-  const computeStats = useCallback((data: any[]) => {
-    setStats({
-      total: data.length,
-      granted: data.filter((c: any) => c.status === 'GRANTED').length,
-      requested: data.filter((c: any) => c.status === 'REQUESTED').length,
-      expired: data.filter((c: any) => c.status === 'EXPIRED').length,
-    });
+  const fetchStats = useCallback(async (fallbackData?: any[]) => {
+    try {
+      const res = await consentService.getConsentStats() as any;
+      const s = res?.data || res;
+      if (s && typeof s.total === 'number') {
+        setStats({ total: s.total, granted: s.granted || 0, requested: s.pending || s.requested || 0, expired: s.expired || 0 });
+        return;
+      }
+    } catch { /* fall through to client-side */ }
+    // Client-side fallback
+    if (fallbackData) {
+      setStats({
+        total: fallbackData.length,
+        granted: fallbackData.filter((c: any) => c.status === 'GRANTED').length,
+        requested: fallbackData.filter((c: any) => c.status === 'REQUESTED').length,
+        expired: fallbackData.filter((c: any) => c.status === 'EXPIRED').length,
+      });
+    }
   }, []);
 
   const fetchConsents = useCallback(async (isBackground = false) => {
@@ -91,13 +176,13 @@ const ConsentManagement: React.FC = () => {
       prevStatusMap.current = newMap;
 
       setConsents(data);
-      computeStats(data);
+      fetchStats(data);
     } catch {
       if (!isBackground) toast.error('Failed to load consents');
     } finally {
       if (!isBackground) setLoading(false);
     }
-  }, [computeStats]);
+  }, [fetchStats]);
 
   useEffect(() => {
     fetchConsents(false);
@@ -119,6 +204,67 @@ const ConsentManagement: React.FC = () => {
       fetchConsents(false);
     } catch {
       toast.error('Failed to cancel consent request');
+    }
+  };
+
+  const handleOpenNewConsent = () => {
+    const userData = JSON.parse(localStorage.getItem('user') || '{}');
+    setNewConsentForm(f => ({
+      ...f,
+      patientAbhaId: '',
+      requesterName: userData?.name || userData?.firstName || 'Doctor',
+      requesterId: userData?.id || 'DOCTOR',
+    }));
+    setSelectedPatient(null);
+    setPatientOptions([]);
+    setNewConsentOpen(true);
+  };
+
+  const handleCreateNewConsent = async () => {
+    if (!newConsentForm.patientAbhaId.trim()) {
+      toast.warning('Please enter patient ABHA ID or address');
+      return;
+    }
+    if (newConsentForm.hiTypes.length === 0) {
+      toast.warning('Please select at least one health information type');
+      return;
+    }
+    setNewConsentLoading(true);
+    try {
+      await consentService.createConsentRequest({
+        patientAbhaId: newConsentForm.patientAbhaId.trim(),
+        purpose: newConsentForm.purpose,
+        hiTypes: newConsentForm.hiTypes,
+        dateRangeFrom: newConsentForm.dateRangeFrom,
+        dateRangeTo: newConsentForm.dateRangeTo,
+        requesterName: newConsentForm.requesterName,
+        requesterId: newConsentForm.requesterId,
+      });
+      toast.success('Consent request sent — patient will be notified on ABHA app');
+      setNewConsentOpen(false);
+      fetchConsents(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to create consent request');
+    } finally {
+      setNewConsentLoading(false);
+    }
+  };
+
+  const handleViewDetails = async (consent: any) => {
+    setSelectedConsent(consent);
+    setArtefactData(null);
+    setDetailsOpen(true);
+
+    if (consent.status === 'GRANTED' || consent.abdmConsentId) {
+      setDetailsLoading(true);
+      try {
+        const res = await consentService.fetchConsentArtefact(consent.id) as any;
+        setArtefactData(res?.data || res);
+      } catch {
+        // Artefact may not be available yet
+      } finally {
+        setDetailsLoading(false);
+      }
     }
   };
 
@@ -225,7 +371,7 @@ const ConsentManagement: React.FC = () => {
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Tooltip title="View Details">
-            <IconButton size="small" color="primary">
+            <IconButton size="small" color="primary" onClick={() => handleViewDetails(params.row)}>
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -289,6 +435,7 @@ const ConsentManagement: React.FC = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
+          onClick={handleOpenNewConsent}
           sx={{
             background: 'linear-gradient(135deg, #50C878 0%, #45B369 100%)',
             '&:hover': { background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)' },
@@ -385,6 +532,349 @@ const ConsentManagement: React.FC = () => {
           }}
         />
       </Paper>
+
+      {/* ── New Consent Request Dialog ──────────────────────────────── */}
+      <Dialog open={newConsentOpen} onClose={() => setNewConsentOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Add color="primary" />
+              New Consent Request
+            </Box>
+            <IconButton onClick={() => setNewConsentOpen(false)} size="small"><Close /></IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            A consent request will be sent to the patient on their ABHA app. They must approve it before health data can be fetched.
+          </Alert>
+
+          <Autocomplete
+            freeSolo
+            options={patientOptions}
+            loading={patientSearchLoading}
+            value={selectedPatient}
+            getOptionLabel={(option: any) => {
+              if (typeof option === 'string') return option;
+              const name = `${option.firstName || ''} ${option.lastName || ''}`.trim();
+              const abha = option.abhaRecord?.abhaAddress || option.abhaRecord?.abhaNumber || option.abhaAddress || option.abhaNumber || option.abhaId || '';
+              return abha ? `${name} (${abha})` : name;
+            }}
+            isOptionEqualToValue={(opt: any, val: any) => opt?.id === val?.id}
+            filterOptions={(x) => x}
+            onInputChange={(_e, value, reason) => {
+              if (reason === 'input') {
+                handlePatientSearch(value);
+                setNewConsentForm(f => ({ ...f, patientAbhaId: value }));
+              }
+            }}
+            onChange={(_e, value) => {
+              if (value && typeof value !== 'string') {
+                setSelectedPatient(value);
+                const abhaId = value.abhaRecord?.abhaAddress || value.abhaRecord?.abhaNumber || value.abhaAddress || value.abhaNumber || value.abhaId || '';
+                setNewConsentForm(f => ({ ...f, patientAbhaId: abhaId }));
+              } else {
+                setSelectedPatient(null);
+                setNewConsentForm(f => ({ ...f, patientAbhaId: typeof value === 'string' ? value : '' }));
+              }
+            }}
+            renderOption={(props, option: any) => (
+              <ListItem {...props} key={option.id} dense>
+                <ListItemAvatar>
+                  <Avatar sx={{ bgcolor: '#4A90E2', width: 32, height: 32, fontSize: 14 }}>
+                    {(option.firstName?.[0] || '')}{(option.lastName?.[0] || '')}
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={
+                    <Typography variant="body2" fontWeight={600}>
+                      {option.firstName} {option.lastName}
+                      {option.uhid && <Chip label={option.uhid} size="small" sx={{ ml: 1, height: 18, fontSize: 10 }} />}
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography variant="caption" color="text.secondary">
+                      {option.abhaRecord?.abhaAddress || option.abhaRecord?.abhaNumber || option.abhaAddress || option.abhaNumber || option.abhaId || 'No ABHA'}
+                      {option.mobile ? ` · ${option.mobile}` : ''}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                required
+                label="Search Patient or Enter ABHA ID"
+                placeholder="Type patient name, UHID, or ABHA address..."
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <>
+                      <InputAdornment position="start"><Search /></InputAdornment>
+                      {params.InputProps.startAdornment}
+                    </>
+                  ),
+                  endAdornment: (
+                    <>
+                      {patientSearchLoading ? <CircularProgress size={18} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+            sx={{ mb: 2 }}
+          />
+
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Purpose</InputLabel>
+            <Select
+              value={newConsentForm.purpose}
+              label="Purpose"
+              onChange={(e) => setNewConsentForm(f => ({ ...f, purpose: e.target.value }))}
+            >
+              <MenuItem value="CAREMGT">Care Management</MenuItem>
+              <MenuItem value="BTG">Break the Glass</MenuItem>
+              <MenuItem value="PUBHLTH">Public Health</MenuItem>
+              <MenuItem value="HPAYMT">Healthcare Payment</MenuItem>
+              <MenuItem value="DSRCH">Disease Specific Healthcare Research</MenuItem>
+              <MenuItem value="PATRQT">Patient Requested</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Typography variant="caption" fontWeight={600} color="text.secondary" display="block" sx={{ mb: 1 }}>
+            Health Information Types
+          </Typography>
+          <FormGroup row sx={{ mb: 2 }}>
+            {HI_TYPES.map(t => (
+              <FormControlLabel
+                key={t}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={newConsentForm.hiTypes.includes(t)}
+                    onChange={(e) => setNewConsentForm(f => ({
+                      ...f,
+                      hiTypes: e.target.checked ? [...f.hiTypes, t] : f.hiTypes.filter(x => x !== t),
+                    }))}
+                  />
+                }
+                label={<Typography variant="caption">{t}</Typography>}
+              />
+            ))}
+          </FormGroup>
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="From Date"
+              type="date"
+              size="small"
+              fullWidth
+              value={newConsentForm.dateRangeFrom}
+              onChange={(e) => setNewConsentForm(f => ({ ...f, dateRangeFrom: e.target.value }))}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="To Date"
+              type="date"
+              size="small"
+              fullWidth
+              value={newConsentForm.dateRangeTo}
+              onChange={(e) => setNewConsentForm(f => ({ ...f, dateRangeTo: e.target.value }))}
+              inputProps={{ max: new Date().toISOString().split('T')[0] }}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setNewConsentOpen(false)} disabled={newConsentLoading}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateNewConsent}
+            disabled={newConsentLoading || !newConsentForm.patientAbhaId.trim() || newConsentForm.hiTypes.length === 0}
+            startIcon={newConsentLoading ? <CircularProgress size={16} /> : <Add />}
+            sx={{
+              background: 'linear-gradient(135deg, #50C878 0%, #45B369 100%)',
+              '&:hover': { background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)' },
+            }}
+          >
+            {newConsentLoading ? 'Sending...' : 'Send Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── View Details Dialog ─────────────────────────────────────── */}
+      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Description color="primary" />
+              Consent Details
+            </Box>
+            <IconButton onClick={() => setDetailsOpen(false)} size="small"><Close /></IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedConsent && (
+            <Box>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Consent ID</Typography>
+                  <Typography variant="body2" fontWeight={600}>{selectedConsent.consentId || selectedConsent.id}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Status</Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <ConsentStatusChip consentId={selectedConsent.id} initialStatus={selectedConsent.status || 'REQUESTED'} />
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Patient</Typography>
+                  <Typography variant="body2" fontWeight={500}>
+                    {selectedConsent.patient?.firstName} {selectedConsent.patient?.lastName}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Purpose</Typography>
+                  <Typography variant="body2" fontWeight={500}>
+                    {PURPOSE_LABELS[selectedConsent.purpose] || selectedConsent.purpose || '—'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Created</Typography>
+                  <Typography variant="body2">
+                    {selectedConsent.createdAt ? format(new Date(selectedConsent.createdAt), 'MMM dd, yyyy HH:mm') : '—'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="caption" color="text.secondary">Expires</Typography>
+                  <Typography variant="body2">
+                    {selectedConsent.expiresAt ? format(new Date(selectedConsent.expiresAt), 'MMM dd, yyyy HH:mm') : '—'}
+                  </Typography>
+                </Grid>
+                {selectedConsent.grantedAt && (
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" color="text.secondary">Granted At</Typography>
+                    <Typography variant="body2">{format(new Date(selectedConsent.grantedAt), 'MMM dd, yyyy HH:mm')}</Typography>
+                  </Grid>
+                )}
+                {selectedConsent.revokedAt && (
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="caption" color="text.secondary">Revoked At</Typography>
+                    <Typography variant="body2">{format(new Date(selectedConsent.revokedAt), 'MMM dd, yyyy HH:mm')}</Typography>
+                  </Grid>
+                )}
+                {selectedConsent.hiTypes && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary">Health Info Types</Typography>
+                    <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(Array.isArray(selectedConsent.hiTypes) ? selectedConsent.hiTypes : []).map((t: string) => (
+                        <Chip key={t} label={t} size="small" variant="outlined" />
+                      ))}
+                    </Box>
+                  </Grid>
+                )}
+                {selectedConsent.abdmRequestId && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary">ABDM Request ID</Typography>
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>{selectedConsent.abdmRequestId}</Typography>
+                  </Grid>
+                )}
+                {selectedConsent.abdmConsentId && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary">ABDM Consent ID</Typography>
+                    <Typography variant="body2" sx={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>{selectedConsent.abdmConsentId}</Typography>
+                  </Grid>
+                )}
+              </Grid>
+
+              {/* Artefact Section */}
+              {detailsLoading && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 2 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">Loading consent artefact...</Typography>
+                </Box>
+              )}
+
+              {artefactData && (
+                <Box>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Consent Artefact</Typography>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha('#4A90E2', 0.03) }}>
+                    <Grid container spacing={1.5}>
+                      {artefactData.consentId && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">Artefact Consent ID</Typography>
+                          <Typography variant="body2" sx={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>{artefactData.consentId}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.permission && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">Access Mode</Typography>
+                          <Typography variant="body2">{artefactData.permission?.accessMode || '—'}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.permission?.dateRange && (
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="caption" color="text.secondary">Data From</Typography>
+                          <Typography variant="body2">{artefactData.permission.dateRange.from ? format(new Date(artefactData.permission.dateRange.from), 'MMM dd, yyyy') : '—'}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.permission?.dateRange && (
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="caption" color="text.secondary">Data To</Typography>
+                          <Typography variant="body2">{artefactData.permission.dateRange.to ? format(new Date(artefactData.permission.dateRange.to), 'MMM dd, yyyy') : '—'}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.hiu && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">HIU</Typography>
+                          <Typography variant="body2">{artefactData.hiu?.name || artefactData.hiu?.id || '—'}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.hip && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">HIP</Typography>
+                          <Typography variant="body2">{artefactData.hip?.name || artefactData.hip?.id || '—'}</Typography>
+                        </Grid>
+                      )}
+                      {artefactData.hiTypes && (
+                        <Grid item xs={12}>
+                          <Typography variant="caption" color="text.secondary">HI Types (Artefact)</Typography>
+                          <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {artefactData.hiTypes.map((t: string) => (
+                              <Chip key={t} label={t} size="small" color="primary" variant="outlined" />
+                            ))}
+                          </Box>
+                        </Grid>
+                      )}
+                    </Grid>
+                  </Paper>
+                </Box>
+              )}
+
+              {!detailsLoading && !artefactData && selectedConsent.status !== 'GRANTED' && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Consent artefact will be available once the consent is granted by the patient.
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          {selectedConsent?.status === 'REQUESTED' && (
+            <Button
+              color="error"
+              variant="outlined"
+              onClick={() => { handleCancelConsent(selectedConsent.id); setDetailsOpen(false); }}
+            >
+              Cancel Request
+            </Button>
+          )}
+          <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

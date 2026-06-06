@@ -84,6 +84,7 @@ class ApiService {
             localStorage.removeItem('token');
             localStorage.removeItem('refreshToken');
             localStorage.removeItem('user');
+            localStorage.removeItem('hospital');
             // Use hash-based flag to prevent redirect loops
             if (!window.location.pathname.includes('/login')) {
               window.location.href = '/login';

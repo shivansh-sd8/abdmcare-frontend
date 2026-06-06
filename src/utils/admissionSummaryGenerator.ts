@@ -3,7 +3,12 @@
  * Generates a summary document when a patient is admitted to IPD.
  */
 import jsPDF from 'jspdf';
-import { format } from 'date-fns';
+import {
+  C, pdfToBase64,
+  drawHeaderBand, drawControlStrip, sectionBand,
+  drawInfoTable, drawFooter, formatDateTime,
+  drawBillingSummaryRow, drawSignatureBlock,
+} from './pdfCommon';
 
 export interface AdmissionSummaryData {
   hospital: {
@@ -12,6 +17,7 @@ export interface AdmissionSummaryData {
     city?: string;
     state?: string;
     phone?: string;
+    email?: string;
   };
   patient: {
     name: string;
@@ -38,121 +44,66 @@ export interface AdmissionSummaryData {
     name: string;
     specialization?: string;
   };
+  generatedBy?: string;
 }
 
 export function generateAdmissionSummary(data: AdmissionSummaryData): string {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 15;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  let y: number;
 
-  // Hospital Header
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(data.hospital.name, pageWidth / 2, y, { align: 'center' });
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const addrParts = [data.hospital.addressLine1, data.hospital.city, data.hospital.state].filter(Boolean);
-  if (addrParts.length) {
-    doc.text(addrParts.join(', '), pageWidth / 2, y, { align: 'center' });
-    y += 4;
-  }
-  if (data.hospital.phone) {
-    doc.text(`Phone: ${data.hospital.phone}`, pageWidth / 2, y, { align: 'center' });
-    y += 4;
-  }
+  // ── Header band ───────────────────────────────────────────────────────
+  y = drawHeaderBand(doc, data.hospital, 'Admission Summary');
 
-  // Title
-  y += 4;
-  doc.setDrawColor(41, 128, 185);
-  doc.setLineWidth(0.5);
-  doc.line(15, y, pageWidth - 15, y);
-  y += 6;
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(41, 128, 185);
-  doc.text('ADMISSION SUMMARY', pageWidth / 2, y, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 4;
-  doc.line(15, y, pageWidth - 15, y);
-  y += 8;
-
-  const addRow = (label: string, value: string, xLabel = 15, xValue = 65) => {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(label, xLabel, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(value || '—', xValue, y);
-    y += 6;
-  };
-
-  // Patient Details
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Patient Details', 15, y);
-  y += 6;
-
-  addRow('Name:', data.patient.name);
-  addRow('UHID:', data.patient.uhid);
-  if (data.patient.gender || data.patient.age) {
-    addRow('Gender / Age:', `${data.patient.gender || '—'} / ${data.patient.age || '—'}`);
-  }
-  if (data.patient.mobile) addRow('Mobile:', data.patient.mobile);
-  if (data.patient.bloodGroup) addRow('Blood Group:', data.patient.bloodGroup);
-  if (data.patient.address) addRow('Address:', data.patient.address);
-
+  // ── Control strip ─────────────────────────────────────────────────────
+  y = drawControlStrip(
+    doc, y,
+    `Admission No: ${data.admission.admissionNumber}`,
+    `Admitted: ${formatDateTime(data.admission.admittedAt)}`,
+  );
   y += 4;
 
-  // Admission Details
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Admission Details', 15, y);
-  y += 6;
+  // ── Patient Information ───────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Patient Information');
+  y = drawInfoTable(doc, y, [
+    ['Name', data.patient.name || '—', 'UHID', data.patient.uhid || '—'],
+    ['Age / Gender', `${data.patient.age || '—'} / ${data.patient.gender || '—'}`, 'Contact', data.patient.mobile || '—'],
+    ['Blood Group', data.patient.bloodGroup || '—', 'Address', data.patient.address || '—'],
+  ]);
 
-  addRow('Admission No:', data.admission.admissionNumber);
-  addRow('Admitted On:', format(new Date(data.admission.admittedAt), 'dd MMM yyyy, hh:mm a'));
-  if (data.admission.admittedBy) addRow('Admitted By:', data.admission.admittedBy);
-  addRow('Ward:', data.admission.wardName);
-  if (data.admission.bedNumber) addRow('Bed:', data.admission.bedNumber);
-  addRow('Daily Charges:', `Rs. ${data.admission.dailyCharges.toLocaleString('en-IN')}`);
+  // ── Admission Details ─────────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Admission Details');
+  y = drawInfoTable(doc, y, [
+    ['Admission No', data.admission.admissionNumber, 'Ward / Bed', `${data.admission.wardName}${data.admission.bedNumber ? ` / Bed ${data.admission.bedNumber}` : ''}`],
+    ['Admitted On', formatDateTime(data.admission.admittedAt), 'Admitted By', data.admission.admittedBy || '—'],
+    ['Daily Charges', `₹${data.admission.dailyCharges.toLocaleString('en-IN')}`, 'Treating Doctor', data.doctor ? `${data.doctor.name}${data.doctor.specialization ? ` (${data.doctor.specialization})` : ''}` : '—'],
+  ]);
 
+  // ── Clinical Details ──────────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Clinical Details', C.teal);
+  y += 1;
+  const clinicalRows: [string, string, string, string][] = [
+    ['Reason', data.admission.admissionReason || '—', 'Diagnosis', data.admission.diagnosis || '—'],
+  ];
+  if (data.admission.notes) {
+    clinicalRows.push(['Notes', data.admission.notes, '', '']);
+  }
+  y = drawInfoTable(doc, y, clinicalRows);
+
+  // ── Payment Details ───────────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Payment Details', C.amber);
+  y = drawBillingSummaryRow(doc, y, 'Daily Charges', `₹${data.admission.dailyCharges.toLocaleString('en-IN')}`, false);
+  y = drawBillingSummaryRow(doc, y, 'Advance Paid', `₹${data.admission.advancePaid.toLocaleString('en-IN')}`, true);
+  y += 4;
+
+  // ── Signature block ───────────────────────────────────────────────────
   if (data.doctor) {
-    addRow('Treating Doctor:', `${data.doctor.name}${data.doctor.specialization ? ` (${data.doctor.specialization})` : ''}`);
+    y = drawSignatureBlock(doc, y, data.doctor.name, data.doctor.specialization);
   }
 
-  y += 4;
+  // ── Footer ────────────────────────────────────────────────────────────
+  drawFooter(doc, data.generatedBy);
 
-  // Clinical Details
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Clinical Details', 15, y);
-  y += 6;
-
-  if (data.admission.admissionReason) addRow('Reason:', data.admission.admissionReason);
-  if (data.admission.diagnosis) addRow('Diagnosis:', data.admission.diagnosis);
-  if (data.admission.notes) addRow('Notes:', data.admission.notes);
-
-  y += 4;
-
-  // Payment Details
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Payment Details', 15, y);
-  y += 6;
-
-  addRow('Advance Paid:', `Rs. ${data.admission.advancePaid.toLocaleString('en-IN')}`);
-
-  // Footer
-  y += 10;
-  doc.setDrawColor(200, 200, 200);
-  doc.line(15, y, pageWidth - 15, y);
-  y += 6;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.text(`Generated on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}`, 15, y);
-  doc.text('This is a computer-generated document.', pageWidth - 15, y, { align: 'right' });
-
-  const base64 = doc.output('base64');
+  const base64 = pdfToBase64(doc);
   doc.save(`Admission_Summary_${data.admission.admissionNumber}.pdf`);
   return base64;
 }

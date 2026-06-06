@@ -7,12 +7,14 @@ import {
 import {
   QrCodeScanner, CameraAlt, Stop, CheckCircle, PersonAdd,
   ContentCopy, Refresh, HealthAndSafety, Search, Person, Visibility,
+  Sms,
 } from '@mui/icons-material';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
+import hipService from '../../services/hipService';
 
 interface ScanResult {
   hidn?: string;
@@ -525,7 +527,7 @@ const ScanAndShare: React.FC = () => {
                       </Box>
                     )}
 
-                    <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                    <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                       <Button variant="contained" color="success" onClick={() => navigate('/app/patients', { state: { highlightPatient: lookupResult.patient.id } })}>
                         View Patient
                       </Button>
@@ -534,6 +536,23 @@ const ScanAndShare: React.FC = () => {
                       })}>
                         Schedule Appointment
                       </Button>
+                      {lookupResult.patient?.mobile && (
+                        <Button
+                          variant="outlined"
+                          color="info"
+                          startIcon={<Sms />}
+                          onClick={async () => {
+                            try {
+                              await hipService.smsNotify(lookupResult.patient.mobile);
+                              toast.success('ABDM deep-link SMS sent to patient');
+                            } catch {
+                              toast.error('Failed to send SMS notification');
+                            }
+                          }}
+                        >
+                          Send ABDM SMS
+                        </Button>
+                      )}
                     </Box>
                   </>
                 ) : (

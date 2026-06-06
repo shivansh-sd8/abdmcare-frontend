@@ -14,6 +14,7 @@ import {
 import { toast } from 'react-toastify';
 import { useNavigate, useLocation } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
+import hipService from '../../services/hipService';
 import ScanAndShare from './ScanAndShare';
 import PatientCheckIn from './PatientCheckIn';
 
@@ -34,6 +35,23 @@ const AbhaManagement: React.FC = () => {
   const routeState = location.state as any;
 
   const initialTab = routeState?.mode === 'link' ? 1 : routeState?.tab === 'scan' ? 2 : routeState?.tab === 'checkin' ? 3 : 0;
+  const [hipRegistering, setHipRegistering] = useState(false);
+
+  // Check if user is admin for HIP register visibility
+  const userData = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(userData?.role);
+
+  const handleHipRegister = async () => {
+    setHipRegistering(true);
+    try {
+      const res = await hipService.registerHipService() as any;
+      toast.success(res?.data?.message || 'HIP/HFR service registered with ABDM successfully');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to register HIP service');
+    } finally {
+      setHipRegistering(false);
+    }
+  };
   const [tabValue, setTabValue] = useState(initialTab);
   const [enrollMethod, setEnrollMethod] = useState<'aadhaar' | 'dl'>('aadhaar');
   const [activeStep, setActiveStep] = useState(0);
@@ -686,11 +704,29 @@ const AbhaManagement: React.FC = () => {
               </Typography>
             </Box>
           </Box>
-          <Chip
-            icon={<HealthAndSafety sx={{ color: '#fff !important' }} />}
-            label="ABDM V3"
-            sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {isAdmin && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleHipRegister}
+                disabled={hipRegistering}
+                startIcon={hipRegistering ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <HealthAndSafety />}
+                sx={{
+                  color: '#fff', borderColor: 'rgba(255,255,255,0.4)',
+                  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
+                  textTransform: 'none', fontWeight: 600,
+                }}
+              >
+                {hipRegistering ? 'Registering...' : 'Register HIP'}
+              </Button>
+            )}
+            <Chip
+              icon={<HealthAndSafety sx={{ color: '#fff !important' }} />}
+              label="ABDM V3"
+              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
+            />
+          </Box>
         </Box>
       </Paper>
 

@@ -48,6 +48,7 @@ import { toast } from 'react-toastify';
 import { generateOPDCardPDF, HospitalInfo, ConsultationInfo } from '../../utils/pdfGenerator';
 import documentService from '../../services/documentService';
 import encounterService from '../../services/encounterService';
+import ipdService from '../../services/ipdService';
 import OPDCardDialog from '../../components/OPDCardDialog';
 
 const STATUS_OPTIONS = [
@@ -80,6 +81,10 @@ const AppointmentList: React.FC = () => {
     upcoming: 0,
     completed: 0,
   });
+
+  // Track which patients are already admitted (ADMITTED or DISCHARGE_READY)
+  const [admittedPatientIds, setAdmittedPatientIds] = useState<Set<string>>(new Set());
+  const [admissionByPatientId, setAdmissionByPatientId] = useState<Record<string, any>>({});
 
   // Refs so the fetch callback always reads latest values without re-creating
   const statusRef = useRef(statusFilter);
@@ -136,6 +141,27 @@ const AppointmentList: React.FC = () => {
 
   useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  // Fetch active admissions to mark already-admitted patients
+  useEffect(() => {
+    const fetchAdmitted = async () => {
+      try {
+        const [admRes, drRes] = await Promise.all([
+          ipdService.listAdmissions({ status: 'ADMITTED' }) as any,
+          ipdService.listAdmissions({ status: 'DISCHARGE_READY' }) as any,
+        ]);
+        const all = [
+          ...(admRes.data?.data?.admissions || admRes.data?.admissions || []),
+          ...(drRes.data?.data?.admissions || drRes.data?.admissions || []),
+        ];
+        const map: Record<string, any> = {};
+        for (const a of all) { if (a.patient?.id) map[a.patient.id] = a; }
+        setAdmittedPatientIds(new Set(Object.keys(map)));
+        setAdmissionByPatientId(map);
+      } catch { /* silent */ }
+    };
+    fetchAdmitted();
+  }, [fetchKey]);
 
   // When filters change → reset to page 0 and trigger a single fetch
   useEffect(() => {
@@ -316,21 +342,37 @@ const AppointmentList: React.FC = () => {
       headerName: 'Patient',
       flex: 1,
       minWidth: 150,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar sx={{ bgcolor: '#4A90E2', width: 36, height: 36 }}>
-            <Person fontSize="small" />
-          </Avatar>
-          <Box>
-            <Typography variant="body2" fontWeight="500">
-              {params.row.patient?.firstName} {params.row.patient?.lastName}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {params.row.patient?.uhid || ''}
-            </Typography>
+      renderCell: (params: GridRenderCellParams) => {
+        const isAdmitted = admittedPatientIds.has(params.row.patient?.id);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ bgcolor: isAdmitted ? '#F39C12' : '#4A90E2', width: 36, height: 36 }}>
+              {isAdmitted ? <AdmitIcon fontSize="small" /> : <Person fontSize="small" />}
+            </Avatar>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2" fontWeight="500">
+                  {params.row.patient?.firstName} {params.row.patient?.lastName}
+                </Typography>
+                {isAdmitted && (
+                  <Chip
+                    label="IPD"
+                    size="small"
+                    sx={{
+                      height: 18, fontSize: '0.6rem', fontWeight: 700,
+                      bgcolor: alpha('#F39C12', 0.15), color: '#F39C12',
+                      border: '1px solid', borderColor: alpha('#F39C12', 0.3),
+                    }}
+                  />
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {params.row.patient?.uhid || ''}
+              </Typography>
+            </Box>
           </Box>
-        </Box>
-      ),
+        );
+      },
     },
     {
       field: 'doctor',
@@ -374,13 +416,21 @@ const AppointmentList: React.FC = () => {
       field: 'type',
       headerName: 'Type',
       width: 110,
-      renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.row.type || 'OPD'}
-          size="small"
-          sx={{ bgcolor: alpha('#4A90E2', 0.1), color: '#4A90E2', fontWeight: 500 }}
-        />
-      ),
+      renderCell: (params: GridRenderCellParams) => {
+        const isAdmitted = admittedPatientIds.has(params.row.patient?.id);
+        return (
+          <Chip
+            label={isAdmitted ? 'IPD' : (params.row.type || 'OPD')}
+            size="small"
+            sx={{
+              bgcolor: isAdmitted ? alpha('#F39C12', 0.1) : alpha('#4A90E2', 0.1),
+              color: isAdmitted ? '#F39C12' : '#4A90E2',
+              fontWeight: 500,
+              border: isAdmitted ? `1px solid ${alpha('#F39C12', 0.3)}` : 'none',
+            }}
+          />
+        );
+      },
     },
     {
       field: 'status',
@@ -448,7 +498,7 @@ const AppointmentList: React.FC = () => {
                 Check-In
               </Button>
             )}
-            {canAdmit && (permissions.isReceptionist || permissions.isAdmin || permissions.isDoctor) && (
+            {canAdmit && (permissions.isReceptionist || permissions.isAdmin || permissions.isDoctor) && !admittedPatientIds.has(params.row.patient?.id) && (
               <Tooltip title="Admit to IPD">
                 <IconButton
                   size="small"
@@ -472,7 +522,7 @@ const AppointmentList: React.FC = () => {
             )}
             {params.row.opdCardNumber && (
               <>
-                <Tooltip title="View OPD Card">
+                <Tooltip title={admittedPatientIds.has(params.row.patient?.id) ? 'View OPD Card & IPD Admission' : 'View OPD Card'}>
                   <IconButton size="small" color="primary" onClick={() => { setSelectedAppointment(params.row); setOpdCardOpen(true); }}>
                     <ViewIcon fontSize="small" />
                   </IconButton>
@@ -484,7 +534,7 @@ const AppointmentList: React.FC = () => {
                 </Tooltip>
               </>
             )}
-            {isTerminal && params.row.patientId && (
+            {(isTerminal || admittedPatientIds.has(params.row.patient?.id)) && params.row.patientId && (
               <Tooltip title="View Patient Profile">
                 <IconButton size="small" sx={{ color: '#4A90E2' }} onClick={() => navigate(`/app/patients/${params.row.patientId}`)}>
                   <ProfileIcon fontSize="small" />
@@ -691,6 +741,7 @@ const AppointmentList: React.FC = () => {
           onClose={() => setOpdCardOpen(false)}
           appointment={selectedAppointment}
           encounter={selectedAppointment.encounter}
+          admissionId={admissionByPatientId[selectedAppointment.patient?.id]?.id || null}
           readOnly={false}
         />
       )}

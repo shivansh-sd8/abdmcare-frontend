@@ -18,6 +18,9 @@ import {
   TableHead,
   TableRow,
   CircularProgress,
+  Tab,
+  Tabs,
+  alpha,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -28,7 +31,9 @@ import {
   Receipt as ReceiptIcon,
   MedicalInformation as RxIcon,
   Summarize as SummaryIcon,
+  Hotel as BedIcon,
 } from '@mui/icons-material';
+import ipdService from '../services/ipdService';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useSelector } from 'react-redux';
@@ -44,6 +49,7 @@ interface OPDCardDialogProps {
   encounter?: any;
   onUpdate?: (data: any) => Promise<void>;
   readOnly?: boolean;
+  admissionId?: string | null;
 }
 
 const NAVY = '#1A3C6E';
@@ -104,6 +110,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
   encounter: encounterProp,
   onUpdate,
   readOnly = false,
+  admissionId = null,
 }) => {
   const authUser = useSelector((state: any) => state.auth?.user);
   const [hospitalInfo, setHospitalInfo] = useState<any>(null);
@@ -111,6 +118,9 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
   const [enc, setEnc] = useState<any>(encounterProp || null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [admission, setAdmission] = useState<any>(null);
+  const [admissionLoading, setAdmissionLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !appointment) return;
@@ -161,6 +171,21 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
   useEffect(() => {
     if (encounterProp) setEnc(encounterProp);
   }, [encounterProp]);
+
+  // Reset tab when dialog opens/closes
+  useEffect(() => {
+    if (!open) { setActiveTab(0); setAdmission(null); }
+  }, [open]);
+
+  // Fetch IPD admission when admissionId provided
+  useEffect(() => {
+    if (!open || !admissionId) return;
+    setAdmissionLoading(true);
+    (ipdService.getAdmission(admissionId) as any)
+      .then((res: any) => setAdmission(res.data?.data || res.data || null))
+      .catch(() => {})
+      .finally(() => setAdmissionLoading(false));
+  }, [open, admissionId]);
 
   const calculateAge = () => {
     if (!appointment?.patient?.dob) return 'N/A';
@@ -410,6 +435,111 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
     if (vitals.respiratoryRate != null) vitalsItems.push(['Resp', `${vitals.respiratoryRate}/min`]);
   }
 
+  const IPDPanel = () => {
+    if (admissionLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>;
+    if (!admission) return <Box sx={{ p: 3 }}><Typography color="text.secondary">No admission data found.</Typography></Box>;
+    const adm = admission;
+    const days = Math.max(1, Math.floor((new Date().getTime() - new Date(adm.admittedAt).getTime()) / 86400000));
+    return (
+      <Box sx={{ p: 0 }}>
+        {/* Status banner */}
+        <Box sx={{
+          px: 2, py: 1, mb: 2,
+          bgcolor: adm.status === 'ADMITTED' ? alpha('#50C878', 0.08) : alpha('#F39C12', 0.08),
+          border: '1px solid', borderColor: adm.status === 'ADMITTED' ? alpha('#50C878', 0.25) : alpha('#F39C12', 0.25),
+          borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <BedIcon sx={{ color: adm.status === 'ADMITTED' ? '#50C878' : '#F39C12', fontSize: 20 }} />
+            <Typography variant="body2" fontWeight={700} color={adm.status === 'ADMITTED' ? '#2A8A4A' : '#B07010'}>
+              {adm.status === 'ADMITTED' ? 'Currently Admitted' : 'Discharge Ready'}
+            </Typography>
+          </Box>
+          <Typography variant="caption" color="text.secondary" fontFamily="monospace" fontWeight={600}>
+            {adm.admissionNumber}
+          </Typography>
+        </Box>
+
+        {/* Admission info grid */}
+        <TableContainer component={Paper} variant="outlined" sx={{ borderColor: BORDER, borderRadius: 2, mb: 2 }}>
+          <Table size="small">
+            <TableBody>
+              {[
+                ['Ward', adm.ward?.name || '—', 'Bed', adm.bed?.bedNumber ? `Bed ${adm.bed.bedNumber}` : 'Not assigned'],
+                ['Admitted', adm.admittedAt ? format(new Date(adm.admittedAt), 'dd MMM yyyy, h:mm a') : '—', 'Days', `${days} day(s)`],
+                ['Reason', adm.admissionReason || '—', 'Diagnosis', adm.diagnosis || '—'],
+                ['Daily Rate', `₹${adm.dailyCharges?.toLocaleString('en-IN') || 0}/day`, 'Advance Paid', `₹${adm.advancePaid?.toLocaleString('en-IN') || 0}`],
+              ].map((row: any, idx: number) => (
+                <TableRow key={idx} sx={{ bgcolor: idx % 2 === 0 ? LGRAY : 'white' }}>
+                  <TableCell sx={{ fontWeight: 700, color: '#50607E', fontSize: '0.72rem', width: '13%', textTransform: 'uppercase', py: 0.8, borderColor: BORDER }}>{row[0]}</TableCell>
+                  <TableCell sx={{ fontSize: '0.82rem', py: 0.8, borderColor: BORDER, width: '37%' }}>{row[1]}</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#50607E', fontSize: '0.72rem', width: '13%', textTransform: 'uppercase', py: 0.8, borderColor: BORDER, borderLeft: `1px solid ${BORDER}` }}>{row[2]}</TableCell>
+                  <TableCell sx={{ fontSize: '0.82rem', py: 0.8, borderColor: BORDER, width: '37%' }}>{row[3]}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+
+        {/* Rounds summary */}
+        {Array.isArray(adm.rounds) && adm.rounds.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <SectionBar label={`IPD DAILY ROUNDS  (${adm.rounds.length})`} />
+            <TableContainer component={Paper} variant="outlined" sx={{ borderColor: BORDER, borderRadius: '0 0 6px 6px' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#E6EDF8' }}>
+                    {['Date', 'Doctor', 'Diagnosis / Notes', 'Rx', 'Labs'].map((h) => (
+                      <TableCell key={h} sx={{ fontWeight: 700, color: NAVY, fontSize: '0.72rem', py: 0.7 }}>{h}</TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {adm.rounds.map((r: any, i: number) => (
+                    <TableRow key={r.id || i} sx={{ bgcolor: i % 2 === 0 ? LGRAY : 'white' }}>
+                      <TableCell sx={{ fontSize: '0.78rem', py: 0.6, whiteSpace: 'nowrap' }}>
+                        {r.visitDate ? format(new Date(r.visitDate), 'dd MMM yy') : '—'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.78rem', py: 0.6 }}>
+                        {r.doctor ? `Dr. ${r.doctor.firstName} ${r.doctor.lastName}` : '—'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.78rem', py: 0.6, maxWidth: 200 }}>
+                        <Typography variant="caption" noWrap title={r.diagnosis || r.notes || ''}>
+                          {r.diagnosis || r.notes || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.78rem', py: 0.6 }}>
+                        {(r.prescriptions?.length || r.newPrescriptions?.length) ? '✓' : '—'}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.78rem', py: 0.6 }}>
+                        {r.labOrders?.length ? `${r.labOrders.length}` : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        )}
+
+        {/* Running bill */}
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Ward Charges', value: `₹${(days * (adm.dailyCharges || 0)).toLocaleString('en-IN')}` },
+            { label: 'Advance Paid', value: `₹${(adm.advancePaid || 0).toLocaleString('en-IN')}` },
+            { label: 'Est. Balance', value: `₹${Math.max(0, days * (adm.dailyCharges || 0) - (adm.advancePaid || 0)).toLocaleString('en-IN')}` },
+            { label: 'Payment Status', value: adm.paymentStatus || 'PENDING' },
+          ].map((item) => (
+            <Paper key={item.label} variant="outlined" sx={{ px: 2, py: 1, flex: 1, minWidth: 120, borderColor: BORDER, borderRadius: 2, textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 700 }}>{item.label}</Typography>
+              <Typography variant="body2" fontWeight={700} color={NAVY}>{item.value}</Typography>
+            </Paper>
+          ))}
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}>
       {/* Custom Header — matching the PDF */}
@@ -477,7 +607,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
             Card No: <strong>{appointment?.opdCardNumber || '—'}</strong>
           </Typography>
           <Typography sx={{ fontWeight: 800, color: NAVY, fontSize: '0.95rem', letterSpacing: 1 }}>
-            OPD CARD
+            PATIENT RECORD
           </Typography>
           <Typography variant="caption" sx={{ color: '#50607E', fontSize: '0.7rem' }}>
             <TimeIcon sx={{ fontSize: 11, mr: 0.3, verticalAlign: 'middle' }} />
@@ -486,10 +616,27 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
               : format(new Date(), 'dd-MM-yyyy')}
           </Typography>
         </Box>
+
+        {/* Tabs — only shown when patient is admitted */}
+        {admissionId && (
+          <Tabs
+            value={activeTab}
+            onChange={(_, v) => setActiveTab(v)}
+            sx={{ mt: 1, minHeight: 36, '& .MuiTab-root': { minHeight: 36, textTransform: 'none', fontWeight: 600, fontSize: '0.8rem' } }}
+          >
+            <Tab label="OPD Card" icon={<HospitalIcon sx={{ fontSize: 16 }} />} iconPosition="start" />
+            <Tab label="IPD Admission" icon={<BedIcon sx={{ fontSize: 16 }} />} iconPosition="start"
+              sx={{ color: '#F39C12', '&.Mui-selected': { color: '#F39C12' } }}
+            />
+          </Tabs>
+        )}
       </Box>
 
       <DialogContent sx={{ px: 3, py: 2, bgcolor: '#FAFBFD' }}>
-        {loading ? (
+        {/* IPD Tab */}
+        {admissionId && activeTab === 1 ? (
+          <IPDPanel />
+        ) : loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress />
           </Box>

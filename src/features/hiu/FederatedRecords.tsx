@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -96,6 +96,9 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevCountRef = useRef(0);
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -111,6 +114,9 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
 
   useEffect(() => {
     fetchRecords();
+    return () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
   }, [fetchRecords]);
 
   const openRequestDialog = async () => {
@@ -136,11 +142,37 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
         dateRangeFrom: new Date(dateFrom).toISOString(),
         dateRangeTo: new Date(dateTo).toISOString(),
       });
-      toast.success('Health information request sent. Records will appear once received.');
+      toast.success('Health information request sent. Records will appear shortly.');
       setRequestDialogOpen(false);
       setSelectedConsentId('');
       setDateFrom('');
       setDateTo('');
+
+      // Start auto-polling for new records
+      prevCountRef.current = records.length;
+      setPolling(true);
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = (await hiuService.getPatientHealthRecords(patientId)) as any;
+          const newRecords = res.data || [];
+          if (newRecords.length > prevCountRef.current) {
+            setRecords(newRecords);
+            setPolling(false);
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+            toast.success(`${newRecords.length - prevCountRef.current} new record(s) received!`);
+          }
+        } catch { /* silent */ }
+      }, 5000);
+
+      // Stop polling after 2 minutes max
+      setTimeout(() => {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setPolling(false);
+        }
+      }, 120_000);
     } catch {
       toast.error('Failed to request health information');
     } finally {
@@ -181,17 +213,36 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
             Records fetched from other hospitals via ABDM
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<CloudDownload />}
-          onClick={openRequestDialog}
-          sx={{
-            background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
-            '&:hover': { background: 'linear-gradient(135deg, #357ABD 0%, #2A6AA1 100%)' },
-          }}
-        >
-          Request Records
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+          {polling && (
+            <Chip
+              icon={<CircularProgress size={14} />}
+              label="Waiting for records..."
+              color="info"
+              variant="outlined"
+              size="small"
+            />
+          )}
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={fetchRecords}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<CloudDownload />}
+            onClick={openRequestDialog}
+            sx={{
+              background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
+              '&:hover': { background: 'linear-gradient(135deg, #357ABD 0%, #2A6AA1 100%)' },
+            }}
+          >
+            Request Records
+          </Button>
+        </Box>
       </Box>
 
       {records.length === 0 ? (
