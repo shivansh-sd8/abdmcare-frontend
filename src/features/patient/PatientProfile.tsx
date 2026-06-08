@@ -134,7 +134,7 @@ const PatientProfile: React.FC = () => {
         encounterId: e.id,
         display: `${e.type === 'IPD' ? 'IPD' : 'OPD'} Visit — ${fmt(e.visitDate || e.createdAt)}`,
       }));
-      const res = await hipService.addCareContexts(patient.id, careContexts);
+      const res: any = await hipService.addCareContexts(patient.id, careContexts);
       const msg = res?.data?.message || '';
       if (msg.toLowerCase().includes('awaiting') || msg.toLowerCase().includes('pending')) {
         toast.info(`${careContexts.length} care context(s) registered — ABDM confirmation pending`);
@@ -142,7 +142,13 @@ const PatientProfile: React.FC = () => {
         toast.success(msg || `${careContexts.length} care context(s) linked to ABDM`);
       }
 
-      // Notify ABDM about newly linked care contexts
+      // Notify ABDM about newly linked care contexts. ABDM expects the
+      // generated careContextReference (careContextId), NOT the internal
+      // encounter id — map encounterId → careContextId from the create response.
+      const created: any[] = res?.data?.data || [];
+      const ctxIdByEncounter = new Map<string, string>(
+        created.map((c: any) => [c.encounterId, c.careContextId]),
+      );
       const abhaAddr = patient.abhaRecord?.abhaAddress || patient.abhaAddress || '';
       const patientRef = patient.uhid || patient.id;
       if (abhaAddr) {
@@ -150,7 +156,7 @@ const PatientProfile: React.FC = () => {
           try {
             await hipService.linkContextNotify({
               abhaAddress: abhaAddr,
-              careContextReference: cc.encounterId,
+              careContextReference: ctxIdByEncounter.get(cc.encounterId) || cc.encounterId,
               patientReference: patientRef,
               hiTypes: ['OPConsultation', 'Prescription', 'DiagnosticReport'],
             });
@@ -177,14 +183,19 @@ const PatientProfile: React.FC = () => {
     if (!abhaId) { toast.error('Patient has no ABHA — cannot request consent'); return; }
     setConsentLoading(true);
     try {
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const requesterName = userData?.name
+        || [userData?.firstName, userData?.lastName].filter(Boolean).join(' ').trim()
+        || 'Doctor';
+      const requesterId = userData?.hprId || userData?.registrationNo || userData?.id || 'DOCTOR';
       await consentService.createConsentRequest({
         patientAbhaId: abhaId,
         purpose: consentForm.purpose,
         hiTypes: consentForm.hiTypes,
         dateRangeFrom: consentForm.dateRangeFrom,
         dateRangeTo: consentForm.dateRangeTo,
-        requesterName: 'Doctor',
-        requesterId: 'DOCTOR',
+        requesterName,
+        requesterId,
       });
       toast.success('Consent request sent — patient will be notified on ABHA app');
       setConsentDialogOpen(false);

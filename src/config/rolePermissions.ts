@@ -50,7 +50,7 @@ export const menuGroups: MenuGroup[] = [
         text: 'Consent Manager',
         path: '/app/consent',
         icon: 'Assignment',
-        badge: 'M2',
+        badge: 'M3',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'],
       },
     ],

@@ -89,6 +89,7 @@ const PatientRegistration: React.FC = () => {
     address:          { line1: '', line2: '', city: '', state: '', pincode: '' },
     emergencyContact: { name: '', relationship: '', mobile: '' },
     abhaNumber: '',
+    abhaAddress: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [abhaLinked, setAbhaLinked] = useState(false);
@@ -157,6 +158,15 @@ const PatientRegistration: React.FC = () => {
       },
       emergencyContact: prev.emergencyContact,
       abhaNumber: data.ABHANumber || data.abhaNumber || data.healthIdNumber || '',
+      // ABHA address (name@sbx) is REQUIRED for ABDM M2 care-context linking and
+      // M3 consent. Without it, linked care contexts never reach the CM and the
+      // patient sees "no facility available to share health records" at consent.
+      abhaAddress:
+        data.preferredAbhaAddress ||
+        data.phrAddress?.[0] ||
+        data.abhaAddress ||
+        prev.abhaAddress ||
+        '',
     }));
     setAbhaLinked(true);
   };
@@ -191,6 +201,7 @@ const PatientRegistration: React.FC = () => {
           mobile: ec.mobile || '',
         },
         abhaNumber: editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber || '',
+        abhaAddress: editPatient.abhaAddress || editPatient.abhaRecord?.abhaAddress || '',
       });
       if (editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber) {
         setAbhaLinked(true);
@@ -397,7 +408,15 @@ const PatientRegistration: React.FC = () => {
       };
       if (formData.email?.trim())      patientPayload.email = formData.email.trim();
       if (formData.bloodGroup)         patientPayload.bloodGroup = formData.bloodGroup;
-      if (abhaLinked && formData.abhaNumber) patientPayload.abhaId = formData.abhaNumber;
+      // Persist BOTH the 14-digit ABHA number and the ABHA address. The backend
+      // stores abhaNumber/abhaAddress separately; sending only abhaId left
+      // patient.abhaNumber empty and the patient un-linkable to ABDM.
+      if (formData.abhaNumber?.trim()) {
+        const digits = formData.abhaNumber.replace(/-/g, '');
+        patientPayload.abhaId = digits;
+        patientPayload.abhaNumber = formData.abhaNumber.trim();
+      }
+      if (formData.abhaAddress?.trim()) patientPayload.abhaAddress = formData.abhaAddress.trim();
 
       if (isEditMode) {
         await patientService.updatePatient(editPatient.id, patientPayload);
@@ -676,6 +695,13 @@ const PatientRegistration: React.FC = () => {
                   </Button>
                 </Grid>
               )}
+              <Grid item xs={12}>
+                <TextField fullWidth label="ABHA Address" value={formData.abhaAddress}
+                  onChange={e => handleChange('abhaAddress', e.target.value)}
+                  placeholder="name@sbx"
+                  error={!!errors.abhaAddress}
+                  helperText={errors.abhaAddress || 'Required for ABDM linking & consent (e.g. name@sbx). Auto-filled from ABHA when available.'} />
+              </Grid>
               {abhaLinked && (
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
