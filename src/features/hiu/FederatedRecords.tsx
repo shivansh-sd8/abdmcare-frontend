@@ -28,11 +28,13 @@ import {
   Assessment,
   EventNote,
   InfoOutlined,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
 import hiuService from '../../services/hiuService';
 import consentService from '../../services/consentService';
+import { GradientHero, EmptyState, LoadingState } from '../../components/ui';
 
 interface ParsedFHIRData {
   patientInfo: { name: string; gender: string; dob?: string };
@@ -165,12 +167,15 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
         } catch { /* silent */ }
       }, 5000);
 
-      // Stop polling after 2 minutes max
       setTimeout(() => {
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
           setPolling(false);
+          toast.info(
+            'No records arrived in 2 minutes. The HIP may be slow or has nothing to send for this date range — click Refresh to check again.',
+            { autoClose: 8000 },
+          );
         }
       }, 120_000);
     } catch {
@@ -195,93 +200,73 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
   });
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingState message="Loading external records" hint="Fetching health information shared via ABDM…" />;
   }
 
   return (
     <Box>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, sm: 2.5 },
-          mb: 3,
-          borderRadius: 3,
-          background: 'linear-gradient(135deg, #4CAF50 0%, #667eea 100%)',
-          color: '#fff',
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
-          boxShadow: '0 8px 24px rgba(76,175,80,0.25)',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ display: 'flex', p: 1.25, borderRadius: 2, bgcolor: alpha('#fff', 0.18) }}>
-            <LocalHospital sx={{ fontSize: 28 }} />
-          </Box>
-          <Box>
-            <Typography variant="h6" fontWeight={700}>
-              External Health Records
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92 }}>
-              Records fetched from other hospitals via ABDM
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-          {polling && (
+      <GradientHero
+        title="External Health Records"
+        subtitle="Records fetched from other hospitals via ABDM"
+        icon={<LocalHospital />}
+        badge={
+          polling && (
             <Chip
-              icon={<CircularProgress size={14} sx={{ color: '#fff !important' }} />}
-              label="Waiting for records..."
+              icon={<CircularProgress size={12} sx={{ color: '#fff !important' }} />}
+              label="Waiting for records…"
               size="small"
-              sx={{ bgcolor: alpha('#fff', 0.22), color: '#fff' }}
+              sx={{
+                bgcolor: alpha('#fff', 0.22),
+                color: '#fff',
+                fontWeight: 600,
+                border: '1px solid rgba(255,255,255,0.3)',
+              }}
             />
-          )}
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={fetchRecords}
-            disabled={loading}
-            sx={{ color: '#fff', borderColor: alpha('#fff', 0.6), '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.12) } }}
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<CloudDownload />}
-            onClick={openRequestDialog}
-            sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 700, '&:hover': { bgcolor: alpha('#fff', 0.9) } }}
-          >
-            Request Records
-          </Button>
-        </Box>
-      </Paper>
+          )
+        }
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
+              onClick={fetchRecords}
+              disabled={loading}
+              sx={{
+                color: '#fff',
+                borderColor: alpha('#fff', 0.55),
+                '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.12) },
+              }}
+            >
+              Refresh
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<CloudDownload />}
+              onClick={openRequestDialog}
+              sx={{
+                bgcolor: '#fff',
+                color: 'primary.main',
+                fontWeight: 700,
+                '&:hover': { bgcolor: alpha('#fff', 0.9) },
+              }}
+            >
+              Request Records
+            </Button>
+          </>
+        }
+      />
+      <Box sx={{ height: 16 }} />
 
       {records.length === 0 ? (
-        <Paper
-          sx={{
-            p: 4,
-            textAlign: 'center',
-            borderRadius: 3,
-            bgcolor: 'action.hover',
-            border: '1px dashed',
-            borderColor: 'divider',
-          }}
-        >
-          <InfoOutlined sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            No External Records Yet
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480, mx: 'auto' }}>
-            External health records from other hospitals will appear here once a consent is granted
-            and data is fetched via ABDM. Click "Request Records" to initiate a data fetch for an
-            existing granted consent.
-          </Typography>
+        <Paper variant="outlined" sx={{ borderStyle: 'dashed', py: 1 }}>
+          <EmptyState
+            icon={<InfoOutlined />}
+            title="No external records yet"
+            message="External records from other hospitals will appear here once a consent is granted and data is pulled via ABDM. Click Request Records to fetch under an existing granted consent."
+            action={{ label: 'Request Records', onClick: openRequestDialog, icon: <CloudDownload /> }}
+          />
         </Paper>
       ) : (
         <Stack spacing={2}>

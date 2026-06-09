@@ -202,28 +202,83 @@ const PatientProfile: React.FC = () => {
       : patient.address
     : null;
 
+  const isMale = patient.gender === 'Male';
+  const accent = isMale ? '#0EA5E9' : '#A855F7';
+
   return (
     <Box>
       {/* ── Header ── */}
-      <Paper sx={{ p: 2.5, mb: 2, borderRadius: 3, background: 'linear-gradient(135deg, #f8f9fe 0%, #fff 100%)', border: '1px solid', borderColor: 'divider' }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2.25,
+          mb: 2,
+          position: 'relative',
+          overflow: 'hidden',
+          background: `linear-gradient(135deg, ${alpha(accent, 0.06)} 0%, ${alpha(accent, 0)} 60%)`,
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            insetInline: 0, top: 0, height: 3,
+            background: `linear-gradient(90deg, ${accent}, ${alpha(accent, 0)})`,
+          },
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton onClick={() => navigate(-1)} sx={{ bgcolor: alpha('#000', 0.04) }}><ArrowBack /></IconButton>
-          <Avatar sx={{ width: 60, height: 60, bgcolor: patient.gender === 'Male' ? '#1976d2' : '#9c27b0', fontSize: 26, fontWeight: 700 }}>
+          <IconButton
+            onClick={() => navigate(-1)}
+            sx={{
+              bgcolor: alpha(accent, 0.08),
+              color: accent,
+              border: `1px solid ${alpha(accent, 0.18)}`,
+              '&:hover': { bgcolor: alpha(accent, 0.14) },
+            }}
+          >
+            <ArrowBack />
+          </IconButton>
+          <Avatar
+            sx={{
+              width: 64, height: 64,
+              fontSize: '1.4rem',
+              bgcolor: alpha(accent, 0.16),
+              color: accent,
+              border: `2px solid ${alpha(accent, 0.32)}`,
+              boxShadow: `0 8px 18px ${alpha(accent, 0.22)}`,
+            }}
+          >
             {patient.firstName?.charAt(0)}{patient.lastName?.charAt(0)}
           </Avatar>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h5" fontWeight={700}>{patient.firstName} {patient.lastName}</Typography>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.5 }}>
-              <Chip label={patient.uhid} size="small" color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
-              {patient.gender && <Chip label={`${patient.gender.toUpperCase()}${age != null ? `, ${age}y` : ''}`} size="small" sx={{ fontWeight: 500 }} />}
-              {patient.bloodGroup && <Chip icon={<Bloodtype sx={{ fontSize: 14 }} />} label={patient.bloodGroup} size="small" color="error" variant="outlined" />}
+            <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+              {patient.firstName} {patient.lastName}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 0.75 }}>
+              <Chip label={patient.uhid} size="small" color="primary" variant="outlined" sx={{ fontWeight: 700, fontFamily: 'monospace' }} />
+              {patient.gender && (
+                <Chip label={`${patient.gender.toUpperCase()}${age != null ? `, ${age}y` : ''}`} size="small" sx={{ fontWeight: 600 }} />
+              )}
+              {patient.bloodGroup && (
+                <Chip icon={<Bloodtype sx={{ fontSize: 14 }} />} label={patient.bloodGroup} size="small" color="error" variant="outlined" />
+              )}
               <Chip icon={<Phone sx={{ fontSize: 14 }} />} label={patient.mobile} size="small" variant="outlined" />
               {(patient.abhaRecord?.abhaNumber || patient.abhaNumber || patient.abhaId) && (
-                <Chip icon={<Verified sx={{ fontSize: 14 }} />} label={`ABHA: ${patient.abhaRecord?.abhaNumber || patient.abhaNumber || patient.abhaId}`} size="small" color="success" variant="outlined" />
+                <Chip
+                  icon={<Verified sx={{ fontSize: 14 }} />}
+                  label={`ABHA: ${patient.abhaRecord?.abhaNumber || patient.abhaNumber || patient.abhaId}`}
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  sx={{ fontFamily: 'monospace' }}
+                />
               )}
             </Box>
           </Box>
-          <Button variant="outlined" size="small" startIcon={<EventAvailable />} onClick={() => navigate('/app/appointments/schedule', { state: { patientId: patient.id } })}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<EventAvailable />}
+            onClick={() => navigate('/app/appointments/schedule', { state: { patientId: patient.id } })}
+          >
             Book Appointment
           </Button>
         </Box>
@@ -258,9 +313,20 @@ const PatientProfile: React.FC = () => {
       )}
 
       {/* ── 4 Tabs ── */}
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider', px: 1, minHeight: 44, '& .MuiTab-root': { minHeight: 44, py: 1, fontSize: 13, textTransform: 'none' } }}>
+      <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 1,
+            minHeight: 48,
+            '& .MuiTab-root': { minHeight: 48, py: 1, fontSize: '0.8125rem' },
+          }}
+        >
           <Tab label="Overview" icon={<Person sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label={`Visits (${(summary?.totalEncounters || 0) + (summary?.totalAdmissions || 0)})`} icon={<Assignment sx={{ fontSize: 18 }} />} iconPosition="start" />
           <Tab label="Billing" icon={<Receipt sx={{ fontSize: 18 }} />} iconPosition="start" />

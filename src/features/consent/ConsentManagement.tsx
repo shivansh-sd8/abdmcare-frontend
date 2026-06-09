@@ -55,6 +55,7 @@ import patientService from '../../services/patientService';
 import ConsentStatusChip from '../../components/ConsentStatusChip';
 import { toast } from 'react-toastify';
 import { format, formatDistanceToNow } from 'date-fns';
+import { GradientHero, StatCard } from '../../components/ui';
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -413,138 +414,98 @@ const ConsentManagement: React.FC = () => {
     );
   });
 
-  const statsCards = [
-    { label: 'Total Consents', value: stats.total, color: '#4A90E2', icon: <VerifiedUser /> },
-    { label: 'Granted', value: stats.granted, color: '#50C878', icon: <CheckCircle /> },
-    { label: 'Requested', value: stats.requested, color: '#F39C12', icon: <HourglassEmpty /> },
-    { label: 'Expired', value: stats.expired, color: '#95A5A6', icon: <Cancel /> },
+  const statsCards: { label: string; value: number; tone: 'info' | 'success' | 'warning' | 'error' }[] = [
+    { label: 'Total Consents', value: stats.total,     tone: 'info' },
+    { label: 'Granted',        value: stats.granted,   tone: 'success' },
+    { label: 'Requested',      value: stats.requested, tone: 'warning' },
+    { label: 'Expired',        value: stats.expired,   tone: 'error' },
   ];
+
+  const statsIcons = [<VerifiedUser />, <CheckCircle />, <HourglassEmpty />, <Cancel />];
 
   return (
     <Box sx={{ overflow: 'hidden', maxWidth: '100%' }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2.5, sm: 3.5 },
-          mb: 3,
-          borderRadius: 3,
-          background: 'linear-gradient(135deg, #4CAF50 0%, #667eea 100%)',
-          color: '#fff',
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
-          boxShadow: '0 8px 24px rgba(76,175,80,0.25)',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ display: 'flex', p: 1.5, borderRadius: 2, bgcolor: alpha('#fff', 0.18) }}>
-            <VerifiedUser sx={{ fontSize: 32 }} />
-          </Box>
-          <Box>
-            <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-              Consent Management
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.92, display: 'flex', alignItems: 'center' }}>
-              Manage patient consent requests and permissions
-              {consents.some(c => c.status === 'REQUESTED') && (
-                <Chip
-                  label="Auto-refreshing"
-                  size="small"
-                  sx={{ ml: 1, height: 20, fontSize: 11, bgcolor: alpha('#fff', 0.22), color: '#fff' }}
-                />
-              )}
-            </Typography>
-          </Box>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={handleOpenNewConsent}
-          sx={{
-            bgcolor: '#fff',
-            color: 'primary.main',
-            fontWeight: 700,
-            '&:hover': { bgcolor: alpha('#fff', 0.9) },
-          }}
-        >
-          New Consent Request
-        </Button>
-      </Paper>
+      <GradientHero
+        title="Consent Management"
+        subtitle="Patient consent requests, grants, revocations and ABDM artefacts"
+        icon={<VerifiedUser />}
+        badge={
+          consents.some(c => c.status === 'REQUESTED') ? (
+            <Chip
+              label="Auto-refreshing"
+              size="small"
+              sx={{
+                bgcolor: alpha('#fff', 0.22),
+                color: '#fff',
+                fontWeight: 700,
+                border: '1px solid rgba(255,255,255,0.3)',
+              }}
+            />
+          ) : undefined
+        }
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleOpenNewConsent}
+            sx={{
+              bgcolor: '#fff',
+              color: 'primary.main',
+              fontWeight: 700,
+              '&:hover': { bgcolor: alpha('#fff', 0.9) },
+            }}
+          >
+            New Consent Request
+          </Button>
+        }
+      />
+      <Box sx={{ height: 16 }} />
 
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {statsCards.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            {loading ? (
-              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
-            ) : (
-              <Card
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha(stat.color, 0.08)} 0%, ${alpha(stat.color, 0.02)} 100%)`,
-                  border: `1px solid ${alpha(stat.color, 0.2)}`,
-                  borderRadius: 3,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: `0 8px 24px ${alpha(stat.color, 0.2)}`,
-                  },
-                }}
-              >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color={stat.color}>
-                        {stat.value.toLocaleString()}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        bgcolor: stat.color,
-                        borderRadius: 2,
-                        p: 1.5,
-                        color: 'white',
-                        display: 'flex',
-                        boxShadow: `0 4px 12px ${alpha(stat.color, 0.4)}`,
-                      }}
-                    >
-                      {stat.icon}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
+      <Grid container spacing={2.25} sx={{ mb: 3 }}>
+        {statsCards.map((s, i) => (
+          <Grid item xs={12} sm={6} md={3} key={s.label}>
+            <StatCard
+              label={s.label}
+              value={s.value.toLocaleString()}
+              tone={s.tone}
+              icon={statsIcons[i]}
+              loading={loading}
+            />
           </Grid>
         ))}
       </Grid>
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+      <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search by consent ID, patient name, or purpose..."
+          size="small"
+          placeholder="Search by consent ID, patient name, or purpose…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search />
+                <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
               </InputAdornment>
             ),
+            sx: {
+              borderRadius: 2,
+              '& fieldset': { border: 'none' },
+              backgroundColor: 'transparent',
+            },
           }}
         />
       </Paper>
 
-      <Paper sx={{
-        height: { xs: 400, sm: 500, md: 600 },
-        width: '100%',
-        borderRadius: 3,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          height: { xs: 420, sm: 520, md: 620 },
+          width: '100%',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+        }}
+      >
         <DataGrid
           rows={filteredConsents}
           loading={loading}
@@ -555,8 +516,8 @@ const ConsentManagement: React.FC = () => {
           pageSizeOptions={[10, 25, 50]}
           disableRowSelectionOnClick
           sx={{
-            '& .MuiDataGrid-cell': { py: 2 },
-            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
+            border: 'none',
+            '& .MuiDataGrid-cell': { py: 1.5 },
           }}
         />
       </Paper>

@@ -12,11 +12,9 @@ import {
   MenuItem,
   Avatar,
   Tooltip,
-  Card,
-  CardContent,
   Grid,
-  Skeleton,
   alpha,
+  useTheme,
 } from '@mui/material';
 import {
   Add,
@@ -30,15 +28,19 @@ import {
   Email,
   Person,
   CalendarToday,
+  PersonAdd,
+  EventAvailable,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import patientService from '../../services/patientService';
 import { toast } from 'react-toastify';
 import { PermissionGuard } from '../../components/common/PermissionGuard';
+import { PageHeader, StatCard } from '../../components/ui';
 
 const PatientList: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -108,28 +110,35 @@ const PatientList: React.FC = () => {
     {
       field: 'patient',
       headerName: 'Patient',
-      width: 250,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1 }}>
-          <Avatar
-            sx={{
-              bgcolor: params.row.gender === 'Male' ? '#1976d2' : '#9c27b0',
-              width: 40,
-              height: 40,
-            }}
-          >
-            {params.row.firstName?.charAt(0) || 'P'}
-          </Avatar>
-          <Box>
-            <Typography variant="body2" fontWeight="600">
-              {params.row.firstName} {params.row.lastName}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {params.row.uhid}
-            </Typography>
+      width: 260,
+      renderCell: (params: GridRenderCellParams) => {
+        const isMale = params.row.gender === 'Male';
+        const tone = isMale ? theme.palette.info.main : theme.palette.secondary.main;
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1 }}>
+            <Avatar
+              sx={{
+                bgcolor: alpha(tone, 0.16),
+                color: tone,
+                border: `1.5px solid ${alpha(tone, 0.3)}`,
+                width: 38, height: 38,
+                fontSize: '0.85rem',
+              }}
+            >
+              {(params.row.firstName?.[0] || 'P').toUpperCase()}
+              {(params.row.lastName?.[0] || '').toUpperCase()}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={700} noWrap>
+                {params.row.firstName} {params.row.lastName}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                {params.row.uhid}
+              </Typography>
+            </Box>
           </Box>
-        </Box>
-      ),
+        );
+      },
     },
     {
       field: 'contact',
@@ -240,137 +249,94 @@ const PatientList: React.FC = () => {
   ];
 
   const statsCards = [
-    { label: 'Total Patients', value: stats.total, color: '#4A90E2', icon: <Person /> },
-    { label: 'ABHA Linked', value: stats.abhaLinked, color: '#50C878', icon: <HealthAndSafety /> },
-    { label: 'New Today', value: stats.newToday, color: '#F39C12', icon: <Add /> },
-    { label: 'Appointments', value: stats.appointments, color: '#9B59B6', icon: <CalendarToday /> },
+    { label: 'Total Patients', value: stats.total,       tone: 'info' as const,      icon: <Person /> },
+    { label: 'ABHA Linked',    value: stats.abhaLinked,  tone: 'success' as const,   icon: <HealthAndSafety /> },
+    { label: 'New Today',      value: stats.newToday,    tone: 'warning' as const,   icon: <PersonAdd /> },
+    { label: 'Appointments',   value: stats.appointments,tone: 'secondary' as const, icon: <EventAvailable /> },
   ];
 
   return (
     <Box>
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between', 
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        mb: 4,
-        gap: 2,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            Patient Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage patient records and ABHA integration
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', width: { xs: '100%', sm: 'auto' } }}>
-          <Button variant="outlined" startIcon={<FilterList />}>
-            Filters
-          </Button>
-          <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => navigate('/app/patients/new')}
-            >
-              New Patient
+      <PageHeader
+        title="Patient Management"
+        subtitle="Manage patient records and ABHA integration"
+        icon={<Person />}
+        actions={
+          <>
+            <Button variant="outlined" size="small" startIcon={<FilterList />}>
+              Filters
             </Button>
-          </PermissionGuard>
-        </Box>
-      </Box>
-
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {statsCards.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            {loading ? (
-              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
-            ) : (
-              <Card
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha(stat.color, 0.08)} 0%, ${alpha(stat.color, 0.02)} 100%)`,
-                  border: `1px solid ${alpha(stat.color, 0.2)}`,
-                  borderRadius: 3,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: `0 8px 24px ${alpha(stat.color, 0.2)}`,
-                  },
-                }}
+            <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Add />}
+                onClick={() => navigate('/app/patients/new')}
               >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color={stat.color}>
-                        {stat.value.toLocaleString()}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        bgcolor: stat.color,
-                        borderRadius: 2,
-                        p: 1.5,
-                        color: 'white',
-                        display: 'flex',
-                        boxShadow: `0 4px 12px ${alpha(stat.color, 0.4)}`,
-                      }}
-                    >
-                      {stat.icon}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
+                New Patient
+              </Button>
+            </PermissionGuard>
+          </>
+        }
+      />
+
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        {statsCards.map((s) => (
+          <Grid item xs={12} sm={6} md={3} key={s.label}>
+            <StatCard
+              label={s.label}
+              value={s.value.toLocaleString()}
+              tone={s.tone}
+              icon={s.icon}
+              loading={loading}
+            />
           </Grid>
         ))}
       </Grid>
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+      <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
         <TextField
           fullWidth
-          placeholder="Search by name, UHID, mobile, or ABHA number..."
+          size="small"
+          placeholder="Search by name, UHID, mobile, or ABHA number…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search />
+                <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
               </InputAdornment>
             ),
+            sx: {
+              borderRadius: 2,
+              '& fieldset': { border: 'none' },
+              backgroundColor: 'transparent',
+            },
           }}
         />
       </Paper>
 
-      <Paper sx={{ 
-        height: { xs: 400, sm: 500, md: 600 }, 
-        width: '100%', 
-        borderRadius: 3, 
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'auto',
-      }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          height: { xs: 420, sm: 520, md: 620 },
+          width: '100%',
+          overflow: 'hidden',
+        }}
+      >
         <DataGrid
           rows={patients}
           loading={loading}
           columns={columns}
           initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 10 },
-            },
+            pagination: { paginationModel: { page: 0, pageSize: 10 } },
           }}
           pageSizeOptions={[10, 25, 50]}
           checkboxSelection
           disableRowSelectionOnClick
           sx={{
-            '& .MuiDataGrid-cell': {
-              py: 2,
-            },
-            '& .MuiDataGrid-columnHeaders': {
-              bgcolor: 'action.hover',
-              fontWeight: 600,
-            },
+            border: 'none',
+            '& .MuiDataGrid-cell': { py: 1.5 },
           }}
         />
       </Paper>
