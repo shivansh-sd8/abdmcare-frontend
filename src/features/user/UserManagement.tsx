@@ -42,6 +42,7 @@ import { toast } from 'react-toastify';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import hospitalService from '../../services/hospitalService';
 import api from '../../services/api';
+import { PageHeader, StatCard } from '../../components/ui';
 
 interface User {
   id: string;
@@ -354,69 +355,27 @@ const UserManagement: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3, mb: 3, borderRadius: 3,
-          background: `linear-gradient(135deg, ${theme.palette.mode === 'dark' ? '#1e1b4b' : '#667eea'} 0%, ${theme.palette.mode === 'dark' ? '#312e81' : '#764ba2'} 100%)`,
-          color: '#fff',
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <SupervisorAccount sx={{ fontSize: 40, opacity: 0.9 }} />
-            <Box>
-              <Typography variant="h4" fontWeight="bold">User Management</Typography>
-              <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
-                {permissions.isSuperAdmin ? 'Manage all users across hospitals' : 'Manage users in your hospital'}
-              </Typography>
-            </Box>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenDialog()}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)', color: '#fff',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
-              fontWeight: 600, px: 3, borderRadius: 2,
-            }}
-          >
-            Add User
+    <Box>
+      <PageHeader
+        title="User Management"
+        subtitle={permissions.isSuperAdmin ? 'Manage users across all hospitals' : 'Manage users in your hospital'}
+        icon={<SupervisorAccount />}
+        actions={
+          <Button variant="contained" startIcon={<Add />} onClick={() => handleOpenDialog()}>
+            Add user
           </Button>
-        </Box>
-      </Paper>
+        }
+      />
 
-      {/* Stat Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {statCards.map((s) => (
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        {statCards.map((s, i) => (
           <Grid item xs={6} md={3} key={s.label}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2.5, borderRadius: 2.5,
-                border: `1px solid ${theme.palette.divider}`,
-                display: 'flex', alignItems: 'center', gap: 2,
-                transition: 'box-shadow 0.2s',
-                '&:hover': { boxShadow: `0 4px 20px ${alpha(s.color, 0.15)}` },
-              }}
-            >
-              <Box
-                sx={{
-                  width: 44, height: 44, borderRadius: 2, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                  bgcolor: alpha(s.color, 0.1), color: s.color,
-                }}
-              >
-                {s.icon}
-              </Box>
-              <Box>
-                <Typography variant="h5" fontWeight={700}>{s.value}</Typography>
-                <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-              </Box>
-            </Paper>
+            <StatCard
+              label={s.label}
+              value={String(s.value)}
+              icon={s.icon as React.ReactElement}
+              tone={(['primary', 'success', 'warning', 'info'] as const)[i] || 'info'}
+            />
           </Grid>
         ))}
       </Grid>

@@ -9,8 +9,9 @@ import {
 import {
   Add, Refresh, Print, LocalHospital, Bed as BedIcon,
   CheckCircle, ExitToApp, CurrencyRupee, AccountBalance,
-  PhoneAndroid, Money, Visibility, VerifiedUser,
+  PhoneAndroid, Money, Visibility, VerifiedUser, Hotel,
 } from '@mui/icons-material';
+import { PageHeader } from '../../components/ui';
 import { toast } from 'react-toastify';
 import { format, differenceInDays } from 'date-fns';
 import { useLocation } from 'react-router-dom';
@@ -346,21 +347,19 @@ const AdmissionList: React.FC = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">IPD / Admissions</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage inpatient admissions, discharges and billing
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={loadAdmissions}><Refresh /></IconButton>
-          <Button variant="contained" startIcon={<Add />} onClick={() => setShowAdmitDialog(true)}>
-            Admit Patient
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="IPD / Admissions"
+        subtitle="Inpatient admissions, discharges, and billing"
+        icon={<Hotel />}
+        actions={
+          <>
+            <IconButton onClick={loadAdmissions}><Refresh /></IconButton>
+            <Button variant="contained" startIcon={<Add />} onClick={() => setShowAdmitDialog(true)}>
+              Admit
+            </Button>
+          </>
+        }
+      />
 
       {/* Status filter tabs */}
       <Paper sx={{ mb: 2 }}>

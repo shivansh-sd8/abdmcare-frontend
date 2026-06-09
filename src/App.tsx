@@ -41,6 +41,8 @@ const SuperAdminSignup = React.lazy(() => import('./features/auth/SuperAdminSign
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
 const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
 const QueueDisplay = React.lazy(() => import('./features/queue/QueueDisplay'));
+const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
+const AbdmActivity = React.lazy(() => import('./features/abdm/AbdmActivity'));
 
 const PageLoader = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -252,7 +254,22 @@ const App: React.FC = () => {
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
             
-            {/* Audit logs removed — backend logging not active yet */}
+            <Route
+              path="audit-logs"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <AuditLogs />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="abdm-activity"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <AbdmActivity />
+                </RoleProtectedRoute>
+              }
+            />
             
             <Route 
               path="hospitals" 

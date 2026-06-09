@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import vitalsService from '../../services/vitalsService';
+import { PageHeader } from '../../components/ui';
 import patientService from '../../services/patientService';
 
 interface VitalsRecord {
@@ -156,19 +157,19 @@ const VitalsManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">Vitals</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {permissions.isNurse ? 'Record and monitor patient vitals' : 'Patient vital signs records'}
-          </Typography>
-        </Box>
-        {permissions.canRecordVitals && (
-          <Button variant="contained" startIcon={<Add />} onClick={() => { fetchPatients(); setCreateOpen(true); }}>
-            Record Vitals
-          </Button>
-        )}
-      </Box>
+      <PageHeader
+        title="Vitals"
+        subtitle={permissions.isNurse ? 'Record and monitor patient vitals' : 'Patient vital signs records'}
+        icon={<MonitorHeart />}
+        actions={
+          permissions.canRecordVitals ? (
+            <Button variant="contained" startIcon={<Add />}
+              onClick={() => { fetchPatients(); setCreateOpen(true); }}>
+              Record vitals
+            </Button>
+          ) : undefined
+        }
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 

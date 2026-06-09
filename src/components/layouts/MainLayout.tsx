@@ -50,6 +50,7 @@ import {
   Receipt,
   Inventory,
   Hotel,
+  Hub,
   DarkMode,
   LightMode,
   ExpandLess,
@@ -66,6 +67,7 @@ import api from '../../services/api';
 import { useThemeMode } from '../../context/ThemeContext';
 
 const drawerWidth = 264;
+const drawerWidthMobile = 280;
 
 const ICON_MAP: Record<string, React.ReactElement> = {
   Dashboard: <Dashboard />,
@@ -85,6 +87,7 @@ const ICON_MAP: Record<string, React.ReactElement> = {
   Receipt: <Receipt />,
   Inventory: <Inventory />,
   Hotel: <Hotel />,
+  Hub: <Hub />,
 };
 
 const getIcon = (name: string) => ICON_MAP[name] || <Dashboard />;
@@ -495,7 +498,7 @@ const MainLayout: React.FC = () => {
             sx={{
               display: { xs: 'none', md: 'flex' },
               alignItems: 'center', gap: 1,
-              minWidth: 320, maxWidth: 460, mx: 'auto',
+              minWidth: { md: 240, lg: 360 }, maxWidth: 460, mx: 'auto',
               px: 1.5, py: 0.75,
               borderRadius: 2,
               cursor: 'pointer',
@@ -506,8 +509,8 @@ const MainLayout: React.FC = () => {
             }}
           >
             <Search sx={{ fontSize: 16, color: 'text.secondary' }} />
-            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-              Search patients, screens, ABDM tools…
+            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>
+              Search screens, ABDM tools…
             </Typography>
             <Box
               sx={{
@@ -525,6 +528,15 @@ const MainLayout: React.FC = () => {
 
           {/* Right */}
           <Stack direction="row" alignItems="center" spacing={0.25}>
+            <Tooltip title="Search (⌘K)">
+              <IconButton
+                size="small"
+                onClick={() => setPaletteOpen(true)}
+                sx={{ display: { xs: 'inline-flex', md: 'none' }, color: 'text.secondary' }}
+              >
+                <Search fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={mode === 'light' ? 'Dark mode' : 'Light mode'}>
               <IconButton size="small" onClick={toggleTheme} sx={{ color: 'text.secondary' }}>
                 {mode === 'light' ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
@@ -617,7 +629,7 @@ const MainLayout: React.FC = () => {
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { width: drawerWidth, border: 'none' },
+            '& .MuiDrawer-paper': { width: drawerWidthMobile, maxWidth: '85vw', border: 'none' },
           }}
         >
           {drawerContent}
@@ -642,16 +654,17 @@ const MainLayout: React.FC = () => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 2, sm: 3, md: 4 },
+          px: { xs: 1.5, sm: 3, md: 4 },
           pt: 0,
+          pb: { xs: 3, sm: 4 },
           minHeight: '100vh',
           bgcolor: 'background.default',
           width: { xs: '100%', sm: `calc(100% - ${drawerWidth}px)` },
-          overflow: 'hidden',
+          overflowX: 'hidden',
         }}
       >
         <Toolbar sx={{ minHeight: '60px !important' }} />
-        <Box sx={{ mt: 2, width: '100%', maxWidth: '1400px', mx: 'auto' }}>
+        <Box sx={{ mt: { xs: 1.5, sm: 2 }, width: '100%', maxWidth: '1400px', mx: 'auto' }}>
           <Suspense fallback={
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
               <Box

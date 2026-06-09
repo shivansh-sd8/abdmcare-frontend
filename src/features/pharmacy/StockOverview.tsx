@@ -11,6 +11,7 @@ import {
   LocalPharmacy, Build,
 } from '@mui/icons-material';
 import pharmacyService from '../../services/pharmacyService';
+import { PageHeader, StatCard } from '../../components/ui';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -131,41 +132,38 @@ const StockOverview: React.FC = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">Stock & Inventory</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Real-time stock levels, alerts, and movement history
-          </Typography>
-        </Box>
-        <IconButton onClick={reload}><Refresh /></IconButton>
-      </Box>
+      <PageHeader
+        title="Stock & Inventory"
+        subtitle="Real-time stock levels, alerts, and movement history"
+        icon={<Inventory />}
+        actions={<IconButton onClick={reload}><Refresh /></IconButton>}
+      />
 
       {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Summary cards */}
       {!loading && (
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          {[
-            { label: 'Total Medicines', value: summary.totalMedicines || 0, color: '#4A90E2', icon: <LocalPharmacy /> },
-            { label: 'Total Stock', value: summary.totalStock || 0, color: '#22c55e', icon: <Inventory /> },
-            { label: 'Low Stock', value: summary.lowStockCount || 0, color: '#f59e0b', icon: <Warning /> },
-            { label: 'Out of Stock', value: summary.outOfStockCount || 0, color: '#ef4444', icon: <TrendingDown /> },
-            { label: 'Stock Value', value: `₹${(summary.totalStockValue || 0).toLocaleString('en-IN')}`, color: '#8b5cf6', icon: <LocalPharmacy /> },
-          ].map((s) => (
-            <Grid item xs={6} sm={2.4} key={s.label}>
-              <Card sx={{ background: alpha(s.color, 0.08), border: `1px solid ${alpha(s.color, 0.2)}`, borderRadius: 3 }}>
-                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: '10px !important', px: 2 }}>
-                  <Box sx={{ bgcolor: s.color, color: 'white', borderRadius: 2, p: 0.8, display: 'flex' }}>{s.icon}</Box>
-                  <Box>
-                    <Typography variant="h6" fontWeight="bold" color={s.color}>{s.value}</Typography>
-                    <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+        <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+          <Grid item xs={6} sm={2.4}>
+            <StatCard label="Medicines" value={String(summary.totalMedicines || 0)}
+              icon={<LocalPharmacy />} tone="info" />
+          </Grid>
+          <Grid item xs={6} sm={2.4}>
+            <StatCard label="Total stock" value={String(summary.totalStock || 0)}
+              icon={<Inventory />} tone="success" />
+          </Grid>
+          <Grid item xs={6} sm={2.4}>
+            <StatCard label="Low stock" value={String(summary.lowStockCount || 0)}
+              icon={<Warning />} tone="warning" />
+          </Grid>
+          <Grid item xs={6} sm={2.4}>
+            <StatCard label="Out of stock" value={String(summary.outOfStockCount || 0)}
+              icon={<TrendingDown />} tone="error" />
+          </Grid>
+          <Grid item xs={12} sm={2.4}>
+            <StatCard label="Stock value"
+              value={`₹${(summary.totalStockValue || 0).toLocaleString('en-IN')}`}
+              icon={<LocalPharmacy />} tone="secondary" />
+          </Grid>
         </Grid>
       )}
 

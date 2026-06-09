@@ -14,6 +14,7 @@ import {
   Medication, Hotel, Search, FilterList, Clear, PendingActions,
   ExpandMore, ExpandLess, Link as LinkIcon,
 } from '@mui/icons-material';
+import { PageHeader, StatCard } from '../../components/ui';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -624,59 +625,27 @@ const BillingDashboard: React.FC = () => {
     },
   };
 
+  const STAT_TONES: Array<'success' | 'info' | 'error' | 'secondary'> = ['success', 'info', 'error', 'secondary'];
+
   return (
     <Box sx={{ width: '100%' }}>
-      {/* ── Gradient Header ── */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3, mb: 3, borderRadius: 3,
-          background: `linear-gradient(135deg, ${theme.palette.mode === 'dark' ? '#1a2e1a' : '#059669'} 0%, ${theme.palette.mode === 'dark' ? '#1e1b4b' : '#0891b2'} 100%)`,
-          color: '#fff',
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <BillingIcon sx={{ fontSize: 40, opacity: 0.9 }} />
-            <Box>
-              <Typography variant="h4" fontWeight="bold">Billing & Payments</Typography>
-              <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
-                Consolidated billing overview across all services
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      </Paper>
+      <PageHeader
+        title="Billing & Payments"
+        subtitle="Consolidated billing across OPD, IPD, lab, and pharmacy"
+        icon={<BillingIcon />}
+      />
 
       {/* ── Stat Cards ── */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {statCards.map((s) => (
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        {statCards.map((s, i) => (
           <Grid item xs={6} md={3} key={s.label}>
-            {loading ? (
-              <Skeleton variant="rectangular" height={90} sx={{ borderRadius: 2.5 }} />
-            ) : (
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5, borderRadius: 2.5, border: `1px solid ${theme.palette.divider}`,
-                  display: 'flex', alignItems: 'center', gap: 2,
-                  transition: 'box-shadow 0.2s',
-                  '&:hover': { boxShadow: `0 4px 20px ${alpha(s.color, 0.15)}` },
-                }}
-              >
-                <Box sx={{
-                  width: 44, height: 44, borderRadius: 2,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  bgcolor: alpha(s.color, 0.1), color: s.color,
-                }}>
-                  {s.icon}
-                </Box>
-                <Box>
-                  <Typography variant="h5" fontWeight={700}>{s.value}</Typography>
-                  <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                </Box>
-              </Paper>
-            )}
+            <StatCard
+              label={s.label}
+              value={String(s.value)}
+              icon={s.icon as React.ReactElement}
+              tone={STAT_TONES[i] || 'info'}
+              loading={loading}
+            />
           </Grid>
         ))}
       </Grid>

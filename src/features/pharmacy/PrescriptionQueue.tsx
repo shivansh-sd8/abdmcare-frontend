@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import prescriptionService from '../../services/prescriptionService';
 import { toast } from 'react-toastify';
+import { PageHeader, StatCard } from '../../components/ui';
 
 interface MedicationItem {
   name: string;
@@ -124,39 +125,35 @@ const PrescriptionQueue: React.FC = () => {
 
   const todayCount = prescriptions.filter(p => new Date(p.createdAt).toDateString() === new Date().toDateString()).length;
 
+  const dispensedToday = prescriptions.filter(p => {
+    if (p.status?.toUpperCase() !== 'DISPENSED') return false;
+    const today = new Date().toDateString();
+    return p.dispensedAt ? new Date(p.dispensedAt).toDateString() === today : true;
+  }).length;
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">Pharmacy Queue</Typography>
-          <Typography variant="body2" color="text.secondary">View prescriptions and dispense medications</Typography>
-        </Box>
-      </Box>
+      <PageHeader
+        title="Pharmacy Queue"
+        subtitle="Review prescriptions and dispense medications"
+        icon={<LocalPharmacy />}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { title: 'Total Prescriptions', value: totalCount, icon: <LocalPharmacy />, color: '#9B59B6' },
-          { title: "Today's Queue", value: todayCount, icon: <Medication />, color: '#4A90E2' },
-          { title: 'Dispensed Today', value: prescriptions.filter(p => {
-            if (p.status?.toUpperCase() !== 'DISPENSED') return false;
-            const today = new Date().toDateString();
-            return p.dispensedAt ? new Date(p.dispensedAt).toDateString() === today : true;
-          }).length, icon: <CheckCircle />, color: '#50C878' },
-        ].map((card) => (
-          <Grid item xs={12} sm={4} key={card.title}>
-            <Card sx={{ background: `linear-gradient(135deg, ${alpha(card.color, 0.08)} 0%, ${alpha(card.color, 0.02)} 100%)`, border: `1px solid ${alpha(card.color, 0.2)}`, borderRadius: 3 }}>
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ backgroundColor: card.color, borderRadius: 2, p: 1, color: 'white' }}>{card.icon}</Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">{card.title}</Typography>
-                  <Typography variant="h5" fontWeight="bold">{card.value}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={4}>
+          <StatCard label="Total Rx" value={String(totalCount)}
+            icon={<LocalPharmacy />} tone="secondary" loading={loading} />
+        </Grid>
+        <Grid item xs={4}>
+          <StatCard label="Today's queue" value={String(todayCount)}
+            icon={<Medication />} tone="info" loading={loading} />
+        </Grid>
+        <Grid item xs={4}>
+          <StatCard label="Dispensed today" value={String(dispensedToday)}
+            icon={<CheckCircle />} tone="success" loading={loading} />
+        </Grid>
       </Grid>
 
       <TableContainer component={Paper} sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>

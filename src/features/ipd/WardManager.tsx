@@ -15,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import ipdService from '../../services/ipdService';
+import { PageHeader, StatCard } from '../../components/ui';
 
 const pulse = keyframes`
   0%, 100% { opacity: 1; }
@@ -233,77 +234,39 @@ const WardManager: React.FC = () => {
 
   return (
     <Box>
-      {/* ── Hero Header ──────────────────────────────────────────────────── */}
-      <Box sx={{
-        background: isDark
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
-          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        borderRadius: 4, p: 3, mb: 3, position: 'relative', overflow: 'hidden',
-      }}>
-        <Box sx={{
-          position: 'absolute', top: -50, right: -50, width: 200, height: 200,
-          borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.05)',
-        }} />
-        <Box sx={{
-          position: 'absolute', bottom: -30, left: '60%', width: 120, height: 120,
-          borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.03)',
-        }} />
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-              <Box sx={{ bgcolor: 'rgba(255,255,255,0.2)', borderRadius: 2, p: 1, display: 'flex' }}>
-                <Hotel sx={{ color: 'white', fontSize: 28 }} />
-              </Box>
-              <Typography variant="h4" fontWeight={800} sx={{ color: 'white', letterSpacing: '-0.5px' }}>
-                Ward & Bed Manager
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)', ml: 6.5 }}>
-              Real-time occupancy tracking, bed configuration, and analytics
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton onClick={() => { load(); if (tab === 1) loadAnalytics(); }}
-              sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' } }}>
+      <PageHeader
+        title="Ward & Bed Manager"
+        subtitle="Real-time occupancy tracking, bed configuration & analytics"
+        icon={<Hotel />}
+        actions={
+          <>
+            <IconButton onClick={() => { load(); if (tab === 1) loadAnalytics(); }}>
               <Refresh />
             </IconButton>
-            <Button variant="contained" startIcon={<Add />} onClick={() => setShowAddWard(true)}
-              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', backdropFilter: 'blur(10px)',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }, fontWeight: 700, borderRadius: 2.5 }}>
-              New Ward
+            <Button variant="contained" startIcon={<Add />} onClick={() => setShowAddWard(true)}>
+              New ward
             </Button>
-          </Box>
-        </Box>
+          </>
+        }
+      />
 
-        {/* Stats row inside hero */}
-        <Grid container spacing={2} sx={{ mt: 2, position: 'relative', zIndex: 1 }}>
-          {[
-            { label: 'Total Beds', value: totalBeds, icon: <AirlineSeatFlat sx={{ fontSize: 20 }} /> },
-            { label: 'Occupied', value: totalOccupied, icon: <Person sx={{ fontSize: 20 }} /> },
-            { label: 'Available', value: totalFree, icon: <BedIcon sx={{ fontSize: 20 }} /> },
-            { label: 'Maintenance', value: totalMaint, icon: <Build sx={{ fontSize: 20 }} /> },
-            { label: 'Occupancy', value: `${overallRate}%`, icon: <TrendingUp sx={{ fontSize: 20 }} /> },
-          ].map((s) => (
-            <Grid item xs={6} sm={2.4} key={s.label}>
-              <Box sx={{
-                bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2.5, px: 2, py: 1.5,
-                backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1.5,
-                border: '1px solid rgba(255,255,255,0.1)',
-              }}>
-                <Box sx={{ color: 'rgba(255,255,255,0.7)' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="h6" fontWeight={800} sx={{ color: 'white', lineHeight: 1.1 }}>
-                    {s.value}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.65rem' }}>
-                    {s.label}
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-          ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Total beds" value={String(totalBeds)} icon={<AirlineSeatFlat />} tone="primary" />
         </Grid>
-      </Box>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Occupied" value={String(totalOccupied)} icon={<Person />} tone="warning" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Available" value={String(totalFree)} icon={<BedIcon />} tone="success" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Maintenance" value={String(totalMaint)} icon={<Build />} tone="info" />
+        </Grid>
+        <Grid item xs={12} sm={2.4}>
+          <StatCard label="Occupancy" value={`${overallRate}%`} icon={<TrendingUp />} tone="secondary" />
+        </Grid>
+      </Grid>
 
       {/* ── Tab Navigation ───────────────────────────────────────────────── */}
       <Paper sx={{

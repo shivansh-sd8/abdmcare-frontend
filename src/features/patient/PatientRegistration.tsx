@@ -40,6 +40,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import patientService from '../../services/patientService';
+import { PageHeader } from '../../components/ui';
 import abhaService from '../../services/abhaService';
 import appointmentService from '../../services/appointmentService';
 import doctorService from '../../services/doctorService';
@@ -515,18 +516,12 @@ const PatientRegistration: React.FC = () => {
   }, [dynamicSlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PersonAdd sx={{ fontSize: 40 }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">{isEditMode ? 'Edit Patient' : 'New Patient Registration'}</Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-              {isEditMode ? 'Update patient information' : 'Register a new patient and optionally schedule an appointment'}
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
+    <Box>
+      <PageHeader
+        title={isEditMode ? 'Edit Patient' : 'New Patient Registration'}
+        subtitle={isEditMode ? 'Update patient information' : 'Register a new patient and optionally schedule an appointment'}
+        icon={<PersonAdd />}
+      />
 
       <Stepper activeStep={activeStep} sx={{
         mb: 4,

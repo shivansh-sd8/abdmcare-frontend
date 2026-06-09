@@ -5,11 +5,8 @@ import {
   Paper,
   Button,
   Grid,
-  Card,
-  CardContent,
   Avatar,
   Chip,
-  Skeleton,
   alpha,
   TextField,
   InputAdornment,
@@ -27,7 +24,10 @@ import {
   MenuItem,
   Stack,
   CircularProgress,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
+import { PageHeader, StatCard, EmptyState } from '../../components/ui';
 import {
   Add,
   Search,
@@ -52,6 +52,8 @@ import { useRolePermissions } from '../../hooks/useRolePermissions';
 
 const DoctorList: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const permissions = useRolePermissions();
   const [doctors, setDoctors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -258,151 +260,191 @@ const DoctorList: React.FC = () => {
     },
   ];
 
-  const statsCards = [
-    { label: 'Total Doctors', value: stats.total, color: '#9B59B6', icon: <LocalHospital /> },
-    { label: 'Active Doctors', value: stats.active, color: '#50C878', icon: <Person /> },
-    { label: 'Specializations', value: stats.specializations, color: '#4A90E2', icon: <MedicalServices /> },
-  ];
+  const filteredDoctors = searchQuery.trim()
+    ? doctors.filter((doc) => {
+        const q = searchQuery.toLowerCase();
+        const name = `${doc.firstName || ''} ${doc.lastName || ''}`.toLowerCase();
+        const spec = (doc.specialization || '').toLowerCase();
+        const regNo = (doc.registrationNo || '').toLowerCase();
+        return name.includes(q) || spec.includes(q) || regNo.includes(q);
+      })
+    : doctors;
 
   return (
     <Box>
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between', 
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        mb: 4,
-        gap: 2,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            {permissions.isReceptionist ? 'Doctor Directory' : 'Doctor Management'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {permissions.isReceptionist 
-              ? 'Search and view doctors for appointment scheduling' 
-              : 'Manage medical professionals and their specializations'}
-          </Typography>
-        </Box>
-        {(permissions.isAdmin || permissions.isSuperAdmin) && (
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => navigate('/app/doctors/new')}
-            sx={{
-              background: 'linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #8E44AD 0%, #7D3C98 100%)',
-              },
-            }}
-          >
-            Add Doctor
-          </Button>
-        )}
-      </Box>
+      <PageHeader
+        title={permissions.isReceptionist ? 'Doctor Directory' : 'Doctor Management'}
+        subtitle={
+          permissions.isReceptionist
+            ? 'Search and view doctors for appointment scheduling'
+            : 'Manage medical professionals, schedules, and specialisations'
+        }
+        icon={<LocalHospital />}
+        actions={
+          (permissions.isAdmin || permissions.isSuperAdmin) ? (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => navigate('/app/doctors/new')}
+            >
+              Add doctor
+            </Button>
+          ) : undefined
+        }
+      />
 
       {(permissions.isAdmin || permissions.isSuperAdmin) && (
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          {statsCards.map((stat, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
-              {loading ? (
-                <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
-              ) : (
-              <Card
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha(stat.color, 0.08)} 0%, ${alpha(stat.color, 0.02)} 100%)`,
-                  border: `1px solid ${alpha(stat.color, 0.2)}`,
-                  borderRadius: 3,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: `0 8px 24px ${alpha(stat.color, 0.2)}`,
-                  },
-                }}
-              >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color={stat.color}>
-                        {stat.value.toLocaleString()}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        bgcolor: stat.color,
-                        borderRadius: 2,
-                        p: 1.5,
-                        color: 'white',
-                        display: 'flex',
-                        boxShadow: `0 4px 12px ${alpha(stat.color, 0.4)}`,
-                      }}
-                    >
-                      {stat.icon}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
+        <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+          <Grid item xs={6} sm={4}>
+            <StatCard label="Total doctors" value={stats.total.toLocaleString()}
+              icon={<LocalHospital />} tone="secondary" loading={loading} />
           </Grid>
-        ))}
+          <Grid item xs={6} sm={4}>
+            <StatCard label="Active" value={stats.active.toLocaleString()}
+              icon={<Person />} tone="success" loading={loading} />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <StatCard label="Specialisations" value={stats.specializations.toLocaleString()}
+              icon={<MedicalServices />} tone="info" loading={loading} />
+          </Grid>
         </Grid>
       )}
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+      <Paper sx={{ p: 1.5, mb: 2, borderRadius: 2 }} variant="outlined">
         <TextField
           fullWidth
-          placeholder="Search by name, specialization, or registration number..."
+          size="small"
+          placeholder="Search by name, specialisation, or registration #"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search />
+                <Search fontSize="small" sx={{ color: 'text.secondary' }} />
               </InputAdornment>
             ),
+            endAdornment: searchQuery ? (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                  <Clear fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
           }}
         />
       </Paper>
 
-      <Paper sx={{ 
-        height: { xs: 400, sm: 500, md: 600 }, 
-        width: '100%', 
-        borderRadius: 3, 
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'auto',
-      }}>
-        <DataGrid
-          rows={searchQuery.trim() ? doctors.filter((doc) => {
-            const q = searchQuery.toLowerCase();
-            const name = `${doc.firstName || ''} ${doc.lastName || ''}`.toLowerCase();
-            const spec = (doc.specialization || '').toLowerCase();
-            const regNo = (doc.registrationNo || '').toLowerCase();
-            return name.includes(q) || spec.includes(q) || regNo.includes(q);
-          }) : doctors}
-          loading={loading}
-          columns={columns}
-          initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 10 },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50]}
-          checkboxSelection
-          disableRowSelectionOnClick
-          sx={{
-            '& .MuiDataGrid-cell': {
-              py: 2,
-            },
-            '& .MuiDataGrid-columnHeaders': {
-              bgcolor: 'action.hover',
-              fontWeight: 600,
-            },
-          }}
-        />
-      </Paper>
+      {/* Mobile: card list. Desktop: DataGrid. */}
+      {isMobile ? (
+        <Stack spacing={1.25}>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Paper key={i} variant="outlined" sx={{ p: 2, height: 96, borderRadius: 2 }} />
+            ))
+          ) : filteredDoctors.length === 0 ? (
+            <EmptyState
+              title="No doctors found"
+              message={searchQuery ? 'Try a different search term.' : 'Add your first doctor to get started.'}
+              action={(permissions.isAdmin || permissions.isSuperAdmin) ? {
+                label: 'Add doctor', onClick: () => navigate('/app/doctors/new'),
+              } : undefined}
+            />
+          ) : (
+            filteredDoctors.map((doc) => (
+              <Paper
+                key={doc.id}
+                variant="outlined"
+                sx={{
+                  p: 1.5, borderRadius: 2,
+                  cursor: 'pointer',
+                  transition: 'border-color 150ms ease',
+                  '&:hover': { borderColor: alpha(theme.palette.primary.main, 0.4) },
+                }}
+                onClick={() => navigate(`/app/doctors/${doc.id}`)}
+              >
+                <Stack direction="row" alignItems="center" spacing={1.5}>
+                  <Avatar sx={{
+                    width: 44, height: 44, fontSize: '0.85rem', fontWeight: 700,
+                    bgcolor: alpha(theme.palette.secondary.main, 0.16),
+                    color: 'secondary.main',
+                  }}>
+                    {doc.firstName?.charAt(0)}{doc.lastName?.charAt(0)}
+                  </Avatar>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={700} noWrap>
+                      Dr. {doc.firstName} {doc.lastName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap component="div">
+                      {doc.specialization}
+                    </Typography>
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap">
+                      {doc.registrationNo && (
+                        <Chip size="small" label={doc.registrationNo}
+                          sx={{ height: 18, fontSize: '0.6rem', fontFamily: 'monospace' }} />
+                      )}
+                      <Chip
+                        size="small"
+                        label={doc.isActive ? 'Active' : 'Inactive'}
+                        color={doc.isActive ? 'success' : 'default'}
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: '0.6rem' }}
+                      />
+                    </Stack>
+                  </Box>
+                  <Stack spacing={0.25}>
+                    {(permissions.isAdmin || permissions.isSuperAdmin) && (
+                      <Tooltip title="Schedule">
+                        <IconButton size="small" sx={{ color: 'secondary.main' }}
+                          onClick={(e) => { e.stopPropagation(); handleOpenSchedule(doc); }}>
+                          <Schedule fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="View">
+                      <IconButton size="small" color="primary"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/app/doctors/${doc.id}`); }}>
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))
+          )}
+        </Stack>
+      ) : (
+        <Paper sx={{
+          height: 600, width: '100%', borderRadius: 2, overflow: 'hidden',
+        }} variant="outlined">
+          <DataGrid
+            rows={filteredDoctors}
+            loading={loading}
+            columns={columns}
+            initialState={{ pagination: { paginationModel: { page: 0, pageSize: 10 } } }}
+            pageSizeOptions={[10, 25, 50]}
+            checkboxSelection
+            disableRowSelectionOnClick
+            sx={{
+              border: 0,
+              '& .MuiDataGrid-cell': { py: 1.5 },
+              '& .MuiDataGrid-columnHeaders': {
+                bgcolor: 'action.hover',
+                fontWeight: 600,
+              },
+            }}
+            slots={{
+              noRowsOverlay: () => (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <EmptyState
+                    title="No doctors found"
+                    message={searchQuery ? 'Try a different search term.' : 'Add your first doctor to get started.'}
+                  />
+                </Box>
+              ),
+            }}
+          />
+        </Paper>
+      )}
 
       {/* Edit Consultation Fee Dialog */}
       <Dialog open={!!editFeeDoctor} onClose={() => setEditFeeDoctor(null)} maxWidth="xs" fullWidth>

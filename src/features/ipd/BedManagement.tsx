@@ -11,6 +11,7 @@ import {
   CleaningServices, LocalHospital, Assessment,
 } from '@mui/icons-material';
 import ipdService from '../../services/ipdService';
+import { PageHeader, StatCard } from '../../components/ui';
 
 const BED_TYPES = ['STANDARD', 'ICU', 'ELECTRIC', 'PEDIATRIC', 'BARIATRIC', 'ISOLATION', 'BIRTHING'];
 
@@ -108,39 +109,35 @@ const BedManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">Bed Management</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Admin console for wards, beds, transfers, and analytics
-          </Typography>
-        </Box>
-        <IconButton onClick={() => { loadWards(); if (tab === 1) loadAnalytics(); }}><Refresh /></IconButton>
-      </Box>
+      <PageHeader
+        title="Bed Management"
+        subtitle="Admin console for wards, beds, transfers, and analytics"
+        icon={<Hotel />}
+        actions={
+          <IconButton onClick={() => { loadWards(); if (tab === 1) loadAnalytics(); }}>
+            <Refresh />
+          </IconButton>
+        }
+      />
 
       {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Summary */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { label: 'Total Beds', value: totals.total, color: '#4A90E2', icon: <Hotel /> },
-          { label: 'Occupied', value: totals.occupied, color: '#ef4444', icon: <Person /> },
-          { label: 'Available', value: totals.available, color: '#22c55e', icon: <Hotel /> },
-          { label: 'Maintenance', value: totals.maintenance, color: '#6b7280', icon: <Build /> },
-          { label: 'Occupancy', value: `${occupancyPct}%`, color: '#f59e0b', icon: <Assessment /> },
-        ].map((s) => (
-          <Grid item xs={6} sm={2.4} key={s.label}>
-            <Card sx={{ background: alpha(s.color, 0.08), border: `1px solid ${alpha(s.color, 0.2)}`, borderRadius: 3 }}>
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: '10px !important', px: 2 }}>
-                <Box sx={{ bgcolor: s.color, color: 'white', borderRadius: 2, p: 0.8, display: 'flex' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="h6" fontWeight="bold" color={s.color}>{s.value}</Typography>
-                  <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Total beds" value={String(totals.total)} icon={<Hotel />} tone="info" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Occupied" value={String(totals.occupied)} icon={<Person />} tone="error" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Available" value={String(totals.available)} icon={<Hotel />} tone="success" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Maintenance" value={String(totals.maintenance)} icon={<Build />} tone="secondary" />
+        </Grid>
+        <Grid item xs={12} sm={2.4}>
+          <StatCard label="Occupancy" value={`${occupancyPct}%`} icon={<Assessment />} tone="warning" />
+        </Grid>
       </Grid>
 
       <Paper sx={{ borderRadius: 2 }}>

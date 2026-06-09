@@ -5,10 +5,7 @@ import {
   Paper,
   Button,
   Grid,
-  Card,
-  CardContent,
   Chip,
-  Skeleton,
   alpha,
   TextField,
   InputAdornment,
@@ -18,7 +15,10 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Stack,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
+import { PageHeader, StatCard, EmptyState } from '../../components/ui';
 import {
   Add,
   Search,
@@ -61,6 +61,8 @@ const STATUS_OPTIONS = [
 
 const AppointmentList: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const permissions = useRolePermissions();
   const authUser = useSelector((state: any) => state.auth?.user);
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -547,82 +549,42 @@ const AppointmentList: React.FC = () => {
     },
   ];
 
-  const statsCards = [
-    { label: 'Total Appointments', value: stats.total, color: '#4A90E2', icon: <CalendarToday /> },
-    { label: 'Today', value: stats.today, color: '#F39C12', icon: <Schedule /> },
-    { label: 'Scheduled', value: stats.upcoming, color: '#9B59B6', icon: <AccessTime /> },
-    { label: 'Completed', value: stats.completed, color: '#50C878', icon: <CheckCircle /> },
-  ];
-
   const hasActiveFilters = statusFilter || dateFilter;
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{
-        display: 'flex', flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' },
-        mb: 4, gap: 2,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            Appointment Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Schedule and manage patient appointments
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          onClick={() => navigate('/app/appointments/schedule')}
-          sx={{
-            background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
-            '&:hover': { background: 'linear-gradient(135deg, #357ABD 0%, #2868A8 100%)' },
-          }}
-        >
-          Schedule Appointment
-        </Button>
-      </Box>
+      <PageHeader
+        title="Appointments"
+        subtitle="Schedule and manage patient appointments"
+        icon={<CalendarToday />}
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => navigate('/app/appointments/schedule')}
+          >
+            Schedule
+          </Button>
+        }
+      />
 
-      {/* Stats */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {statsCards.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            {loading && appointments.length === 0 ? (
-              <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} />
-            ) : (
-              <Card
-                sx={{
-                  background: `linear-gradient(135deg, ${alpha(stat.color, 0.08)} 0%, ${alpha(stat.color, 0.02)} 100%)`,
-                  border: `1px solid ${alpha(stat.color, 0.2)}`,
-                  borderRadius: 3,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': { transform: 'translateY(-4px)', boxShadow: `0 8px 24px ${alpha(stat.color, 0.2)}` },
-                }}
-              >
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography variant="h4" fontWeight="bold" color={stat.color}>
-                        {stat.value.toLocaleString()}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box sx={{
-                      bgcolor: stat.color, borderRadius: 2, p: 1.5, color: 'white',
-                      display: 'flex', boxShadow: `0 4px 12px ${alpha(stat.color, 0.4)}`,
-                    }}>
-                      {stat.icon}
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
-          </Grid>
-        ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="Total" value={stats.total.toLocaleString()}
+            icon={<CalendarToday />} tone="info" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="Today" value={stats.today.toLocaleString()}
+            icon={<Schedule />} tone="warning" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="Scheduled" value={stats.upcoming.toLocaleString()}
+            icon={<AccessTime />} tone="secondary" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="Completed" value={stats.completed.toLocaleString()}
+            icon={<CheckCircle />} tone="success" loading={loading} />
+        </Grid>
       </Grid>
 
       {/* Filters */}
@@ -707,32 +669,140 @@ const AppointmentList: React.FC = () => {
         </Stack>
       </Paper>
 
-      {/* Data Grid */}
-      <Paper sx={{
-        height: { xs: 400, sm: 500, md: 600 },
-        width: '100%', borderRadius: 3,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-        overflow: 'hidden',
-      }}>
-        <DataGrid
-          rows={filteredRows}
-          rowCount={searchQuery.trim() ? filteredRows.length : totalRows}
-          loading={loading}
-          columns={columns}
-          paginationModel={paginationModel}
-          onPaginationModelChange={handlePaginationChange}
-          paginationMode={searchQuery.trim() ? 'client' : 'server'}
-          pageSizeOptions={[10, 25, 50, 100]}
-          disableRowSelectionOnClick
-          initialState={{
-            sorting: { sortModel: [{ field: 'scheduledAt', sort: 'desc' }] },
-          }}
-          sx={{
-            '& .MuiDataGrid-cell': { py: 2 },
-            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
-          }}
-        />
-      </Paper>
+      {/* Data: card list on mobile, DataGrid on desktop */}
+      {isMobile ? (
+        <Stack spacing={1.25}>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Paper key={i} variant="outlined" sx={{ p: 2, height: 110, borderRadius: 2 }} />
+            ))
+          ) : filteredRows.length === 0 ? (
+            <EmptyState
+              icon={<CalendarToday />}
+              title="No appointments"
+              message={hasActiveFilters || searchQuery ? 'Try adjusting filters.' : 'Schedule a new appointment to get started.'}
+              action={{ label: 'Schedule', onClick: () => navigate('/app/appointments/schedule') }}
+            />
+          ) : (
+            filteredRows.map((apt: any) => {
+              const isAdmitted = admittedPatientIds.has(apt.patient?.id);
+              const status = (apt.status || 'SCHEDULED').toUpperCase();
+              const time = apt.scheduledAt
+                ? format(new Date(apt.scheduledAt), 'dd MMM · hh:mm a')
+                : '—';
+              return (
+                <Paper
+                  key={apt.id}
+                  variant="outlined"
+                  sx={{
+                    p: 1.5, borderRadius: 2,
+                    transition: 'border-color 150ms ease',
+                    '&:hover': { borderColor: alpha(theme.palette.primary.main, 0.4) },
+                  }}
+                >
+                  <Stack spacing={1}>
+                    <Stack direction="row" alignItems="center" spacing={1.25}>
+                      <Avatar sx={{
+                        width: 38, height: 38, fontSize: '0.78rem', fontWeight: 700,
+                        bgcolor: alpha(isAdmitted ? theme.palette.warning.main : theme.palette.info.main, 0.16),
+                        color: isAdmitted ? 'warning.main' : 'info.main',
+                      }}>
+                        {isAdmitted ? <AdmitIcon fontSize="small" /> : (
+                          (apt.patient?.firstName?.[0] || '') + (apt.patient?.lastName?.[0] || '')
+                        )}
+                      </Avatar>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={700} noWrap>
+                          {apt.patient?.firstName} {apt.patient?.lastName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap component="div">
+                          Dr. {apt.doctor?.firstName} {apt.doctor?.lastName} · {apt.patient?.uhid || '—'}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        label={status.replace('_', ' ').toLowerCase()}
+                        sx={{
+                          textTransform: 'capitalize',
+                          height: 22, fontSize: '0.65rem',
+                          bgcolor: alpha(getStatusColor(status), 0.1),
+                          color: getStatusColor(status),
+                          fontWeight: 600,
+                        }}
+                      />
+                    </Stack>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between">
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <CalendarToday sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary">{time}</Typography>
+                      </Stack>
+                      <Stack direction="row" spacing={0.25}>
+                        {status === 'SCHEDULED' && !apt.opdCardNumber && (permissions.isReceptionist || permissions.isAdmin) && (
+                          <Button size="small" variant="contained" color="success"
+                            sx={{ minWidth: 'auto', px: 1.5, py: 0.25, fontSize: '0.7rem', textTransform: 'none' }}
+                            onClick={() => handleCheckIn(apt)}>
+                            Check-in
+                          </Button>
+                        )}
+                        {apt.opdCardNumber && (
+                          <Tooltip title="View OPD">
+                            <IconButton size="small" color="primary"
+                              onClick={() => { setSelectedAppointment(apt); setOpdCardOpen(true); }}>
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {apt.patientId && (
+                          <Tooltip title="Patient profile">
+                            <IconButton size="small" sx={{ color: 'info.main' }}
+                              onClick={() => navigate(`/app/patients/${apt.patientId}`)}>
+                              <ProfileIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              );
+            })
+          )}
+        </Stack>
+      ) : (
+        <Paper sx={{
+          height: { sm: 500, md: 600 }, width: '100%', borderRadius: 2, overflow: 'hidden',
+        }} variant="outlined">
+          <DataGrid
+            rows={filteredRows}
+            rowCount={searchQuery.trim() ? filteredRows.length : totalRows}
+            loading={loading}
+            columns={columns}
+            paginationModel={paginationModel}
+            onPaginationModelChange={handlePaginationChange}
+            paginationMode={searchQuery.trim() ? 'client' : 'server'}
+            pageSizeOptions={[10, 25, 50, 100]}
+            disableRowSelectionOnClick
+            initialState={{ sorting: { sortModel: [{ field: 'scheduledAt', sort: 'desc' }] } }}
+            sx={{
+              border: 0,
+              '& .MuiDataGrid-cell': { py: 2 },
+              '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
+            }}
+            slots={{
+              noRowsOverlay: () => (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                  <EmptyState
+                    icon={<CalendarToday />}
+                    title="No appointments"
+                    message={hasActiveFilters || searchQuery ? 'Try adjusting filters.' : 'Schedule a new appointment to get started.'}
+                    action={{ label: 'Schedule', onClick: () => navigate('/app/appointments/schedule') }}
+                  />
+                </Box>
+              ),
+            }}
+          />
+        </Paper>
+      )}
 
       {/* OPD Card Dialog */}
       {selectedAppointment && (

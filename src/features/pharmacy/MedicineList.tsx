@@ -13,6 +13,7 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import pharmacyService from '../../services/pharmacyService';
+import { PageHeader, StatCard } from '../../components/ui';
 
 const CATEGORIES = [
   'TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'OINTMENT',
@@ -265,81 +266,47 @@ const MedicineList: React.FC = () => {
 
   return (
     <Box>
-      {/* ── Hero Header ──────────────────────────────────────────────── */}
-      <Box sx={{
-        background: isDark
-          ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
-          : 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
-        borderRadius: 4, p: 3, mb: 3, position: 'relative', overflow: 'hidden',
-      }}>
-        <Box sx={{
-          position: 'absolute', top: -60, right: -60, width: 220, height: 220,
-          borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.05)',
-        }} />
-        <Box sx={{
-          position: 'absolute', bottom: -40, left: '55%', width: 140, height: 140,
-          borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.03)',
-        }} />
-
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-              <Box sx={{ bgcolor: 'rgba(255,255,255,0.2)', borderRadius: 2, p: 1, display: 'flex' }}>
-                <MedicalServices sx={{ color: 'white', fontSize: 28 }} />
-              </Box>
-              <Typography variant="h4" fontWeight={800} sx={{ color: 'white', letterSpacing: '-0.5px' }}>
-                Pharmacy Manager
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)', ml: 6.5 }}>
-              Medicine catalog, inventory tracking, stock alerts, and movement history
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton onClick={reload}
-              sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' } }}>
-              <Refresh />
-            </IconButton>
+      <PageHeader
+        title="Pharmacy Manager"
+        subtitle="Medicine catalog, inventory tracking, stock alerts & movements"
+        icon={<MedicalServices />}
+        actions={
+          <>
+            <IconButton onClick={reload}><Refresh /></IconButton>
             <Button variant="contained" startIcon={<Add />}
-              onClick={() => { setEditId(null); setForm(emptyMedicine); setShowForm(true); }}
-              sx={{
-                bgcolor: 'rgba(255,255,255,0.2)', color: 'white', backdropFilter: 'blur(10px)',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }, fontWeight: 700, borderRadius: 2.5,
-              }}>
-              Add Medicine
+              onClick={() => { setEditId(null); setForm(emptyMedicine); setShowForm(true); }}>
+              Add medicine
             </Button>
-          </Box>
-        </Box>
+          </>
+        }
+      />
 
-        {/* Hero stats */}
-        <Grid container spacing={2} sx={{ mt: 2, position: 'relative', zIndex: 1 }}>
-          {[
-            { label: 'Medicines', value: total, icon: <LocalPharmacy sx={{ fontSize: 20 }} /> },
-            { label: 'In Stock', value: total - outOfStock, icon: <Inventory sx={{ fontSize: 20 }} /> },
-            { label: 'Low Stock', value: lowStockCount, icon: <Warning sx={{ fontSize: 20 }} /> },
-            { label: 'Out of Stock', value: outOfStock, icon: <TrendingDown sx={{ fontSize: 20 }} /> },
-            { label: 'Stock Value', value: summary.totalStockValue ? `₹${Number(summary.totalStockValue).toLocaleString('en-IN')}` : '—', icon: <BarChart sx={{ fontSize: 20 }} /> },
-          ].map((s) => (
-            <Grid item xs={6} sm={2.4} key={s.label}>
-              <Box sx={{
-                bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2.5, px: 2, py: 1.5,
-                backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', gap: 1.5,
-                border: '1px solid rgba(255,255,255,0.1)',
-              }}>
-                <Box sx={{ color: 'rgba(255,255,255,0.7)' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="h6" fontWeight={800} sx={{ color: 'white', lineHeight: 1.1 }}>
-                    {s.value}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.65rem' }}>
-                    {s.label}
-                  </Typography>
-                </Box>
-              </Box>
-            </Grid>
-          ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Medicines" value={String(total)}
+            icon={<LocalPharmacy />} tone="primary" />
         </Grid>
-      </Box>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="In stock" value={String(total - outOfStock)}
+            icon={<Inventory />} tone="success" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Low stock" value={String(lowStockCount)}
+            icon={<Warning />} tone="warning" />
+        </Grid>
+        <Grid item xs={6} sm={2.4}>
+          <StatCard label="Out of stock" value={String(outOfStock)}
+            icon={<TrendingDown />} tone="error" />
+        </Grid>
+        <Grid item xs={12} sm={2.4}>
+          <StatCard
+            label="Stock value"
+            value={summary.totalStockValue ? `₹${Number(summary.totalStockValue).toLocaleString('en-IN')}` : '—'}
+            icon={<BarChart />}
+            tone="info"
+          />
+        </Grid>
+      </Grid>
 
       {/* ── Tab Navigation ───────────────────────────────────────────── */}
       <Paper sx={{

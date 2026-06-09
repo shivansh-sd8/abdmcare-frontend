@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, IconButton, Tooltip, CircularProgress,
-  Alert, Grid, Card, CardContent, alpha, Tabs, Tab,
+  Alert, Grid, alpha, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
+import { PageHeader, StatCard } from '../../components/ui';
 import {
   MedicalInformation, LocalHospital, Assignment, Schedule,
   CheckCircle, Edit as EditIcon, Visibility, HourglassEmpty, Hotel as AdmitIcon,
@@ -163,54 +164,35 @@ const EncounterList: React.FC = () => {
     { label: 'Pending',   value: pending.length,      color: '#8e44ad', icon: <Schedule /> },
   ];
 
+  const TONE_BY_LABEL: Record<string, 'info' | 'warning' | 'success' | 'secondary'> = {
+    'Total': 'info',
+    'Waiting': 'warning',
+    'Completed': 'success',
+    'Pending': 'secondary',
+  };
+
   return (
     <Box>
-      {/* ── Page header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={800} color="#1a3c6e">
-            {permissions.isDoctor ? 'My Patients' : 'Encounters'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {permissions.isDoctor
-              ? 'Patients checked in and waiting for consultation'
-              : 'All clinical encounters'}
-          </Typography>
-        </Box>
-      </Box>
+      <PageHeader
+        title={permissions.isDoctor ? 'My Patients' : 'Encounters'}
+        subtitle={permissions.isDoctor
+          ? 'Patients checked in and waiting for consultation'
+          : 'All clinical encounters'}
+        icon={<MedicalInformation />}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* ── Stat cards ── */}
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
         {stats.map((s) => (
           <Grid item xs={6} sm={3} key={s.label}>
-            <Card sx={{
-              background: `linear-gradient(135deg, ${alpha(s.color, 0.09)}, ${alpha(s.color, 0.02)})`,
-              border: `1px solid ${alpha(s.color, 0.22)}`, borderRadius: 3,
-              position: 'relative', overflow: 'visible',
-            }}>
-              {(s as any).pulse && s.value > 0 && (
-                <Box sx={{
-                  position: 'absolute', top: -4, right: -4,
-                  width: 10, height: 10, borderRadius: '50%',
-                  bgcolor: '#F39C12',
-                  boxShadow: '0 0 0 4px rgba(243,156,18,0.3)',
-                  animation: 'pulse 1.5s ease infinite',
-                  '@keyframes pulse': {
-                    '0%,100%': { boxShadow: '0 0 0 4px rgba(243,156,18,0.3)' },
-                    '50%': { boxShadow: '0 0 0 8px rgba(243,156,18,0)' },
-                  },
-                }} />
-              )}
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '10px !important' }}>
-                <Box sx={{ bgcolor: s.color, borderRadius: 2, p: 0.75, color: 'white' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                  <Typography variant="h5" fontWeight={800}>{s.value}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
+            <StatCard
+              label={s.label}
+              value={String(s.value)}
+              icon={s.icon as React.ReactElement}
+              tone={TONE_BY_LABEL[s.label] || 'info'}
+              loading={loading}
+            />
           </Grid>
         ))}
       </Grid>

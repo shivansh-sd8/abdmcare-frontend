@@ -30,6 +30,7 @@ import paymentService from '../../services/paymentService';
 import { generateAdvanceSlip } from '../../utils/advanceSlipGenerator';
 import documentService from '../../services/documentService';
 import { useSelector } from 'react-redux';
+import { PageHeader } from '../../components/ui';
 
 const PaymentManagement: React.FC = () => {
   const authUser = useSelector((state: any) => state.auth?.user);
@@ -231,31 +232,25 @@ const PaymentManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PaymentIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">
-              Payment Management
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Manage patient payments and receipts
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton onClick={fetchPayments} color="primary">
-          <Refresh />
-        </IconButton>
-      </Box>
+      <PageHeader
+        title="Payment Management"
+        subtitle="Manage patient payments and receipts"
+        icon={<PaymentIcon />}
+        actions={
+          <IconButton onClick={fetchPayments} color="primary">
+            <Refresh />
+          </IconButton>
+        }
+      />
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={2}>
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2 }}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Status Filter</InputLabel>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
               <Select
                 value={statusFilter}
-                label="Status Filter"
+                label="Status"
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <MenuItem value="">All</MenuItem>
@@ -268,7 +263,7 @@ const PaymentManagement: React.FC = () => {
         </Grid>
       </Paper>
 
-      <Paper sx={{ height: 600 }}>
+      <Paper variant="outlined" sx={{ height: 600, borderRadius: 2, overflow: 'hidden' }}>
         <DataGrid
           rows={payments}
           columns={columns}
@@ -282,6 +277,10 @@ const PaymentManagement: React.FC = () => {
           }}
           pageSizeOptions={[10, 25, 50, 100]}
           disableRowSelectionOnClick
+          sx={{
+            border: 0,
+            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
+          }}
         />
       </Paper>
 

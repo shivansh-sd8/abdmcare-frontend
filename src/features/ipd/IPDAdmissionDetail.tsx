@@ -63,6 +63,7 @@ interface AdmissionDetail {
   paymentStatus?: string;
   dischargeReadyAt?: string;
   dischargeReadyBy?: string;
+  patientId?: string;
   patient: {
     id: string;
     firstName: string;
@@ -519,7 +520,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                         notes: admission.notes,
                       },
                     });
-                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId, admissionId, type: 'ADMISSION_SUMMARY', content: admB64 }).catch(() => {});
+                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId || '', admissionId, type: 'ADMISSION_SUMMARY', content: admB64 }).catch(() => {});
                     toast.success('Admission Summary PDF downloaded');
                   } catch (e: any) {
                     console.error('Admission summary error:', e);
@@ -562,7 +563,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
                         paymentStatus: admission.paymentStatus || 'PENDING',
                       },
                     });
-                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId, admissionId, type: 'GATE_PASS', content: gpB64 }).catch(() => {});
+                    documentService.persistDocument({ patientId: admission.patient.id || admission.patientId || '', admissionId, type: 'GATE_PASS', content: gpB64 }).catch(() => {});
                     toast.success('Gate Pass PDF downloaded');
                   } catch (e: any) {
                     console.error('Gate pass error:', e);

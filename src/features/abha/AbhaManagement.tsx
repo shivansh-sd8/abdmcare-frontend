@@ -17,6 +17,7 @@ import abhaService from '../../services/abhaService';
 import hipService from '../../services/hipService';
 import ScanAndShare from './ScanAndShare';
 import PatientCheckIn from './PatientCheckIn';
+import { PageHeader } from '../../components/ui';
 
 const AADHAAR_STEPS = ['Enter Aadhaar', 'Verify OTP', 'ABHA Created', 'ABHA Address', 'Complete'];
 const DL_STEPS = ['Enter Mobile', 'Verify OTP', 'DL Details', 'ABHA Created', 'ABHA Address', 'Complete'];
@@ -683,52 +684,35 @@ const AbhaManagement: React.FC = () => {
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3, mb: 3, borderRadius: 3,
-          background: `linear-gradient(135deg, ${theme.palette.mode === 'dark' ? '#064e3b' : '#059669'} 0%, ${theme.palette.mode === 'dark' ? '#1e3a5f' : '#0d9488'} 100%)`,
-          color: '#fff',
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <HealthAndSafety sx={{ fontSize: 40, opacity: 0.9 }} />
-            <Box>
-              <Typography variant="h4" fontWeight="bold">ABHA Management</Typography>
-              <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
-                Create, verify and manage Ayushman Bharat Health Accounts
-                {linkedPatientName && <Chip size="small" label={`Linking for: ${linkedPatientName}`} sx={{ ml: 1, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }} />}
-              </Typography>
-            </Box>
+    <Box>
+      <PageHeader
+        title="ABHA Management"
+        subtitle={
+          <Box component="span">
+            Create, verify and manage Ayushman Bharat Health Accounts
+            {linkedPatientName && (
+              <Chip size="small" label={`Linking: ${linkedPatientName}`}
+                sx={{ ml: 1, height: 20, fontSize: '0.65rem' }} color="primary" variant="outlined" />
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        }
+        icon={<HealthAndSafety />}
+        actions={
+          <>
             {isAdmin && (
               <Button
-                variant="outlined"
-                size="small"
+                variant="outlined" size="small"
                 onClick={handleHipRegister}
                 disabled={hipRegistering}
-                startIcon={hipRegistering ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <HealthAndSafety />}
-                sx={{
-                  color: '#fff', borderColor: 'rgba(255,255,255,0.4)',
-                  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
-                  textTransform: 'none', fontWeight: 600,
-                }}
+                startIcon={hipRegistering ? <CircularProgress size={14} /> : <HealthAndSafety />}
               >
-                {hipRegistering ? 'Registering...' : 'Register HIP'}
+                {hipRegistering ? 'Registering…' : 'Register HIP'}
               </Button>
             )}
-            <Chip
-              icon={<HealthAndSafety sx={{ color: '#fff !important' }} />}
-              label="ABDM V3"
-              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 600 }}
-            />
-          </Box>
-        </Box>
-      </Paper>
+            <Chip icon={<HealthAndSafety />} label="ABDM V3" size="small" color="success" variant="outlined" />
+          </>
+        }
+      />
 
       <Paper elevation={0} sx={{ borderRadius: 2.5, border: `1px solid ${theme.palette.divider}`, overflow: 'hidden', mb: 3 }}>
         <Tabs

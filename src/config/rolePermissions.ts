@@ -151,6 +151,18 @@ export const menuGroups: MenuGroup[] = [
         icon: 'Receipt',
         roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN'],
       },
+      {
+        text: 'ABDM Activity',
+        path: '/app/abdm-activity',
+        icon: 'Hub',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'Audit Logs',
+        path: '/app/audit-logs',
+        icon: 'History',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
     ],
   },
 ];
