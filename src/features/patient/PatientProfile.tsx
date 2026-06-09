@@ -426,17 +426,45 @@ const PatientProfile: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <SectionCard title="Consent Records">
                   {(consents || []).length === 0 ? <EmptyState icon={<HealthAndSafety />} message="No consent records" small /> : (
-                    consents.map((c: any) => (
-                      <Box key={c.id} sx={{ mb: 1.5, p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" fontWeight={600}>{
-                            ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string,string>)[c.purpose] || c.purpose || 'Health Data Consent'
-                          }</Typography>
-                          <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
+                    consents.map((c: any) => {
+                      const purposeLabel = ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string, string>)[c.purpose] || c.purpose || 'Health Data Consent';
+                      const hiTypes: string[] = Array.isArray(c.hiTypes) ? c.hiTypes : [];
+                      return (
+                        <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: '#fff', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" fontWeight={700} noWrap>{purposeLabel}</Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{c.consentId}</Typography>
+                            </Box>
+                            <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
+                          </Box>
+                          {hiTypes.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.75 }}>
+                              {hiTypes.map((t) => (
+                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ height: 20, fontSize: 10.5 }} />
+                              ))}
+                            </Box>
+                          )}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                            <Typography variant="caption" color="text.secondary">Requested {fmtTime(c.createdAt)}</Typography>
+                            {c.grantedAt && (
+                              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>Granted {fmtTime(c.grantedAt)}</Typography>
+                            )}
+                          </Box>
                         </Box>
-                        <Typography variant="caption" color="text.secondary">{fmtTime(c.createdAt)}</Typography>
-                      </Box>
-                    ))
+                      );
+                    })
+                  )}
+                  {(consents || []).some((c: any) => c.status === 'GRANTED') && (
+                    <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <CloudDownload sx={{ fontSize: 16, color: 'primary.main' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Fetched documents appear in the{' '}
+                        <Box component="span" onClick={() => setTab(4)} sx={{ color: 'primary.main', fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+                          ABDM Records
+                        </Box>{' '}tab.
+                      </Typography>
+                    </Box>
                   )}
                 </SectionCard>
               </Grid>
