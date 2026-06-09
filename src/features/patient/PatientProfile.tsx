@@ -194,12 +194,22 @@ const PatientProfile: React.FC = () => {
   if (loading) return <Box sx={{ p: 3 }}><Skeleton variant="rectangular" height={80} sx={{ mb: 2, borderRadius: 2 }} /><Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} /></Box>;
   if (!data) return <Box sx={{ p: 3 }}><Alert severity="error">Patient not found</Alert><Button sx={{ mt: 2 }} onClick={() => navigate(-1)}>Go Back</Button></Box>;
 
-  const { patient, summary, billingOverview, chargeItems, latestVitals, activeAdmission, encounters, prescriptions, vitals, investigations, admissions, consents } = data;
+  const { patient, summary, billingOverview, chargeItems, latestVitals, activeAdmission, encounters, prescriptions, vitals, investigations, admissions, consents, appointments } = data;
   const age = patient.dob ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / 31557600000) : null;
   const address = patient.address
     ? typeof patient.address === 'object'
-      ? [patient.address.line, patient.address.district, patient.address.city, patient.address.state, patient.address.pincode].filter(Boolean).join(', ')
+      ? [
+          patient.address.line || patient.address.line1,
+          patient.address.line2,
+          patient.address.district,
+          patient.address.city,
+          patient.address.state,
+          patient.address.pincode,
+        ].filter(Boolean).join(', ')
       : patient.address
+    : null;
+  const emergencyContact = patient.emergencyContact && typeof patient.emergencyContact === 'object'
+    ? patient.emergencyContact
     : null;
 
   const isMale = patient.gender === 'Male';
@@ -340,10 +350,23 @@ const PatientProfile: React.FC = () => {
             <Grid container spacing={2.5}>
               <Grid item xs={12} md={4}>
                 <SectionCard title="Demographics">
-                  <InfoRow icon={<Person />} label="Name" value={`${patient.firstName} ${patient.lastName}`} />
+                  <InfoRow icon={<Person />} label="Name" value={`${patient.firstName}${patient.middleName ? ' ' + patient.middleName : ''} ${patient.lastName}`} />
                   <InfoRow icon={<CalendarToday />} label="DOB" value={`${fmt(patient.dob)}${age != null ? ` (${age}y)` : ''}`} />
                   <InfoRow icon={<Phone />} label="Mobile" value={patient.mobile} />
+                  {patient.email && <InfoRow icon={<Phone />} label="Email" value={patient.email} />}
                   {address && <InfoRow icon={<Home />} label="Address" value={address} />}
+                  {patient.maritalStatus && <InfoRow icon={<Person />} label="Marital status" value={patient.maritalStatus} />}
+                  {patient.occupation && <InfoRow icon={<Person />} label="Occupation" value={patient.occupation} />}
+                  {Array.isArray(patient.allergies) && patient.allergies.length > 0 && (
+                    <InfoRow icon={<MonitorHeart />} label="Allergies" value={patient.allergies.join(', ')} />
+                  )}
+                  {emergencyContact && (emergencyContact.name || emergencyContact.mobile) && (
+                    <InfoRow
+                      icon={<Phone />}
+                      label="Emergency contact"
+                      value={`${emergencyContact.name || '—'}${emergencyContact.relationship ? ` (${emergencyContact.relationship})` : ''} • ${emergencyContact.mobile || ''}`}
+                    />
+                  )}
                 </SectionCard>
               </Grid>
               <Grid item xs={12} md={4}>
@@ -374,6 +397,48 @@ const PatientProfile: React.FC = () => {
                   </Box>
                 </SectionCard>
               </Grid>
+              {/* ── Upcoming appointments ───────────────────────────────────── */}
+              {Array.isArray(appointments) && appointments.length > 0 && (
+                <Grid item xs={12}>
+                  <SectionCard title="Upcoming & Recent Appointments">
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {appointments.slice(0, 5).map((appt: any) => {
+                        const when = appt.scheduledAt ? new Date(appt.scheduledAt) : null;
+                        const isFuture = when ? when.getTime() > Date.now() : false;
+                        const docName = appt.doctor
+                          ? `Dr. ${appt.doctor.firstName} ${appt.doctor.lastName}`
+                          : 'Doctor';
+                        return (
+                          <Box key={appt.id} sx={{
+                            display: 'flex', alignItems: 'center', gap: 1.5,
+                            p: 1.25, borderRadius: 1.5,
+                            border: theme => `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
+                            bgcolor: theme => alpha(theme.palette.primary.main, isFuture ? 0.05 : 0.02),
+                          }}>
+                            <CalendarToday sx={{ fontSize: 18, color: 'primary.main' }} />
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {docName} {appt.doctor?.specialization ? `(${appt.doctor.specialization})` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {when ? when.toLocaleString() : ''} {appt.type ? `• ${appt.type}` : ''}
+                              </Typography>
+                            </Box>
+                            <Chip size="small"
+                              label={appt.status}
+                              color={
+                                appt.status === 'COMPLETED' ? 'success' :
+                                appt.status === 'CANCELLED' || appt.status === 'NO_SHOW' ? 'default' :
+                                'primary'
+                              }
+                            />
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </SectionCard>
+                </Grid>
+              )}
               <Grid item xs={12}>
                 <Grid container spacing={1.5}>
                   {[

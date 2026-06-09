@@ -3,8 +3,14 @@ import api from './api';
 const HIP_BASE = '/api/v1/hip';
 
 class HipService {
-  async registerHipService() {
-    return api.post(`${HIP_BASE}/register`);
+  /** Register the (caller's or specified) hospital as an HIP service with ABDM. */
+  async registerHipService(hospitalId?: string) {
+    return api.post(`${HIP_BASE}/register`, hospitalId ? { hospitalId } : {});
+  }
+
+  /** Register the (caller's or specified) hospital as an HIU service with ABDM. */
+  async registerHiuService(hospitalId?: string) {
+    return api.post(`${HIP_BASE}/register-hiu`, hospitalId ? { hospitalId } : {});
   }
 
   async getFacilityQrData() {

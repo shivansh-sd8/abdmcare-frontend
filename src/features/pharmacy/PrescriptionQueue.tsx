@@ -21,10 +21,10 @@ import {
   CircularProgress,
   Alert,
   Grid,
-  Card,
-  CardContent,
-  alpha,
   Divider,
+  TextField,
+  Autocomplete,
+  InputAdornment,
 } from '@mui/material';
 import {
   Visibility,
@@ -32,8 +32,10 @@ import {
   LocalPharmacy,
   Medication,
   CheckCircle,
+  Search,
 } from '@mui/icons-material';
 import prescriptionService from '../../services/prescriptionService';
+import pharmacyService from '../../services/pharmacyService';
 import { toast } from 'react-toastify';
 import { PageHeader, StatCard } from '../../components/ui';
 
@@ -57,6 +59,28 @@ interface Prescription {
   createdAt: string;
 }
 
+/** Pharmacy master record (subset). */
+interface MedicineOption {
+  id: string;
+  name: string;
+  brandName?: string;
+  unit?: string;
+  mrp?: number;
+  totalStock?: number;
+}
+
+/** A row in the dispense dialog representing one line on the prescription. */
+interface DispenseLine {
+  /** Original prescription label (drug name + dosage), shown read-only. */
+  label: string;
+  /** Selected pharmacy master record (or null if not yet matched). */
+  match: MedicineOption | null;
+  /** Quantity to dispense for this line. */
+  quantity: number;
+  /** Unit price (defaults to master MRP, but editable for OTC mark-downs). */
+  price: number;
+}
+
 const PrescriptionQueue: React.FC = () => {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +90,13 @@ const PrescriptionQueue: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
-  const [dispensingId, setDispensingId] = useState<string | null>(null);
+
+  // ── Dispense dialog state ─────────────────────────────────────────────
+  const [dispenseOpen, setDispenseOpen] = useState(false);
+  const [dispensing, setDispensing] = useState(false);
+  const [dispenseTarget, setDispenseTarget] = useState<Prescription | null>(null);
+  const [dispenseLines, setDispenseLines] = useState<DispenseLine[]>([]);
+  const [medicineOptions, setMedicineOptions] = useState<MedicineOption[]>([]);
 
   const fetchPrescriptions = useCallback(async () => {
     try {
@@ -104,22 +134,89 @@ const PrescriptionQueue: React.FC = () => {
     printWindow.print();
   };
 
-  const handleDispense = async (prescription: Prescription) => {
+  /** Open the dispense dialog and seed lines from the prescription, attempting
+   *  best-effort name matches against the pharmacy master. */
+  const openDispense = async (prescription: Prescription) => {
+    setDispenseTarget(prescription);
+    setDispenseOpen(true);
+    setDispenseLines((prescription.medications || []).map((m) => ({
+      label: `${m.name}${m.dosage ? ` ${m.dosage}` : ''}`,
+      match: null,
+      quantity: 1,
+      price: 0,
+    })));
+
+    // Pull a small slice of the master so the autocomplete has options ready.
     try {
-      setDispensingId(prescription.id);
-      await prescriptionService.dispensePrescription(prescription.id, {
-        medicines: (prescription.medications || []).map(m => ({
-          name: m.name,
-          price: 0,
-          quantity: 1,
+      const res: any = await pharmacyService.listMedicines({ limit: 100 });
+      const list: MedicineOption[] = res.data?.medicines || res.data?.data || res.data || [];
+      setMedicineOptions(list);
+
+      // Try to auto-match by exact (case-insensitive) name. The user can
+      // override before submitting.
+      setDispenseLines(prev => prev.map((line, i) => {
+        const orig = prescription.medications?.[i];
+        if (!orig) return line;
+        const target = (orig.name || '').toLowerCase().trim();
+        const exact = list.find(x => (x.name || '').toLowerCase().trim() === target);
+        const partial = exact || list.find(x => target.includes((x.name || '').toLowerCase().trim()) || (x.name || '').toLowerCase().trim().includes(target));
+        return partial
+          ? { ...line, match: partial, price: typeof partial.mrp === 'number' ? partial.mrp : line.price }
+          : line;
+      }));
+    } catch {
+      // Silent: dialog still works, user can pick manually
+    }
+  };
+
+  const closeDispense = () => {
+    setDispenseOpen(false);
+    setDispenseTarget(null);
+    setDispenseLines([]);
+  };
+
+  const updateLine = (idx: number, patch: Partial<DispenseLine>) => {
+    setDispenseLines(prev => prev.map((line, i) => i === idx ? { ...line, ...patch } : line));
+  };
+
+  /** Block submission when any line has zero quantity, missing match, or the
+   *  selected medicine doesn't have enough stock. */
+  const dispenseValidation = (() => {
+    if (dispenseLines.length === 0) return 'No medications to dispense';
+    for (let i = 0; i < dispenseLines.length; i++) {
+      const l = dispenseLines[i];
+      if (l.quantity <= 0) return `Row ${i + 1}: quantity must be at least 1`;
+      if (l.price < 0)     return `Row ${i + 1}: price cannot be negative`;
+      if (l.match && typeof l.match.totalStock === 'number' && l.match.totalStock < l.quantity) {
+        return `Row ${i + 1}: only ${l.match.totalStock} ${l.match.unit || 'units'} of ${l.match.name} in stock`;
+      }
+    }
+    return null;
+  })();
+
+  const submitDispense = async () => {
+    if (!dispenseTarget) return;
+    if (dispenseValidation) {
+      toast.error(dispenseValidation);
+      return;
+    }
+    try {
+      setDispensing(true);
+      await prescriptionService.dispensePrescription(dispenseTarget.id, {
+        medicines: dispenseLines.map((l, i) => ({
+          name: l.match?.name || (dispenseTarget.medications?.[i]?.name || l.label),
+          medicineId: l.match?.id,
+          price: Number(l.price) || 0,
+          quantity: Number(l.quantity) || 1,
         })),
       });
-      toast.success('Prescription dispensed successfully');
+      toast.success('Prescription dispensed and stock deducted');
+      closeDispense();
       fetchPrescriptions();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to dispense prescription');
     } finally {
-      setDispensingId(null);
+      setDispensing(false);
     }
   };
 
@@ -215,9 +312,8 @@ const PrescriptionQueue: React.FC = () => {
                                   size="small"
                                   variant="contained"
                                   color="success"
-                                  startIcon={dispensingId === rx.id ? <CircularProgress size={14} color="inherit" /> : <CheckCircle />}
-                                  disabled={dispensingId === rx.id}
-                                  onClick={() => handleDispense(rx)}
+                                  startIcon={<CheckCircle />}
+                                  onClick={() => openDispense(rx)}
                                   sx={{ textTransform: 'none', minWidth: 0, px: 1.5 }}
                                 >
                                   Dispense
@@ -275,6 +371,113 @@ const PrescriptionQueue: React.FC = () => {
         <DialogActions>
           {selectedPrescription && <Button startIcon={<Print />} onClick={() => handlePrint(selectedPrescription)}>Print</Button>}
           <Button onClick={() => setViewOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dispense Dialog — explicit medicine matching, real prices, stock check */}
+      <Dialog open={dispenseOpen} onClose={dispensing ? undefined : closeDispense} maxWidth="md" fullWidth>
+        <DialogTitle>Dispense Prescription</DialogTitle>
+        <DialogContent>
+          {dispenseTarget && (
+            <Box sx={{ pt: 1 }}>
+              <Typography sx={{ mb: 2 }}>
+                <strong>Patient:</strong> {dispenseTarget.patient?.firstName} {dispenseTarget.patient?.lastName}
+                {dispenseTarget.patient?.uhid ? ` (${dispenseTarget.patient.uhid})` : ''}
+              </Typography>
+
+              <Alert severity="info" sx={{ mb: 2 }} icon={<Search />}>
+                Match each prescribed item to a pharmacy master record so stock is deducted (FEFO) and the patient is billed correctly.
+              </Alert>
+
+              {dispenseLines.map((line, i) => (
+                <Paper key={i} sx={{ p: 2, mb: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>{i + 1}. {line.label}</strong>
+                  </Typography>
+                  <Grid container spacing={1.5}>
+                    <Grid item xs={12} md={6}>
+                      <Autocomplete
+                        size="small"
+                        options={medicineOptions}
+                        value={line.match}
+                        getOptionLabel={(o) => o ? `${o.name}${o.brandName ? ` (${o.brandName})` : ''}` : ''}
+                        isOptionEqualToValue={(a, b) => a.id === b.id}
+                        onChange={(_, val) => updateLine(i, {
+                          match: val,
+                          price: val && typeof val.mrp === 'number' ? val.mrp : line.price,
+                        })}
+                        renderOption={(props, opt) => (
+                          <li {...props} key={opt.id}>
+                            <Box>
+                              <Typography variant="body2" fontWeight={600}>
+                                {opt.name}{opt.brandName ? ` — ${opt.brandName}` : ''}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                MRP ₹{opt.mrp ?? 0} • Stock {opt.totalStock ?? 0} {opt.unit || ''}
+                              </Typography>
+                            </Box>
+                          </li>
+                        )}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Match to pharmacy master"
+                            error={!line.match}
+                            helperText={!line.match ? 'Required for stock deduction' : ''}
+                          />
+                        )}
+                      />
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <TextField
+                        size="small" fullWidth type="number"
+                        label="Quantity" value={line.quantity}
+                        inputProps={{ min: 1 }}
+                        onChange={(e) => updateLine(i, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                        error={typeof line.match?.totalStock === 'number' && line.match.totalStock < line.quantity}
+                        helperText={
+                          typeof line.match?.totalStock === 'number' && line.match.totalStock < line.quantity
+                            ? `Only ${line.match.totalStock} in stock`
+                            : (line.match ? `Stock: ${line.match.totalStock ?? 0}` : '')
+                        }
+                      />
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <TextField
+                        size="small" fullWidth type="number"
+                        label="Unit price" value={line.price}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start">₹</InputAdornment>,
+                        }}
+                        onChange={(e) => updateLine(i, { price: Math.max(0, Number(e.target.value) || 0) })}
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              ))}
+
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Typography variant="h6">
+                  Total: ₹{dispenseLines.reduce((s, l) => s + (l.price * l.quantity), 0).toFixed(2)}
+                </Typography>
+              </Box>
+
+              {dispenseValidation && (
+                <Alert severity="warning" sx={{ mt: 2 }}>{dispenseValidation}</Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDispense} disabled={dispensing}>Cancel</Button>
+          <Button
+            variant="contained" color="success"
+            onClick={submitDispense}
+            disabled={dispensing || !!dispenseValidation}
+            startIcon={dispensing ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
+          >
+            {dispensing ? 'Dispensing...' : 'Confirm Dispense'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

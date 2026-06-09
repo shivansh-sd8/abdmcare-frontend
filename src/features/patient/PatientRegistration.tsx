@@ -85,10 +85,13 @@ const PatientRegistration: React.FC = () => {
 
   // ── Patient form ─────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '',
+    firstName: '', middleName: '', lastName: '',
     gender: '', dob: '', mobile: '', email: '', bloodGroup: '',
+    maritalStatus: '', occupation: '',
     address:          { line1: '', line2: '', city: '', state: '', pincode: '' },
     emergencyContact: { name: '', relationship: '', mobile: '' },
+    allergies: '' as string, // comma-separated in UI; converted to string[] on submit
+    medicalHistory: '' as string, // free-text; stored as { notes }
     abhaNumber: '',
     abhaAddress: '',
   });
@@ -181,14 +184,25 @@ const PatientRegistration: React.FC = () => {
       const ec = typeof editPatient.emergencyContact === 'object' && editPatient.emergencyContact
         ? editPatient.emergencyContact
         : {};
+      const allergiesRaw = editPatient.allergies;
+      const allergiesString = Array.isArray(allergiesRaw)
+        ? allergiesRaw.join(', ')
+        : (typeof allergiesRaw === 'string' ? allergiesRaw : '');
+      const pmh = editPatient.medicalHistory;
+      const pmhString = typeof pmh === 'string'
+        ? pmh
+        : (pmh && typeof pmh === 'object' && 'notes' in pmh ? String((pmh as any).notes || '') : '');
       setFormData({
         firstName: editPatient.firstName || '',
+        middleName: editPatient.middleName || '',
         lastName: editPatient.lastName || '',
         gender: editPatient.gender || '',
         dob: editPatient.dob ? new Date(editPatient.dob).toISOString().split('T')[0] : '',
         mobile: editPatient.mobile || '',
         email: editPatient.email || '',
         bloodGroup: editPatient.bloodGroup || '',
+        maritalStatus: editPatient.maritalStatus || '',
+        occupation: editPatient.occupation || '',
         address: {
           line1: addr.line1 || addr.line || addr.addressLine || '',
           line2: addr.line2 || '',
@@ -201,6 +215,8 @@ const PatientRegistration: React.FC = () => {
           relationship: ec.relationship || '',
           mobile: ec.mobile || '',
         },
+        allergies: allergiesString,
+        medicalHistory: pmhString,
         abhaNumber: editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber || '',
         abhaAddress: editPatient.abhaAddress || editPatient.abhaRecord?.abhaAddress || '',
       });
@@ -407,6 +423,18 @@ const PatientRegistration: React.FC = () => {
         address: formData.address,
         emergencyContact: formData.emergencyContact,
       };
+      if (formData.middleName?.trim())   patientPayload.middleName = formData.middleName.trim();
+      if (formData.maritalStatus)        patientPayload.maritalStatus = formData.maritalStatus;
+      if (formData.occupation?.trim())   patientPayload.occupation = formData.occupation.trim();
+      if (formData.allergies?.trim()) {
+        patientPayload.allergies = formData.allergies
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+      }
+      if (formData.medicalHistory?.trim()) {
+        patientPayload.medicalHistory = { notes: formData.medicalHistory.trim() };
+      }
       if (formData.email?.trim())      patientPayload.email = formData.email.trim();
       if (formData.bloodGroup)         patientPayload.bloodGroup = formData.bloodGroup;
       // Persist BOTH the 14-digit ABHA number and the ABHA address. The backend
@@ -549,12 +577,16 @@ const PatientRegistration: React.FC = () => {
                 </Typography>
                 <Divider sx={{ mb: 3 }} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
                 <TextField fullWidth label="First Name" required value={formData.firstName}
                   onChange={e => handleChange('firstName', e.target.value)}
                   onBlur={() => validateField('firstName')} error={!!errors.firstName} helperText={errors.firstName} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Middle Name" value={formData.middleName}
+                  onChange={e => handleChange('middleName', e.target.value)} />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField fullWidth label="Last Name" required value={formData.lastName}
                   onChange={e => handleChange('lastName', e.target.value)}
                   onBlur={() => validateField('lastName')} error={!!errors.lastName} helperText={errors.lastName} />
@@ -579,6 +611,21 @@ const PatientRegistration: React.FC = () => {
                   onChange={e => handleChange('bloodGroup', e.target.value)}>
                   {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => <MenuItem key={bg} value={bg}>{bg}</MenuItem>)}
                 </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth select label="Marital Status" value={formData.maritalStatus}
+                  onChange={e => handleChange('maritalStatus', e.target.value)}>
+                  <MenuItem value="">— Not specified —</MenuItem>
+                  <MenuItem value="SINGLE">Single</MenuItem>
+                  <MenuItem value="MARRIED">Married</MenuItem>
+                  <MenuItem value="WIDOWED">Widowed</MenuItem>
+                  <MenuItem value="DIVORCED">Divorced</MenuItem>
+                  <MenuItem value="SEPARATED">Separated</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Occupation" value={formData.occupation}
+                  onChange={e => handleChange('occupation', e.target.value)} />
               </Grid>
             </Grid>
           )}
@@ -650,6 +697,25 @@ const PatientRegistration: React.FC = () => {
                   error={!!errors['emergencyContact.mobile']}
                   helperText={errors['emergencyContact.mobile']}
                   inputProps={{ maxLength: 10 }} />
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2, fontWeight: 600 }}>Clinical Background (optional)</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Known Allergies"
+                  value={formData.allergies}
+                  onChange={e => handleChange('allergies', e.target.value)}
+                  helperText="Comma-separated, e.g. Penicillin, Peanuts, Latex"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={2} maxRows={6}
+                  label="Past Medical History"
+                  value={formData.medicalHistory}
+                  onChange={e => handleChange('medicalHistory', e.target.value)}
+                  helperText="Diabetes, hypertension, prior surgeries, family history etc."
+                />
               </Grid>
             </Grid>
           )}

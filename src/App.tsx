@@ -37,12 +37,11 @@ const MedicineList = React.lazy(() => import('./features/pharmacy/MedicineList')
 const BillingDashboard = React.lazy(() => import('./features/billing/BillingDashboard'));
 const Login = React.lazy(() => import('./features/auth/Login'));
 const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword'));
-const SuperAdminSignup = React.lazy(() => import('./features/auth/SuperAdminSignup'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
-const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
 const QueueDisplay = React.lazy(() => import('./features/queue/QueueDisplay'));
 const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
 const AbdmActivity = React.lazy(() => import('./features/abdm/AbdmActivity'));
+const CompliancePack = React.lazy(() => import('./features/compliance/CompliancePack'));
 
 const PageLoader = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -62,11 +61,13 @@ const App: React.FC = () => {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
-        <Route path="/documentation" element={<Suspense fallback={<PageLoader />}><DocumentationPage /></Suspense>} />
+        {/* Public /documentation has been retired; the tech pack now lives behind login at /app/compliance. */}
+        <Route path="/documentation" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
         <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense>} />
-        <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SuperAdminSignup /></Suspense>} />
-        <Route path="/super-admin-signup" element={<Suspense fallback={<PageLoader />}><SuperAdminSignup /></Suspense>} />
+        {/* Legacy signup paths now bounce to /login. Account creation is admin-only. */}
+        <Route path="/signup" element={<Navigate to="/login" replace />} />
+        <Route path="/super-admin-signup" element={<Navigate to="/login" replace />} />
         
         <Route
           path="/app"
@@ -267,6 +268,14 @@ const App: React.FC = () => {
               element={
                 <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
                   <AbdmActivity />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="compliance"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <CompliancePack />
                 </RoleProtectedRoute>
               }
             />

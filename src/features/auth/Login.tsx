@@ -1,56 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+// Login page for AbhaAyushman.
+//
+// Shares the visual language of LandingPage.tsx — soft cream surface, deep
+// teal/emerald gradient brand, slate text. The form lives in a single centred
+// glass card so the page feels welcoming on any screen size and matches the
+// rest of the marketing/brand surface.
+
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../../store/slices/authSlice';
 import {
-  Box,
-  TextField,
-  Button,
-  Typography,
-  InputAdornment,
-  IconButton,
   Alert,
-  Stack,
+  Box,
+  Button,
   Chip,
+  IconButton,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
   alpha,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import {
-  Visibility,
-  VisibilityOff,
+  ArrowForward,
   Email,
+  HealthAndSafety,
   Lock,
   LocalHospital,
   Verified,
+  Visibility,
+  VisibilityOff,
   Shield,
-  Groups,
-  ArrowForward,
-  ArrowBack,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 
-/* ── tiny decorative blob ─────────────────────────────────── */
-const Blob: React.FC<{ color: string; size: number; top?: string | number; bottom?: string | number; left?: string | number; right?: string | number; opacity?: number }> = ({
-  color, size, top, bottom, left, right, opacity = 0.2,
-}) => (
-  <Box sx={{ position: 'absolute', top, bottom, left, right, width: size, height: size, borderRadius: '50%', background: color, filter: 'blur(90px)', opacity, pointerEvents: 'none' }} />
+/* ── theme tokens (kept in sync with LandingPage.tsx) ─────────── */
+const BRAND = {
+  primary:    '#0F766E',
+  primary600: '#0D9488',
+  accent:     '#14B8A6',
+  accent2:    '#22D3EE',
+  emerald:    '#10B981',
+  ink:        '#0F172A',
+  ink600:     '#334155',
+  ink500:     '#475569',
+  bg:         '#F6FBF9',
+  surface:    '#FFFFFF',
+  hairline:   '#E2E8F0',
+};
+
+/** Soft blurred blob — same primitive as on the landing page. */
+const Blob: React.FC<{
+  color: string;
+  size: number;
+  top?: string | number;
+  left?: string | number;
+  right?: string | number;
+  bottom?: string | number;
+  opacity?: number;
+}> = ({ color, size, top, left, right, bottom, opacity = 0.35 }) => (
+  <Box
+    sx={{
+      position: 'absolute',
+      top, left, right, bottom,
+      width: size,
+      height: size,
+      borderRadius: '50%',
+      background: color,
+      filter: 'blur(110px)',
+      opacity,
+      pointerEvents: 'none',
+    }}
+  />
 );
 
 const Login: React.FC = () => {
-  const navigate  = useNavigate();
-  const dispatch  = useDispatch();
-  const theme     = useTheme();
-  const isMobile  = useMediaQuery(theme.breakpoints.down('md'));
-  const [email, setEmail]               = useState('');
-  const [password, setPassword]         = useState('');
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (localStorage.getItem('token')) {
       navigate('/app/dashboard', { replace: true });
     }
   }, [navigate]);
@@ -63,12 +102,20 @@ const Login: React.FC = () => {
       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082';
       const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
         method: 'POST',
+        // Send/receive httpOnly cookies so the axios interceptor can fall back
+        // to cookie-based refresh too.
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       const data = await response.json();
       if (response.ok) {
         localStorage.setItem('token', data.data.token);
+        // Persist refresh token so the api interceptor can silently refresh
+        // expired access tokens instead of bouncing the user back to /login.
+        if (data.data.refreshToken) {
+          localStorage.setItem('refreshToken', data.data.refreshToken);
+        }
         localStorage.setItem('user', JSON.stringify(data.data.user));
         dispatch(setCredentials({ user: data.data.user, token: data.data.token }));
         toast.success('Welcome back!');
@@ -87,262 +134,294 @@ const Login: React.FC = () => {
     }
   };
 
-  return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#0A0A0F' }}>
+  const fieldStyles = {
+    mt: 0.75,
+    '& .MuiOutlinedInput-root': {
+      bgcolor: BRAND.surface,
+      color: BRAND.ink,
+      borderRadius: 2,
+      transition: 'border-color .2s ease, box-shadow .2s ease',
+      '& fieldset': { borderColor: BRAND.hairline },
+      '&:hover fieldset': { borderColor: alpha(BRAND.primary600, 0.5) },
+      '&.Mui-focused fieldset': {
+        borderColor: BRAND.primary600,
+        borderWidth: 1.5,
+      },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 4px ${alpha(BRAND.primary600, 0.12)}`,
+      },
+      '& input::placeholder': { color: alpha(BRAND.ink, 0.35) },
+    },
+  } as const;
 
-      {/* ── LEFT PANEL — branding ─────────────────────────────── */}
-      {!isMobile && (
+  return (
+    <Box
+      sx={{
+        position: 'relative',
+        minHeight: '100vh',
+        bgcolor: BRAND.bg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        px: 2,
+        py: { xs: 6, md: 8 },
+      }}
+    >
+      {/* Ambient background — same vocabulary as LandingPage hero */}
+      <Blob color={BRAND.primary}  size={520} top={-160} left={-160} opacity={0.18} />
+      <Blob color={BRAND.accent2}  size={460} top={120}  right={-120} opacity={0.18} />
+      <Blob color={BRAND.emerald}  size={380} bottom={-120} left="35%" opacity={0.12} />
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `linear-gradient(${alpha(BRAND.primary, 0.06)} 1px, transparent 1px), linear-gradient(90deg, ${alpha(BRAND.primary, 0.06)} 1px, transparent 1px)`,
+          backgroundSize: '64px 64px',
+          maskImage: 'radial-gradient(ellipse at center, black 35%, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, black 35%, transparent 75%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <Box
+        sx={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: 460,
+          bgcolor: alpha(BRAND.surface, 0.85),
+          backdropFilter: 'blur(18px)',
+          border: `1px solid ${BRAND.hairline}`,
+          borderRadius: 4,
+          p: { xs: 3.5, sm: 5 },
+          boxShadow: `0 30px 60px -20px ${alpha(BRAND.primary, 0.25)}`,
+        }}
+      >
+        {/* Brand row */}
+        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 4 }}>
+          <Box
+            sx={{
+              width: 42,
+              height: 42,
+              borderRadius: 2,
+              background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: `0 8px 20px ${alpha(BRAND.primary, 0.35)}`,
+              cursor: 'pointer',
+            }}
+            onClick={() => navigate('/')}
+          >
+            <LocalHospital sx={{ color: 'white', fontSize: 22 }} />
+          </Box>
+          <Box>
+            <Typography fontWeight={800} fontSize="1.1rem" sx={{ color: BRAND.ink, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+              AbhaAyushman
+            </Typography>
+            <Typography variant="caption" sx={{ color: BRAND.ink500 }}>
+              Hospital Information Management
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Chip
+          icon={<Verified sx={{ color: `${BRAND.primary600} !important`, fontSize: '14px !important' }} />}
+          label="Secure sign in"
+          size="small"
+          sx={{
+            bgcolor: alpha(BRAND.primary, 0.08),
+            color: BRAND.primary600,
+            fontWeight: 700,
+            fontSize: '0.7rem',
+            border: `1px solid ${alpha(BRAND.primary, 0.18)}`,
+            mb: 2,
+          }}
+        />
+
+        <Typography
+          variant="h4"
+          fontWeight={800}
+          sx={{ color: BRAND.ink, letterSpacing: '-0.5px', mb: 1, fontSize: { xs: '1.7rem', sm: '2rem' } }}
+        >
+          Welcome back
+        </Typography>
+        <Typography variant="body2" sx={{ color: BRAND.ink500, mb: 3.5 }}>
+          Sign in to continue to your hospital workspace.
+        </Typography>
+
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2.5,
+              bgcolor: alpha('#EF4444', 0.06),
+              color: '#B91C1C',
+              border: `1px solid ${alpha('#EF4444', 0.25)}`,
+              '& .MuiAlert-icon': { color: '#EF4444' },
+              borderRadius: 2,
+            }}
+          >
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit} noValidate>
+          <Box sx={{ mb: 2.5 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: BRAND.ink500, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.7rem' }}
+            >
+              Email address
+            </Typography>
+            <TextField
+              fullWidth
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              required
+              placeholder="you@hospital.com"
+              sx={fieldStyles}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Email sx={{ color: BRAND.ink500, fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+
+          <Box sx={{ mb: 1.5 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography
+                variant="caption"
+                sx={{ color: BRAND.ink500, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.7rem' }}
+              >
+                Password
+              </Typography>
+              <Link
+                to="/forgot-password"
+                style={{
+                  color: BRAND.primary600,
+                  textDecoration: 'none',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                }}
+              >
+                Forgot?
+              </Link>
+            </Stack>
+            <TextField
+              fullWidth
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
+              required
+              placeholder="Enter your password"
+              sx={fieldStyles}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Lock sx={{ color: BRAND.ink500, fontSize: 18 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      size="small"
+                      sx={{ color: BRAND.ink500, '&:hover': { color: BRAND.ink } }}
+                    >
+                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            disabled={loading}
+            endIcon={!loading && <ArrowForward />}
+            sx={{
+              mt: 2.5,
+              background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
+              color: 'white',
+              py: 1.55,
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              borderRadius: 2.5,
+              textTransform: 'none',
+              boxShadow: `0 10px 30px ${alpha(BRAND.primary, 0.35)}`,
+              '&:hover': {
+                transform: 'translateY(-1px)',
+                boxShadow: `0 14px 38px ${alpha(BRAND.primary, 0.45)}`,
+              },
+              '&:disabled': {
+                background: alpha(BRAND.primary, 0.4),
+                color: alpha('#FFFFFF', 0.7),
+              },
+              transition: 'all 0.2s',
+            }}
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
+
+        {/* Footer microcopy — replaces the old Super-Admin signup CTA */}
         <Box
           sx={{
-            flex: '0 0 46%',
-            position: 'relative',
-            background: 'linear-gradient(150deg, #0F0C29 0%, #302B63 55%, #24243e 100%)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            p: 6,
-            overflow: 'hidden',
+            mt: 4,
+            pt: 3,
+            borderTop: `1px solid ${BRAND.hairline}`,
+            textAlign: 'center',
           }}
         >
-          <Blob color="#6366F1" size={500} top="-80px" left="-80px" />
-          <Blob color="#0EA5E9" size={400} bottom="-60px" right="-60px" />
-
-          {/* Grid overlay */}
-          <Box sx={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${alpha('#6366F1', 0.06)} 1px, transparent 1px), linear-gradient(90deg, ${alpha('#6366F1', 0.06)} 1px, transparent 1px)`, backgroundSize: '60px 60px' }} />
-
-          {/* Back to home */}
-          <Box sx={{ position: 'relative', zIndex: 1 }}>
-            <Button
-              startIcon={<ArrowBack />}
+          <Typography variant="caption" sx={{ color: BRAND.ink500, display: 'block', mb: 0.5 }}>
+            New to AbhaAyushman?
+          </Typography>
+          <Typography variant="body2" sx={{ color: BRAND.ink600, fontWeight: 500 }}>
+            Accounts are provisioned by your hospital administrator.{' '}
+            <Box
+              component="span"
               onClick={() => navigate('/')}
-              sx={{ color: alpha('#fff', 0.5), '&:hover': { color: 'white' }, textTransform: 'none', fontWeight: 500, pl: 0 }}
+              sx={{
+                color: BRAND.primary600,
+                fontWeight: 600,
+                cursor: 'pointer',
+                '&:hover': { textDecoration: 'underline' },
+              }}
             >
-              Back to home
-            </Button>
-          </Box>
+              Learn more
+            </Box>
+            .
+          </Typography>
+        </Box>
 
-          {/* Center content */}
-          <Box sx={{ position: 'relative', zIndex: 1 }}>
-            {/* Logo */}
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 5 }}>
-              <Box sx={{ width: 44, height: 44, borderRadius: 2.5, background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LocalHospital sx={{ color: 'white', fontSize: 24 }} />
-              </Box>
-              <Typography fontWeight={800} fontSize="1.35rem" color="white" letterSpacing="-0.5px">
-                AbhaAyushman
-              </Typography>
-            </Stack>
-
-            <Chip
-              icon={<Verified sx={{ color: '#818CF8 !important', fontSize: '15px !important' }} />}
-              label="ABDM Integration Ready"
-              sx={{ bgcolor: alpha('#818CF8', 0.12), color: '#818CF8', fontWeight: 700, fontSize: '0.72rem', mb: 3, border: `1px solid ${alpha('#818CF8', 0.25)}` }}
-            />
-
-            <Typography variant="h3" fontWeight={800} color="white" sx={{ lineHeight: 1.2, letterSpacing: '-1px', mb: 2 }}>
-              India's Smartest
-              <Box component="span" sx={{ display: 'block', background: 'linear-gradient(90deg, #818CF8, #38BDF8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Hospital Platform
-              </Box>
-            </Typography>
-            <Typography variant="body1" sx={{ color: alpha('#fff', 0.6), lineHeight: 1.8, maxWidth: 380 }}>
-              Unified OPD, IPD, Lab, Pharmacy, and Billing — built for modern Indian healthcare with ABDM integration capabilities.
-            </Typography>
-
-            {/* Mini stats */}
-            <Stack direction="row" spacing={2} sx={{ mt: 5 }}>
-              {[
-                { v: '8+', l: 'Modules' },
-                { v: '10+', l: 'Roles' },
-                { v: 'FHIR', l: 'Ready' },
-              ].map((s) => (
-                <Box key={s.l} sx={{ textAlign: 'center', px: 2.5, py: 1.5, borderRadius: 2, bgcolor: alpha('#fff', 0.06), border: `1px solid ${alpha('#fff', 0.1)}` }}>
-                  <Typography fontWeight={800} color="white" fontSize="1.3rem" lineHeight={1}>{s.v}</Typography>
-                  <Typography fontSize="0.7rem" sx={{ color: alpha('#fff', 0.5), mt: 0.3 }}>{s.l}</Typography>
-                </Box>
-              ))}
-            </Stack>
-          </Box>
-
-          {/* Bottom trust badges */}
-          <Stack direction="row" spacing={1.5} sx={{ position: 'relative', zIndex: 1 }}>
+        {/* Trust badges */}
+        {!isSmall && (
+          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 3 }}>
             {[
-              { icon: <Shield sx={{ fontSize: 14 }} />, label: 'Secure & Compliant', color: '#818CF8' },
-              { icon: <Groups sx={{ fontSize: 14 }} />, label: 'Enterprise Grade', color: '#38BDF8' },
+              { icon: <Shield sx={{ fontSize: 14, color: BRAND.primary600 }} />, label: 'Encrypted & audited' },
+              { icon: <HealthAndSafety sx={{ fontSize: 14, color: BRAND.emerald }} />, label: 'ABDM integration' },
             ].map((b) => (
               <Stack key={b.label} direction="row" spacing={0.6} alignItems="center">
-                <Box sx={{ color: b.color }}>{b.icon}</Box>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.45) }}>{b.label}</Typography>
+                {b.icon}
+                <Typography variant="caption" sx={{ color: BRAND.ink500, fontWeight: 500 }}>
+                  {b.label}
+                </Typography>
               </Stack>
             ))}
           </Stack>
-        </Box>
-      )}
-
-      {/* ── RIGHT PANEL — form ────────────────────────────────── */}
-      <Box
-        sx={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          p: { xs: 3, md: 6 },
-          bgcolor: '#0D0D14',
-        }}
-      >
-        <Box sx={{ width: '100%', maxWidth: 440 }}>
-
-          {/* Mobile logo */}
-          {isMobile && (
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 5, justifyContent: 'center' }}>
-              <Box sx={{ width: 40, height: 40, borderRadius: 2, background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LocalHospital sx={{ color: 'white', fontSize: 22 }} />
-              </Box>
-              <Typography fontWeight={800} fontSize="1.2rem" color="white">AbhaAyushman</Typography>
-            </Stack>
-          )}
-
-          {/* Heading */}
-          <Typography variant="h4" fontWeight={800} color="white" letterSpacing="-0.5px" gutterBottom>
-            Welcome back
-          </Typography>
-          <Typography variant="body2" sx={{ color: alpha('#fff', 0.45), mb: 4 }}>
-            Sign in to continue to your dashboard
-          </Typography>
-
-          {error && (
-            <Alert severity="error" sx={{ mb: 3, bgcolor: alpha('#EF4444', 0.1), color: '#FCA5A5', border: `1px solid ${alpha('#EF4444', 0.3)}`, '& .MuiAlert-icon': { color: '#FCA5A5' } }}>
-              {error}
-            </Alert>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <Box sx={{ mb: 2.5 }}>
-              <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                Email Address
-              </Typography>
-              <TextField
-                fullWidth
-                type="email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                required
-                placeholder="doctor@hospital.com"
-                sx={{
-                  mt: 0.75,
-                  '& .MuiOutlinedInput-root': {
-                    bgcolor: alpha('#fff', 0.04),
-                    color: 'white',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: alpha('#fff', 0.1) },
-                    '&:hover fieldset': { borderColor: alpha('#fff', 0.25) },
-                    '&.Mui-focused fieldset': { borderColor: '#6366F1', borderWidth: 1 },
-                    '& input::placeholder': { color: alpha('#fff', 0.25) },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Email sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-
-            <Box sx={{ mb: 1.5 }}>
-              <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                Password
-              </Typography>
-              <TextField
-                fullWidth
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                required
-                placeholder="••••••••"
-                sx={{
-                  mt: 0.75,
-                  '& .MuiOutlinedInput-root': {
-                    bgcolor: alpha('#fff', 0.04),
-                    color: 'white',
-                    borderRadius: 2,
-                    '& fieldset': { borderColor: alpha('#fff', 0.1) },
-                    '&:hover fieldset': { borderColor: alpha('#fff', 0.25) },
-                    '&.Mui-focused fieldset': { borderColor: '#6366F1', borderWidth: 1 },
-                    '& input::placeholder': { color: alpha('#fff', 0.25) },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: alpha('#fff', 0.3), '&:hover': { color: alpha('#fff', 0.7) } }}>
-                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-
-            <Box sx={{ textAlign: 'right', mb: 3.5 }}>
-              <Link to="/forgot-password" style={{ color: '#818CF8', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600 }}>
-                Forgot password?
-              </Link>
-            </Box>
-
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              disabled={loading}
-              endIcon={!loading && <ArrowForward />}
-              sx={{
-                background: 'linear-gradient(135deg, #6366F1, #0EA5E9)',
-                color: 'white',
-                py: 1.6,
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                borderRadius: 2,
-                textTransform: 'none',
-                boxShadow: '0 8px 32px rgba(99,102,241,0.35)',
-                '&:hover': { transform: 'translateY(-1px)', boxShadow: '0 12px 40px rgba(99,102,241,0.45)' },
-                '&:disabled': { background: alpha('#6366F1', 0.4), color: alpha('#fff', 0.5) },
-                transition: 'all 0.2s',
-              }}
-            >
-              {loading ? 'Signing in…' : 'Sign In'}
-            </Button>
-          </form>
-
-          <Box sx={{ mt: 5, pt: 4, borderTop: `1px solid ${alpha('#fff', 0.07)}` }}>
-            <Typography variant="caption" sx={{ color: alpha('#fff', 0.3), display: 'block', textAlign: 'center', mb: 2 }}>
-              First time here?
-            </Typography>
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={() => navigate('/super-admin-signup')}
-              sx={{
-                borderColor: alpha('#fff', 0.12),
-                color: alpha('#fff', 0.6),
-                py: 1.3,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { borderColor: alpha('#6366F1', 0.6), color: '#818CF8', bgcolor: alpha('#6366F1', 0.05) },
-              }}
-            >
-              Create Super Admin Account
-            </Button>
-          </Box>
-        </Box>
+        )}
       </Box>
     </Box>
   );

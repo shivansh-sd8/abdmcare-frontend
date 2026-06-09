@@ -70,7 +70,12 @@ const HospitalManagement: React.FC = () => {
     establishedYear: '', ownerName: '', ownerEmail: '', ownerPhone: '',
     totalBeds: '', icuBeds: '', emergencyBeds: '', operationTheaters: '',
     plan: 'FREE', defaultOpdCharge: '',
-    hipId: '', hiuId: '',
+    // Per-hospital ABDM credentials. Empty = fall back to env-level config.
+    hipId: '', hipName: '', hiuId: '', hiuName: '',
+    abdmClientId: '', abdmClientSecret: '', abdmCallbackUrl: '',
+    hfrFacilityId: '', hprId: '',
+    // Optional initial ADMIN bootstrap so the hospital can self-serve from day 1.
+    adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
   });
   const [abdmRegistering, setAbdmRegistering] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -286,7 +291,13 @@ const HospitalManagement: React.FC = () => {
         operationTheaters: h.operationTheaters ? String(h.operationTheaters) : '',
         plan: hospital.plan || 'FREE',
         defaultOpdCharge: h.defaultOpdCharge ? String(h.defaultOpdCharge) : '',
-        hipId: hospital.hipId || '', hiuId: h.hiuId || '',
+        hipId: hospital.hipId || '', hipName: h.hipName || '',
+        hiuId: h.hiuId || '', hiuName: h.hiuName || '',
+        abdmClientId: h.abdmClientId || '', abdmClientSecret: h.abdmClientSecret || '',
+        abdmCallbackUrl: h.abdmCallbackUrl || '',
+        hfrFacilityId: h.hfrFacilityId || '', hprId: h.hprId || '',
+        // Admin bootstrap fields are write-only on create.
+        adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
       });
     } else {
       setEditingHospital(null);
@@ -298,7 +309,10 @@ const HospitalManagement: React.FC = () => {
         establishedYear: '', ownerName: '', ownerEmail: '', ownerPhone: '',
         totalBeds: '', icuBeds: '', emergencyBeds: '', operationTheaters: '',
         plan: 'FREE', defaultOpdCharge: '',
-        hipId: '', hiuId: '',
+        hipId: '', hipName: '', hiuId: '', hiuName: '',
+        abdmClientId: '', abdmClientSecret: '', abdmCallbackUrl: '',
+        hfrFacilityId: '', hprId: '',
+        adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
       });
     }
     setOpenDialog(true);
@@ -389,7 +403,14 @@ const HospitalManagement: React.FC = () => {
 
     setAbdmRegistering(true);
     try {
-      await hipService.registerHipService();
+      // Pass the target hospital so SUPER_ADMIN (whose JWT carries no hospitalId)
+      // can register any hospital, while ADMIN is locked to their own.
+      await hipService.registerHipService(hospital.id);
+      // Best-effort HIU registration too; fail silently if the hospital has no HIU id.
+      const h: any = hospital;
+      if (h.hiuId) {
+        try { await hipService.registerHiuService(hospital.id); } catch (_) { /* non-blocking */ }
+      }
       toast.success('Hospital registered with ABDM successfully!');
       fetchHospitals();
     } catch (error: any) {
@@ -864,18 +885,97 @@ const HospitalManagement: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HIP display name"
+                placeholder="Defaults to hospital name"
+                value={formData.hipName} onChange={(e) => handleFieldChange('hipName', e.target.value)}
+                helperText="Patient-facing facility name shown in the ABHA app"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="HIU ID (ABDM)"
                 placeholder="e.g. IN0710000123-HIU"
                 value={formData.hiuId} onChange={(e) => handleFieldChange('hiuId', e.target.value)}
                 helperText="Health Information User ID from ABDM/NHA"
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HIU display name"
+                placeholder="Defaults to hospital name"
+                value={formData.hiuName} onChange={(e) => handleFieldChange('hiuName', e.target.value)}
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="ABDM Client ID"
+                placeholder="Per-hospital bridge client id (overrides env)"
+                value={formData.abdmClientId} onChange={(e) => handleFieldChange('abdmClientId', e.target.value)}
+                helperText="Leave blank to use system default"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="ABDM Client Secret"
+                type="password"
+                value={formData.abdmClientSecret} onChange={(e) => handleFieldChange('abdmClientSecret', e.target.value)}
+                helperText="Stored encrypted; leave blank to use system default"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="ABDM Callback URL (override)"
+                placeholder="https://your-domain.com/api/v3"
+                value={formData.abdmCallbackUrl} onChange={(e) => handleFieldChange('abdmCallbackUrl', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HFR Facility ID"
+                placeholder="e.g. F-NHA-XXXX"
+                value={formData.hfrFacilityId} onChange={(e) => handleFieldChange('hfrFacilityId', e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth size="small" label="HPR ID (Owner)"
+                placeholder="e.g. drsmith@hpr"
+                value={formData.hprId} onChange={(e) => handleFieldChange('hprId', e.target.value)}
+              />
+            </Grid>
+
             {editingHospital && formData.hipId && !editingHospital.abdmEnabled && (
               <Grid item xs={12}>
                 <Alert severity="info" sx={{ borderRadius: 2 }}>
                   Save the HIP ID first, then click "Register with ABDM" from the hospital list to activate ABDM integration.
                 </Alert>
               </Grid>
+            )}
+
+            {!editingHospital && (
+              <>
+                <SectionTitle title="Initial Hospital Admin (optional)" />
+                <Grid item xs={12}>
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Provide credentials to bootstrap a hospital ADMIN at create-time. If omitted, you can add the admin later from User Management.
+                  </Alert>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth size="small" label="Admin Username"
+                    value={formData.adminUsername} onChange={(e) => handleFieldChange('adminUsername', e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth size="small" type="password" label="Admin Password"
+                    value={formData.adminPassword} onChange={(e) => handleFieldChange('adminPassword', e.target.value)}
+                    helperText="At least 8 characters"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth size="small" label="Admin First Name"
+                    value={formData.adminFirstName} onChange={(e) => handleFieldChange('adminFirstName', e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField fullWidth size="small" label="Admin Last Name"
+                    value={formData.adminLastName} onChange={(e) => handleFieldChange('adminLastName', e.target.value)}
+                  />
+                </Grid>
+              </>
             )}
           </Grid>
         </DialogContent>

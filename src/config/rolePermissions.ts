@@ -163,6 +163,12 @@ export const menuGroups: MenuGroup[] = [
         icon: 'History',
         roles: ['SUPER_ADMIN', 'ADMIN'],
       },
+      {
+        text: 'Compliance & Tech Pack',
+        path: '/app/compliance',
+        icon: 'Shield',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
     ],
   },
 ];

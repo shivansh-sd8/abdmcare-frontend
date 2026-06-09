@@ -51,6 +51,7 @@ import {
   Inventory,
   Hotel,
   Hub,
+  Shield,
   DarkMode,
   LightMode,
   ExpandLess,
@@ -88,6 +89,7 @@ const ICON_MAP: Record<string, React.ReactElement> = {
   Inventory: <Inventory />,
   Hotel: <Hotel />,
   Hub: <Hub />,
+  Shield: <Shield />,
 };
 
 const getIcon = (name: string) => ICON_MAP[name] || <Dashboard />;
