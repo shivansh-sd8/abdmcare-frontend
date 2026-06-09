@@ -204,23 +204,42 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h6" fontWeight={600}>
-            External Health Records
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Records fetched from other hospitals via ABDM
-          </Typography>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          mb: 3,
+          borderRadius: 3,
+          background: 'linear-gradient(135deg, #4CAF50 0%, #667eea 100%)',
+          color: '#fff',
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          boxShadow: '0 8px 24px rgba(76,175,80,0.25)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', p: 1.25, borderRadius: 2, bgcolor: alpha('#fff', 0.18) }}>
+            <LocalHospital sx={{ fontSize: 28 }} />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              External Health Records
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.92 }}>
+              Records fetched from other hospitals via ABDM
+            </Typography>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
           {polling && (
             <Chip
-              icon={<CircularProgress size={14} />}
+              icon={<CircularProgress size={14} sx={{ color: '#fff !important' }} />}
               label="Waiting for records..."
-              color="info"
-              variant="outlined"
               size="small"
+              sx={{ bgcolor: alpha('#fff', 0.22), color: '#fff' }}
             />
           )}
           <Button
@@ -228,6 +247,7 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
             size="small"
             onClick={fetchRecords}
             disabled={loading}
+            sx={{ color: '#fff', borderColor: alpha('#fff', 0.6), '&:hover': { borderColor: '#fff', bgcolor: alpha('#fff', 0.12) } }}
           >
             Refresh
           </Button>
@@ -235,15 +255,12 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
             variant="contained"
             startIcon={<CloudDownload />}
             onClick={openRequestDialog}
-            sx={{
-              background: 'linear-gradient(135deg, #4A90E2 0%, #357ABD 100%)',
-              '&:hover': { background: 'linear-gradient(135deg, #357ABD 0%, #2A6AA1 100%)' },
-            }}
+            sx={{ bgcolor: '#fff', color: 'primary.main', fontWeight: 700, '&:hover': { bgcolor: alpha('#fff', 0.9) } }}
           >
             Request Records
           </Button>
         </Box>
-      </Box>
+      </Paper>
 
       {records.length === 0 ? (
         <Paper
@@ -251,8 +268,9 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
             p: 4,
             textAlign: 'center',
             borderRadius: 3,
-            bgcolor: alpha('#4A90E2', 0.03),
-            border: `1px dashed ${alpha('#4A90E2', 0.3)}`,
+            bgcolor: 'action.hover',
+            border: '1px dashed',
+            borderColor: 'divider',
           }}
         >
           <InfoOutlined sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
@@ -287,12 +305,13 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                       borderRadius: '12px !important',
                       '&:before': { display: 'none' },
                       boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                      border: `1px solid ${alpha('#000', 0.08)}`,
+                      border: '1px solid',
+                      borderColor: 'divider',
                     }}
                   >
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', width: '100%' }}>
-                        <LocalHospital sx={{ color: '#4A90E2', fontSize: 20 }} />
+                        <LocalHospital sx={{ color: 'primary.main', fontSize: 20 }} />
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body1" fontWeight={600} noWrap>
                             {p.compositionTitle || rec.recordType}

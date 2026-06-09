@@ -70,7 +70,18 @@ function getStatusConfig(status: string) {
   return STATUS_CONFIG[status?.toUpperCase()] || { color: '#4A90E2', icon: <VerifiedUser fontSize="small" /> };
 }
 
-const HI_TYPES = ['OPConsultation', 'Prescription', 'DiagnosticReport', 'DischargeSummary', 'ImmunizationRecord', 'HealthDocumentRecord'];
+// Per ABDM M3 Health Information Types — every type the gateway recognises.
+// WellnessRecord and ImmunizationRecord both have FHIR profiles built locally
+// (see backend/src/common/utils/fhir/profiles).
+const HI_TYPES = [
+  'OPConsultation',
+  'Prescription',
+  'DiagnosticReport',
+  'DischargeSummary',
+  'ImmunizationRecord',
+  'WellnessRecord',
+  'HealthDocumentRecord',
+];
 
 const PURPOSE_LABELS: Record<string, string> = {
   CAREMGT: 'Care Management',
@@ -78,11 +89,15 @@ const PURPOSE_LABELS: Record<string, string> = {
   PUBHLTH: 'Public Health',
   HPAYMT: 'Healthcare Payment',
   DSRCH: 'Disease Specific Research',
-  PATRQT: 'Patient Requested',
+  PATRQT: 'Patient (Self) Requested',
+  HQUALITY: 'Healthcare Quality',
   CARE_MANAGEMENT: 'Care Management',
   BREAK_THE_GLASS: 'Break the Glass',
   PUBLIC_HEALTH: 'Public Health',
   DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research',
+  HEALTHCARE_PAYMENT: 'Healthcare Payment',
+  SELF_REQUESTED: 'Patient (Self) Requested',
+  HEALTHCARE_QUALITY_AUDIT: 'Healthcare Quality',
 };
 
 const ConsentManagement: React.FC = () => {
@@ -287,7 +302,7 @@ const ConsentManagement: React.FC = () => {
       minWidth: 140,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar sx={{ bgcolor: '#4A90E2', width: 36, height: 36 }}>
+          <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}>
             <Person fontSize="small" />
           </Avatar>
           <Typography variant="body2" fontWeight="500">
@@ -407,43 +422,56 @@ const ConsentManagement: React.FC = () => {
 
   return (
     <Box sx={{ overflow: 'hidden', maxWidth: '100%' }}>
-      <Box sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        mb: 4,
-        gap: 2,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            Consent Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage patient consent requests and permissions
-            {consents.some(c => c.status === 'REQUESTED') && (
-              <Chip
-                label="Auto-refreshing"
-                size="small"
-                color="warning"
-                variant="outlined"
-                sx={{ ml: 1, height: 20, fontSize: 11 }}
-              />
-            )}
-          </Typography>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2.5, sm: 3.5 },
+          mb: 3,
+          borderRadius: 3,
+          background: 'linear-gradient(135deg, #4CAF50 0%, #667eea 100%)',
+          color: '#fff',
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          boxShadow: '0 8px 24px rgba(76,175,80,0.25)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', p: 1.5, borderRadius: 2, bgcolor: alpha('#fff', 0.18) }}>
+            <VerifiedUser sx={{ fontSize: 32 }} />
+          </Box>
+          <Box>
+            <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
+              Consent Management
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.92, display: 'flex', alignItems: 'center' }}>
+              Manage patient consent requests and permissions
+              {consents.some(c => c.status === 'REQUESTED') && (
+                <Chip
+                  label="Auto-refreshing"
+                  size="small"
+                  sx={{ ml: 1, height: 20, fontSize: 11, bgcolor: alpha('#fff', 0.22), color: '#fff' }}
+                />
+              )}
+            </Typography>
+          </Box>
         </Box>
         <Button
           variant="contained"
           startIcon={<Add />}
           onClick={handleOpenNewConsent}
           sx={{
-            background: 'linear-gradient(135deg, #50C878 0%, #45B369 100%)',
-            '&:hover': { background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)' },
+            bgcolor: '#fff',
+            color: 'primary.main',
+            fontWeight: 700,
+            '&:hover': { bgcolor: alpha('#fff', 0.9) },
           }}
         >
           New Consent Request
         </Button>
-      </Box>
+      </Paper>
 
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {statsCards.map((stat, index) => (
@@ -581,7 +609,7 @@ const ConsentManagement: React.FC = () => {
             renderOption={(props, option: any) => (
               <ListItem {...props} key={option.id} dense>
                 <ListItemAvatar>
-                  <Avatar sx={{ bgcolor: '#4A90E2', width: 32, height: 32, fontSize: 14 }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: 14 }}>
                     {(option.firstName?.[0] || '')}{(option.lastName?.[0] || '')}
                   </Avatar>
                 </ListItemAvatar>
@@ -639,7 +667,8 @@ const ConsentManagement: React.FC = () => {
               <MenuItem value="PUBHLTH">Public Health</MenuItem>
               <MenuItem value="HPAYMT">Healthcare Payment</MenuItem>
               <MenuItem value="DSRCH">Disease Specific Healthcare Research</MenuItem>
-              <MenuItem value="PATRQT">Patient Requested</MenuItem>
+              <MenuItem value="PATRQT">Patient (Self) Requested</MenuItem>
+              <MenuItem value="HQUALITY">Healthcare Quality</MenuItem>
             </Select>
           </FormControl>
 
@@ -694,10 +723,6 @@ const ConsentManagement: React.FC = () => {
             onClick={handleCreateNewConsent}
             disabled={newConsentLoading || !newConsentForm.patientAbhaId.trim() || newConsentForm.hiTypes.length === 0}
             startIcon={newConsentLoading ? <CircularProgress size={16} /> : <Add />}
-            sx={{
-              background: 'linear-gradient(135deg, #50C878 0%, #45B369 100%)',
-              '&:hover': { background: 'linear-gradient(135deg, #45B369 0%, #3A9E5A 100%)' },
-            }}
           >
             {newConsentLoading ? 'Sending...' : 'Send Request'}
           </Button>
@@ -801,7 +826,7 @@ const ConsentManagement: React.FC = () => {
                 <Box>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Consent Artefact</Typography>
-                  <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha('#4A90E2', 0.03) }}>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
                     <Grid container spacing={1.5}>
                       {artefactData.consentId && (
                         <Grid item xs={12}>

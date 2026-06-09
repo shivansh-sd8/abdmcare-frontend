@@ -12,6 +12,7 @@ import {
   ArrowBack, EventAvailable, TrendingUp, Home,
   ExpandMore, ExpandLess, Download, Verified, Description,
   Assignment, CloudDownload, Link as LinkIcon, AddCircleOutline,
+  Block,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import ehrService from '../../services/ehrService';
@@ -234,6 +235,28 @@ const PatientProfile: React.FC = () => {
         </Alert>
       )}
 
+      {/*
+        ABDM lifecycle banner — when the CM has informed us that the patient
+        deactivated or deleted their PHR (via /api/v3/patients/status/notify),
+        AbhaRecord.profileStatus moves out of ACTIVE. Surface this prominently
+        because:
+          • We can no longer push new health data for this patient
+          • All existing care contexts are unlinked
+          • Any open consents have been auto-revoked + records purged
+      */}
+      {patient.abhaRecord?.profileStatus && patient.abhaRecord.profileStatus !== 'ACTIVE' && (
+        <Alert severity="error" icon={<Block />} sx={{ mb: 2, borderRadius: 2 }}>
+          <strong>ABHA {patient.abhaRecord.profileStatus}</strong>
+          {patient.abhaRecord.deactivatedAt && (
+            <> on {fmt(patient.abhaRecord.deactivatedAt)}</>
+          )} —
+          {' '}This patient deactivated their ABHA. ABDM linking, consent and
+          data-push are disabled. Existing local hospital records are retained
+          but cannot be shared with other facilities until the patient
+          reactivates their ABHA.
+        </Alert>
+      )}
+
       {/* ── 4 Tabs ── */}
       <Paper sx={{ borderRadius: 3, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto"
@@ -430,7 +453,7 @@ const PatientProfile: React.FC = () => {
                       const purposeLabel = ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string, string>)[c.purpose] || c.purpose || 'Health Data Consent';
                       const hiTypes: string[] = Array.isArray(c.hiTypes) ? c.hiTypes : [];
                       return (
-                        <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: '#fff', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
+                        <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="body2" fontWeight={700} noWrap>{purposeLabel}</Typography>
