@@ -132,7 +132,7 @@ const PatientProfile: React.FC = () => {
       if (unlinked.length === 0) { toast.info('All encounters are already linked'); setLinkDialogOpen(false); return; }
       const careContexts = unlinked.map((e: any) => ({
         encounterId: e.id,
-        display: `${e.type === 'IPD' ? 'IPD' : 'OPD'} Visit — ${fmt(e.visitDate || e.createdAt)}`,
+        display: `${e.type === 'IPD' ? 'IPD' : 'OPD'} Visit - ${fmt(e.visitDate || e.createdAt)}`,
       }));
       const res: any = await hipService.addCareContexts(patient.id, careContexts);
       const msg = res?.data?.message || '';
