@@ -9,8 +9,6 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
 const AbhaManagement = React.lazy(() => import('./features/abha/AbhaManagement'));
-const ScanAndShare = React.lazy(() => import('./features/abha/ScanAndShare'));
-const PatientCheckIn = React.lazy(() => import('./features/abha/PatientCheckIn'));
 const PatientList = React.lazy(() => import('./features/patient/PatientList'));
 const PatientRegistration = React.lazy(() => import('./features/patient/PatientRegistration'));
 const PatientProfile = React.lazy(() => import('./features/patient/PatientProfile'));

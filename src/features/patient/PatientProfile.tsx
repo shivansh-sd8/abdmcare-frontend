@@ -142,29 +142,12 @@ const PatientProfile: React.FC = () => {
         toast.success(msg || `${careContexts.length} care context(s) linked to ABDM`);
       }
 
-      // Notify ABDM about newly linked care contexts. ABDM expects the
-      // generated careContextReference (careContextId), NOT the internal
-      // encounter id — map encounterId → careContextId from the create response.
-      const created: any[] = res?.data?.data || [];
-      const ctxIdByEncounter = new Map<string, string>(
-        created.map((c: any) => [c.encounterId, c.careContextId]),
-      );
-      const abhaAddr = patient.abhaRecord?.abhaAddress || patient.abhaAddress || '';
-      const patientRef = patient.uhid || patient.id;
-      if (abhaAddr) {
-        for (const cc of careContexts) {
-          try {
-            await hipService.linkContextNotify({
-              abhaAddress: abhaAddr,
-              careContextReference: ctxIdByEncounter.get(cc.encounterId) || cc.encounterId,
-              patientReference: patientRef,
-              hiTypes: ['OPConsultation', 'Prescription', 'DiagnosticReport'],
-            });
-          } catch {
-            // Non-critical — notification may fail silently
-          }
-        }
-      }
+      // NOTE: We deliberately do NOT call link/context/notify from here.
+      // Linking is completed entirely server-side via the ABDM token flow
+      // (generate-token → on-generate-token → link/carecontext → on_carecontext).
+      // The backend fires link/context/notify only AFTER on_carecontext confirms
+      // a link exists. Calling notify here — before any link exists — made ABDM
+      // return "ABDM-1006: No links found for the patient in the given HIP".
 
       setLinkDialogOpen(false);
       fetchProfile();
