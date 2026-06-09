@@ -268,7 +268,33 @@ const EnquiryDialog: React.FC<EnquiryDialogProps> = ({
             </Button>
           </Stack>
         ) : (
-          <Box component="form" onSubmit={handleSubmit} noValidate>
+          <Box
+            component="form"
+            onSubmit={handleSubmit}
+            noValidate
+            sx={{
+              // The app theme uses an 8%-opacity slate border which disappears
+              // against the dialog's white surface — explicitly paint visible
+              // hairlines (matches the Login page's input treatment).
+              '& .MuiOutlinedInput-root': {
+                bgcolor: BRAND.surface,
+                color: BRAND.ink,
+                borderRadius: 2,
+                transition: 'border-color .2s ease, box-shadow .2s ease',
+                '& fieldset': { borderColor: BRAND.hairline },
+                '&:hover fieldset': { borderColor: alpha(BRAND.primary600, 0.5) },
+                '&.Mui-focused fieldset': {
+                  borderColor: BRAND.primary600,
+                  borderWidth: 1.5,
+                },
+                '&.Mui-focused': {
+                  boxShadow: `0 0 0 4px ${alpha(BRAND.primary600, 0.12)}`,
+                },
+              },
+              '& .MuiInputLabel-root': { color: BRAND.ink500 },
+              '& .MuiInputLabel-root.Mui-focused': { color: BRAND.primary600 },
+            }}
+          >
             {/* Honeypot — hidden from humans, irresistible to bots. */}
             <Box
               sx={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}
@@ -347,10 +373,14 @@ const EnquiryDialog: React.FC<EnquiryDialogProps> = ({
                   onChange={update('role')}
                   fullWidth
                   size="small"
+                  // displayEmpty + shrink keeps the placeholder visible and
+                  // lifts the label into the notched outline so the two
+                  // don't overlap on top of each other.
                   SelectProps={{ displayEmpty: true }}
+                  InputLabelProps={{ shrink: true }}
                 >
                   <MenuItem value="">
-                    <em>Select your role (optional)</em>
+                    <em style={{ color: '#94A3B8' }}>Select your role (optional)</em>
                   </MenuItem>
                   {ROLE_OPTIONS.map((r) => (
                     <MenuItem key={r} value={r}>
