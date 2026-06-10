@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Alert, Chip, Grid, Divider,
   CircularProgress, Avatar, Paper, IconButton, TextField, InputAdornment,
-  Tabs, Tab, alpha,
+  Tabs, Tab, alpha, Dialog, DialogTitle, DialogContent, DialogActions, Stack, Tooltip,
 } from '@mui/material';
 import {
   QrCodeScanner, CameraAlt, Stop, CheckCircle, PersonAdd,
   ContentCopy, Refresh, HealthAndSafety, Search, Person, Visibility,
-  Sms,
+  Sms, Close, MergeType, BlockOutlined,
 } from '@mui/icons-material';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
@@ -44,6 +44,17 @@ const ScanAndShare: React.FC = () => {
   const [receivedShares, setReceivedShares] = useState<any[]>([]);
   const [sharesLoading, setSharesLoading] = useState(false);
 
+  // ── Convert-share workflow state ──────────────────────────────────────
+  // When the receptionist clicks "Start registration" on a PENDING share we
+  // open this dialog. It hits /match-candidates first and offers the user a
+  // choice of merge vs new vs ignore. All three resolve via /convert.
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [convertShare, setConvertShare] = useState<any>(null);
+  const [convertCandidates, setConvertCandidates] = useState<any[]>([]);
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [convertSubmitting, setConvertSubmitting] = useState<null | 'NEW' | 'MERGE' | 'IGNORE'>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+
   const loadFacilityQr = useCallback(async () => {
     try {
       const res: any = await abhaService.getFacilityQrData();
@@ -59,6 +70,59 @@ const ScanAndShare: React.FC = () => {
     } catch {}
     finally { setSharesLoading(false); }
   }, []);
+
+  const openConvertDialog = useCallback(async (share: any) => {
+    setConvertShare(share);
+    setConvertCandidates([]);
+    setSelectedMatchId(null);
+    setConvertOpen(true);
+    setConvertLoading(true);
+    try {
+      const res: any = await hipService.getReceivedShareMatchCandidates(share.id);
+      const cands = res?.data?.candidates || res?.candidates || [];
+      setConvertCandidates(Array.isArray(cands) ? cands : []);
+      // Auto-select the strongest candidate so the user can just hit "Merge"
+      if (cands?.[0]?.score >= 60) setSelectedMatchId(cands[0].id);
+    } catch {
+      // Non-fatal — the user can still create a new patient.
+    } finally {
+      setConvertLoading(false);
+    }
+  }, []);
+
+  const handleConvert = useCallback(
+    async (mode: 'NEW' | 'MERGE' | 'IGNORE') => {
+      if (!convertShare) return;
+      if (mode === 'MERGE' && !selectedMatchId) {
+        toast.warning('Select a patient to merge into');
+        return;
+      }
+      setConvertSubmitting(mode);
+      try {
+        const res: any = await hipService.convertReceivedShare(convertShare.id, {
+          mode,
+          existingPatientId: mode === 'MERGE' ? selectedMatchId! : undefined,
+        });
+        const result = res?.data || res;
+        if (mode === 'IGNORE') {
+          toast.success('Share dismissed');
+          setConvertOpen(false);
+          loadReceivedShares();
+          return;
+        }
+        const patientId = result?.patient?.id;
+        toast.success(mode === 'NEW' ? 'Patient registered from share' : 'ABHA linked to existing patient');
+        setConvertOpen(false);
+        loadReceivedShares();
+        if (patientId) navigate(`/app/patients/${patientId}`);
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || 'Failed to process share');
+      } finally {
+        setConvertSubmitting(null);
+      }
+    },
+    [convertShare, selectedMatchId, loadReceivedShares, navigate],
+  );
 
   useEffect(() => {
     loadFacilityQr();
@@ -569,25 +633,38 @@ const ScanAndShare: React.FC = () => {
                             label={expired ? 'Expired' : `Expires in ${minutesLeft}m`}
                             sx={{ fontWeight: 700 }}
                           />
-                          {share.patientId ? (
-                            <Button
-                              size="small"
-                              variant="contained"
-                              startIcon={<Person fontSize="small" />}
-                              onClick={() => navigate(`/app/patients/${share.patientId}`)}
-                              sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600 }}
-                            >
-                              Open profile
-                            </Button>
+                          {share.status === 'CONVERTED' ? (
+                            <>
+                              <Chip
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                                icon={<CheckCircle sx={{ fontSize: 14 }} />}
+                                label="Registered"
+                                sx={{ fontWeight: 700 }}
+                              />
+                              {share.convertedPatientId && (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  startIcon={<Person fontSize="small" />}
+                                  onClick={() => navigate(`/app/patients/${share.convertedPatientId}`)}
+                                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                                >
+                                  Open profile
+                                </Button>
+                              )}
+                            </>
                           ) : (
                             <Button
                               size="small"
-                              variant="outlined"
-                              startIcon={<Visibility fontSize="small" />}
-                              onClick={() => { setActiveTab(0); setManualInput(share.abhaNumber || share.abhaAddress || ''); }}
-                              sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600 }}
+                              variant="contained"
+                              startIcon={<PersonAdd fontSize="small" />}
+                              onClick={() => openConvertDialog(share)}
+                              disabled={!!expired}
+                              sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 700 }}
                             >
-                              Look Up
+                              Start registration
                             </Button>
                           )}
                         </Box>
@@ -880,6 +957,181 @@ const ScanAndShare: React.FC = () => {
           )}
         </Grid>
       </Grid>}
+
+      {/* ── Convert ReceivedShare → Patient dialog ─────────────────────────
+          Three actions:
+            • Merge into an existing patient (preferred when we found a match)
+            • Register as a new patient (creates UH###### + SCAN_SHARE source)
+            • Dismiss the share (wrong scan, walk-away, test) */}
+      <Dialog
+        open={convertOpen}
+        onClose={() => !convertSubmitting && setConvertOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonAdd color="primary" />
+              Register patient from scan
+            </Box>
+            <IconButton size="small" onClick={() => setConvertOpen(false)} disabled={!!convertSubmitting}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {convertShare && (
+            <>
+              {/* Hero — what was shared */}
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2, mb: 2.25, borderRadius: 2,
+                  bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+                }}
+              >
+                <Stack direction="row" spacing={1.75} alignItems="center">
+                  <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48, fontWeight: 700 }}>
+                    {convertShare.name?.[0]?.toUpperCase() || 'P'}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={700}>{convertShare.name || 'Unknown'}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      ABHA <strong>{convertShare.abhaNumber || '—'}</strong>
+                      {convertShare.abhaAddress ? ` · ${convertShare.abhaAddress}` : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {convertShare.gender || '—'}
+                      {convertShare.mobile ? ` · ${convertShare.mobile}` : ''}
+                      {convertShare.tokenNumber ? ` · token ${convertShare.tokenNumber}` : ''}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              {/* Match candidates */}
+              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 1, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                Possible matches in this hospital
+              </Typography>
+
+              {convertLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="body2" color="text.secondary">
+                    Checking for existing patients with the same ABHA, mobile or name…
+                  </Typography>
+                </Box>
+              ) : convertCandidates.length === 0 ? (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  No existing patient looks like a match. You can register a new patient below.
+                </Alert>
+              ) : (
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  {convertCandidates.map((c: any) => {
+                    const selected = selectedMatchId === c.id;
+                    return (
+                      <Paper
+                        key={c.id}
+                        variant="outlined"
+                        onClick={() => setSelectedMatchId(c.id)}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2,
+                          cursor: 'pointer',
+                          borderColor: selected ? 'primary.main' : 'divider',
+                          borderWidth: selected ? 2 : 1,
+                          bgcolor: selected ? (t) => alpha(t.palette.primary.main, 0.06) : 'background.paper',
+                          transition: 'border-color .15s, background-color .15s',
+                          '&:hover': { borderColor: 'primary.light' },
+                        }}
+                      >
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
+                          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+                            <Avatar sx={{ width: 36, height: 36, bgcolor: 'secondary.main' }}>
+                              {c.firstName?.[0]?.toUpperCase() || 'P'}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                                <Typography fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                                  {c.firstName} {c.lastName}
+                                </Typography>
+                                <Chip size="small" label={c.uhid} sx={{ height: 18, fontSize: 11 }} />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                {c.gender || '—'}
+                                {c.dob ? ` · ${new Date(c.dob).toLocaleDateString()}` : ''}
+                                {c.mobile && !c.mobile.startsWith('SCAN-') ? ` · ${c.mobile}` : ''}
+                              </Typography>
+                              {c.reasons?.length > 0 && (
+                                <Box sx={{ mt: 0.4, display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                                  {c.reasons.map((r: string) => (
+                                    <Chip key={r} size="small" label={r} variant="outlined" color={c.score >= 60 ? 'success' : 'default'} sx={{ height: 18, fontSize: 10 }} />
+                                  ))}
+                                </Box>
+                              )}
+                            </Box>
+                          </Stack>
+                          {selected && <CheckCircle color="primary" />}
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+              )}
+
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.25 }}>
+                  Pick one of the actions below.
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Merging links the patient's ABHA to their existing record (no duplicate row). Creating a new patient
+                  uses the next UH###### in your hospital's series and marks the profile as incomplete so the
+                  receptionist can fill in the missing fields.
+                </Typography>
+              </Alert>
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Tooltip title="Dismiss this share — patient walked away or wrong scan">
+            <span>
+              <Button
+                color="inherit"
+                onClick={() => handleConvert('IGNORE')}
+                disabled={!!convertSubmitting}
+                startIcon={convertSubmitting === 'IGNORE' ? <CircularProgress size={14} /> : <BlockOutlined fontSize="small" />}
+                sx={{ textTransform: 'none' }}
+              >
+                Dismiss
+              </Button>
+            </span>
+          </Tooltip>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={() => handleConvert('NEW')}
+            disabled={!!convertSubmitting}
+            startIcon={convertSubmitting === 'NEW' ? <CircularProgress size={14} /> : <PersonAdd fontSize="small" />}
+            sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 700 }}
+          >
+            Register as new patient
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => handleConvert('MERGE')}
+            disabled={!!convertSubmitting || !selectedMatchId}
+            startIcon={convertSubmitting === 'MERGE' ? <CircularProgress size={14} /> : <MergeType fontSize="small" />}
+            sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 700 }}
+          >
+            {selectedMatchId ? 'Link ABHA to selected patient' : 'Select a match to merge'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

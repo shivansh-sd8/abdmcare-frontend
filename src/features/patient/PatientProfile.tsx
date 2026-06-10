@@ -12,7 +12,7 @@ import {
   ArrowBack, EventAvailable, TrendingUp, Home,
   ExpandMore, ExpandLess, Download, Verified, Description,
   Assignment, CloudDownload, Link as LinkIcon, AddCircleOutline,
-  Block,
+  Block, PersonAdd,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import ehrService from '../../services/ehrService';
@@ -319,6 +319,38 @@ const PatientProfile: React.FC = () => {
           data-push are disabled. Existing local hospital records are retained
           but cannot be shared with other facilities until the patient
           reactivates their ABHA.
+        </Alert>
+      )}
+
+      {/*
+        Incomplete-profile banner.
+        Shows when the patient was registered from an ABDM Scan & Share (so we
+        only have what the patient's PHR app supplied — typically no mobile,
+        sparse address, no blood group / emergency contact). The receptionist
+        is expected to fill in the missing fields and then click "Mark profile
+        complete" to dismiss this for everyone.
+      */}
+      {patient.profileCompleted === false && (
+        <Alert
+          severity="info"
+          icon={<PersonAdd />}
+          sx={{ mb: 2, borderRadius: 2 }}
+          action={
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => navigate('/app/patients/new', { state: { editPatient: patient } })}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Complete intake
+            </Button>
+          }
+        >
+          <strong>Incomplete profile</strong>
+          {patient.registrationSource === 'SCAN_SHARE' ? ' — registered from an ABHA Scan & Share. ' : ' — '}
+          ABDM only sent us the basics. Please confirm <strong>mobile</strong>,
+          <strong> address</strong>, <strong>blood group</strong> and <strong>emergency contact</strong> with the patient,
+          then mark the profile complete.
         </Alert>
       )}
 

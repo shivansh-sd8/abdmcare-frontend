@@ -448,7 +448,10 @@ const PatientRegistration: React.FC = () => {
       if (formData.abhaAddress?.trim()) patientPayload.abhaAddress = formData.abhaAddress.trim();
 
       if (isEditMode) {
-        await patientService.updatePatient(editPatient.id, patientPayload);
+        // Submitting the edit form is the receptionist's explicit "yes, this
+        // intake is complete" — flip the banner-driver flag so the
+        // "Incomplete profile" alert disappears on the patient profile.
+        await patientService.updatePatient(editPatient.id, { ...patientPayload, profileCompleted: true });
         toast.success('Patient updated successfully!');
         navigate(`/app/patients/${editPatient.id}`);
       } else {

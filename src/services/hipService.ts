@@ -21,6 +21,17 @@ class HipService {
     return api.get(`${HIP_BASE}/received-shares`);
   }
 
+  async getReceivedShareMatchCandidates(shareId: string) {
+    return api.get(`${HIP_BASE}/received-shares/${shareId}/match-candidates`);
+  }
+
+  async convertReceivedShare(
+    shareId: string,
+    body: { mode: 'NEW' | 'MERGE' | 'IGNORE'; existingPatientId?: string; notes?: string },
+  ) {
+    return api.post(`${HIP_BASE}/received-shares/${shareId}/convert`, body);
+  }
+
   async generateLinkToken(data: {
     abhaNumber: string;
     abhaAddress: string;
