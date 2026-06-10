@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, TextField, Stepper, Step, StepLabel,
   Grid, Paper, Tabs, Tab, InputAdornment, Chip, Divider, Alert, IconButton,
   CircularProgress, ToggleButtonGroup, ToggleButton, Avatar, Dialog, DialogTitle,
   DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText,
   MenuItem, Select, FormControl, FormControlLabel, Checkbox, InputLabel, alpha, useTheme,
+  Tooltip,
 } from '@mui/material';
 import {
   Search, QrCode, Phone, CreditCard, HealthAndSafety, CheckCircle,
   ContentCopy, Download, Refresh, Person, Badge, PersonAdd, Edit,
-  AlternateEmail, Close, Save,
+  AlternateEmail, Close, Save, CloudDone, CloudOff,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useNavigate, useLocation } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
 import hipService from '../../services/hipService';
+import api from '../../services/api';
 import ScanAndShare from './ScanAndShare';
 import PatientCheckIn from './PatientCheckIn';
 import { PageHeader } from '../../components/ui';
@@ -23,8 +25,16 @@ const AADHAAR_STEPS = ['Enter Aadhaar', 'Verify OTP', 'ABHA Created', 'ABHA Addr
 const DL_STEPS = ['Enter Mobile', 'Verify OTP', 'DL Details', 'ABHA Created', 'ABHA Address', 'Complete'];
 
 interface TabPanelProps { children?: React.ReactNode; index: number; value: number; }
+// Consistent inset for every tab panel so children don't sit flush against
+// the surrounding paper border (was a long-standing visual bug — ScanAndShare
+// & PatientCheckIn rendered with no horizontal padding while CreateABHA
+// double-padded its own inner Box).
 const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => (
-  <div hidden={value !== index}>{value === index && <Box sx={{ pt: 3 }}>{children}</Box>}</div>
+  <div hidden={value !== index}>
+    {value === index && (
+      <Box sx={{ p: { xs: 2, sm: 3 } }}>{children}</Box>
+    )}
+  </div>
 );
 
 type VerifyMethod = 'abha-number' | 'mobile' | 'aadhaar' | 'abha-address';
@@ -42,11 +52,56 @@ const AbhaManagement: React.FC = () => {
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(userData?.role);
 
+  // Track hospital ABDM registration state so the button reflects reality
+  // (idempotent — we re-fetch after registering so the pill flips to ✓).
+  const [hospital, setHospital] = useState<any>(null);
+  const [hospitalLoading, setHospitalLoading] = useState(false);
+  const hospitalId: string | undefined = userData?.hospitalId;
+
+  const loadHospital = useCallback(async () => {
+    if (!hospitalId) return;
+    setHospitalLoading(true);
+    try {
+      const resp: any = await api.get(`/api/v1/hospitals/${hospitalId}`);
+      setHospital(resp?.data?.data || resp?.data || null);
+    } catch {
+      // Soft-fail: button just falls back to "Register HIP" affordance.
+    } finally {
+      setHospitalLoading(false);
+    }
+  }, [hospitalId]);
+
+  useEffect(() => { loadHospital(); }, [loadHospital]);
+
+  const abdmRegistered = !!hospital?.abdmEnabled;
+  const abdmRegisteredAt = hospital?.abdmRegisteredAt
+    ? new Date(hospital.abdmRegisteredAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
+  const hasHipId = !!hospital?.hipId;
+  const hasHiuId = !!hospital?.hiuId;
+
   const handleHipRegister = async () => {
+    if (!hasHipId) {
+      toast.error('No HIP ID configured for this hospital. An admin needs to set it up first.');
+      return;
+    }
+    if (abdmRegistered &&
+      !window.confirm(`This hospital is already registered with ABDM${abdmRegisteredAt ? ` (since ${abdmRegisteredAt})` : ''}.\n\nRe-register now? Use this only if ABDM credentials changed.`)) {
+      return;
+    }
     setHipRegistering(true);
     try {
       const res = await hipService.registerHipService() as any;
-      toast.success(res?.data?.message || 'HIP/HFR service registered with ABDM successfully');
+      toast.success(res?.data?.message || 'HIP service registered with ABDM');
+      // Best-effort HIU registration if a HIU id is configured. If it fails
+      // we surface a non-blocking warning rather than rolling back the HIP.
+      if (hasHiuId) {
+        try { await hipService.registerHiuService(); }
+        catch (e: any) {
+          toast.warning(e?.response?.data?.message || 'HIP registered, but HIU registration failed');
+        }
+      }
+      await loadHospital();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to register HIP service');
     } finally {
@@ -699,17 +754,64 @@ const AbhaManagement: React.FC = () => {
         icon={<HealthAndSafety />}
         actions={
           <>
-            {isAdmin && (
-              <Button
-                variant="outlined" size="small"
-                onClick={handleHipRegister}
-                disabled={hipRegistering}
-                startIcon={hipRegistering ? <CircularProgress size={14} /> : <HealthAndSafety />}
-              >
-                {hipRegistering ? 'Registering…' : 'Register HIP'}
-              </Button>
+            {isAdmin && hospitalId && (
+              <>
+                {/* Live registration status pill — flips to green ✓ once registered. */}
+                <Tooltip
+                  title={
+                    abdmRegistered
+                      ? `Connected to ABDM as HIP ${hospital?.hipId || ''}${abdmRegisteredAt ? ` · since ${abdmRegisteredAt}` : ''}`
+                      : hasHipId
+                        ? 'Hospital has a HIP ID but is not yet registered with ABDM. Click to register.'
+                        : 'No HIP ID configured for this hospital yet.'
+                  }
+                  arrow
+                >
+                  <Chip
+                    size="small"
+                    icon={
+                      hospitalLoading
+                        ? <CircularProgress size={12} thickness={6} />
+                        : abdmRegistered
+                          ? <CloudDone sx={{ fontSize: 14 }} />
+                          : <CloudOff  sx={{ fontSize: 14 }} />
+                    }
+                    label={
+                      hospitalLoading
+                        ? 'Checking ABDM…'
+                        : abdmRegistered
+                          ? 'ABDM Registered'
+                          : hasHipId ? 'Not registered' : 'No HIP ID'
+                    }
+                    color={abdmRegistered ? 'success' : hasHipId ? 'warning' : 'default'}
+                    variant={abdmRegistered ? 'filled' : 'outlined'}
+                    sx={{
+                      fontWeight: 700,
+                      ...(abdmRegistered && { color: '#fff' }),
+                    }}
+                  />
+                </Tooltip>
+
+                <Button
+                  variant={abdmRegistered ? 'text' : 'contained'}
+                  color={abdmRegistered ? 'inherit' : 'primary'}
+                  size="small"
+                  onClick={handleHipRegister}
+                  disabled={hipRegistering || !hasHipId}
+                  startIcon={hipRegistering ? <CircularProgress size={14} /> : <HealthAndSafety />}
+                  sx={{
+                    textTransform: 'none', fontWeight: 700, borderRadius: 1.75,
+                    ...(!abdmRegistered && hasHipId && {
+                      boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.25)}`,
+                    }),
+                  }}
+                >
+                  {hipRegistering
+                    ? 'Registering…'
+                    : abdmRegistered ? 'Re-register' : 'Register with ABDM'}
+                </Button>
+              </>
             )}
-            <Chip icon={<HealthAndSafety />} label="ABDM V3" size="small" color="success" variant="outlined" />
           </>
         }
       />
@@ -733,7 +835,7 @@ const AbhaManagement: React.FC = () => {
         {/* CREATE ABHA TAB                                                   */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         <TabPanel value={tabValue} index={0}>
-          <Box sx={{ p: 3 }}>
+          <Box>
             <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography variant="body2" color="text.secondary">Method:</Typography>
               <ToggleButtonGroup size="small" exclusive value={enrollMethod} onChange={(_, v) => { if (v) { setEnrollMethod(v); resetFlow(); } }}>
@@ -972,7 +1074,7 @@ const AbhaManagement: React.FC = () => {
         {/* VERIFY / SEARCH TAB                                               */}
         {/* ══════════════════════════════════════════════════════════════════ */}
         <TabPanel value={tabValue} index={1}>
-          <Box sx={{ p: 3 }}>
+          <Box>
             <Box sx={{ mb: 2 }}>
               <ToggleButtonGroup size="small" exclusive value={verifyMethod}
                 onChange={(_, v) => { if (v) { setVerifyMethod(v); setSearchQuery(''); setSearchResult(null); setVerifiedProfile(null); setTxnId(''); setOtp(''); } }}>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Box, Card, CardContent, Typography, Button, Alert, Chip, Grid, Divider,
   CircularProgress, Avatar, Paper, IconButton, TextField, InputAdornment,
-  Tabs, Tab,
+  Tabs, Tab, alpha,
 } from '@mui/material';
 import {
   QrCodeScanner, CameraAlt, Stop, CheckCircle, PersonAdd,
@@ -217,12 +217,13 @@ const ScanAndShare: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>Scan & Share</Typography>
+          <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5, letterSpacing: '-0.01em' }}>
+            Scan & Share
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            Scan patient's ABHA QR code for quick check-in (M1 mandatory)
+            Scan a patient's ABHA QR for instant check-in, or share your facility's QR for patients to scan.
           </Typography>
         </Box>
-        <Chip icon={<HealthAndSafety />} label="ABDM V3 M1" color="success" variant="outlined" />
       </Box>
 
       <Paper sx={{ mb: 3 }}>
@@ -235,51 +236,203 @@ const ScanAndShare: React.FC = () => {
 
       {/* ── Tab 1: Facility QR Display ──────────────────────────────── */}
       {activeTab === 1 && (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>Health Facility QR Code</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Display this QR at the reception counter. Patients scan it with their PHR app to share their ABHA profile with your facility.
-          </Typography>
-          {facilityQr ? (
+        <Paper variant="outlined" sx={{ p: { xs: 3, sm: 4 }, borderRadius: 2.5, textAlign: 'center' }}>
+          <Box sx={{
+            display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'space-between', gap: 1.5, mb: 3,
+            flexDirection: { xs: 'column', sm: 'row' }, textAlign: 'left',
+          }}>
             <Box>
-              <Box sx={{
-                display: 'inline-block', p: 4, border: '3px solid', borderColor: 'primary.main',
-                borderRadius: 3, bgcolor: 'white', mb: 3,
-              }}>
-                <QRCodeSVG
-                  value={JSON.stringify({
-                    hipId: facilityQr.hipId,
-                    hipName: facilityQr.hipName,
-                    url: facilityQr.scanAndShareUrl,
-                  })}
-                  size={250}
-                  level="M"
-                  includeMargin={false}
-                />
-              </Box>
-              <Divider sx={{ my: 2 }} />
-              <Grid container spacing={2} sx={{ maxWidth: 500, mx: 'auto', textAlign: 'left' }}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">HIP ID</Typography>
-                  <Typography fontWeight={600}>{facilityQr.hipId || '—'}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">HIP Name</Typography>
-                  <Typography fontWeight={600}>{facilityQr.hipName || '—'}</Typography>
-                </Grid>
-                <Grid item xs={12}>
-                  <Typography variant="caption" color="text.secondary">Callback URL</Typography>
-                  <Typography fontWeight={500} sx={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>{facilityQr.scanAndShareUrl || '—'}</Typography>
-                </Grid>
-              </Grid>
-              <Alert severity="info" sx={{ mt: 3, textAlign: 'left' }}>
-                In production, this data is encoded as a QR image registered with ABDM. Patients scan it with their PHR app, which then sends their profile to your <strong>POST /api/v3/hip/patient/share</strong> callback.
-              </Alert>
+              <Typography variant="h6" fontWeight={700} sx={{ letterSpacing: '-0.01em' }}>
+                Health Facility QR
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Display this at reception. Patients scan it with their ABHA PHR app to share their profile with your facility.
+              </Typography>
             </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<Refresh />}
+                onClick={loadFacilityQr}
+                sx={{ textTransform: 'none', borderRadius: 1.75 }}
+              >
+                Refresh
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={!facilityQr?.shareProfileUrl && !facilityQr?.scanAndShareUrl}
+                onClick={() => {
+                  const svg = document.querySelector<SVGSVGElement>('#facility-qr-svg');
+                  if (!svg) { toast.error('QR not ready yet'); return; }
+                  const xml = new XMLSerializer().serializeToString(svg);
+                  const img = new Image();
+                  img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 600; canvas.height = 600;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(0, 0, 600, 600);
+                    ctx.drawImage(img, 0, 0, 600, 600);
+                    const a = document.createElement('a');
+                    a.download = `facility-qr-${facilityQr?.hfrFacilityId || facilityQr?.hipId || 'abdm'}.png`;
+                    a.href = canvas.toDataURL('image/png');
+                    a.click();
+                  };
+                  img.onerror = () => toast.error('Could not export QR');
+                  img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(xml)))}`;
+                }}
+                sx={{ textTransform: 'none', borderRadius: 1.75 }}
+              >
+                Download
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!facilityQr?.shareProfileUrl && !facilityQr?.scanAndShareUrl}
+                onClick={() => {
+                  const svg = document.querySelector<SVGSVGElement>('#facility-qr-svg');
+                  if (!svg || !facilityQr) { toast.error('QR not ready yet'); return; }
+                  const xml = new XMLSerializer().serializeToString(svg);
+                  const w = window.open('', '_blank', 'width=720,height=900');
+                  if (!w) { toast.warning('Pop-up blocked. Allow pop-ups to print.'); return; }
+                  w.document.write(`<!doctype html><html><head><title>Facility QR · ${facilityQr.hipName || ''}</title>
+                    <style>
+                      body{margin:0;padding:48px;font-family:Inter,Arial,sans-serif;color:#0f172a;text-align:center}
+                      h1{margin:0 0 8px;font-size:22px}
+                      p{margin:0 0 24px;color:#64748b}
+                      .qr{display:inline-block;padding:24px;border:1px solid #e2e8f0;border-radius:12px}
+                      .meta{margin-top:24px;font-size:12px;color:#64748b}
+                      @media print{body{padding:24px}}
+                    </style></head><body>
+                    <h1>Scan to share your ABHA</h1>
+                    <p>${facilityQr.hipName || ''}</p>
+                    <div class="qr">${xml.replace(/width="\d+"/, 'width="380"').replace(/height="\d+"/, 'height="380"')}</div>
+                    <div class="meta">HFR ID · ${facilityQr.hfrFacilityId || facilityQr.hipId || '—'}</div>
+                    <script>window.print();</script>
+                  </body></html>`);
+                  w.document.close();
+                }}
+                sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 700 }}
+              >
+                Print
+              </Button>
+            </Box>
+          </Box>
+
+          {facilityQr ? (
+            facilityQr.shareProfileUrl || facilityQr.scanAndShareUrl ? (
+              <>
+                <Box
+                  sx={{
+                    display: 'inline-block', p: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    borderRadius: 3, bgcolor: 'white', mb: 3,
+                    boxShadow: (t) => `0 8px 28px ${alpha(t.palette.primary.main, 0.08)}`,
+                  }}
+                >
+                  {/*
+                    ABDM expects the QR contents to be a plain URL of the form
+                      https://phrsbx.abdm.gov.in/share-profile?hip-id=…&counter-id=…
+                    Anything else (e.g. JSON) makes the ABHA / PHR app reject it
+                    as "invalid QR code". Render the URL string verbatim.
+                  */}
+                  <QRCodeSVG
+                    id="facility-qr-svg"
+                    value={facilityQr.shareProfileUrl || facilityQr.scanAndShareUrl}
+                    size={240}
+                    level="M"
+                    includeMargin={false}
+                  />
+                </Box>
+
+                <Grid container spacing={1.5} sx={{ maxWidth: 640, mx: 'auto', textAlign: 'left' }}>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{
+                      p: 1.25, borderRadius: 2,
+                      border: '1px solid', borderColor: 'divider',
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
+                    }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.06em' }}>
+                        HFR ID (HIP)
+                      </Typography>
+                      <Typography fontWeight={700} sx={{ fontFamily: 'monospace', fontSize: 13 }}>
+                        {facilityQr.hfrFacilityId || facilityQr.hipId || '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Box sx={{
+                      p: 1.25, borderRadius: 2,
+                      border: '1px solid', borderColor: 'divider',
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
+                    }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.06em' }}>
+                        Facility name
+                      </Typography>
+                      <Typography fontWeight={700} sx={{ fontSize: 13 }} noWrap title={facilityQr.hipName || ''}>
+                        {facilityQr.hipName || '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box sx={{
+                      p: 1.25, borderRadius: 2,
+                      border: '1px solid', borderColor: 'divider',
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
+                      display: 'flex', alignItems: 'center', gap: 1,
+                    }}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: '0.06em' }}>
+                          QR contents (URL)
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all', color: 'text.secondary' }}>
+                          {facilityQr.shareProfileUrl || facilityQr.scanAndShareUrl}
+                        </Typography>
+                      </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          navigator.clipboard.writeText(facilityQr.shareProfileUrl || facilityQr.scanAndShareUrl);
+                          toast.success('Copied');
+                        }}
+                      >
+                        <ContentCopy fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Grid>
+                </Grid>
+
+                <Alert
+                  severity="info"
+                  icon={<HealthAndSafety fontSize="small" />}
+                  sx={{ mt: 3, textAlign: 'left', borderRadius: 2 }}
+                >
+                  When a patient scans this QR with their ABHA / PHR app, their profile is shared with your facility and lands under <strong>Received shares</strong>.
+                </Alert>
+              </>
+            ) : (
+              <Alert
+                severity="warning"
+                sx={{ textAlign: 'left', borderRadius: 2 }}
+              >
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                  Facility not registered with HFR yet
+                </Typography>
+                <Typography variant="body2">
+                  This hospital doesn't have an HFR Facility ID configured, so a Scan-and-Share QR can't be generated. Ask an admin to add the HFR ID under <strong>Hospitals → Edit → ABDM</strong>.
+                </Typography>
+              </Alert>
+            )
           ) : (
-            <Box sx={{ py: 4 }}>
-              <CircularProgress size={24} />
-              <Typography sx={{ mt: 1 }}>Loading facility data...</Typography>
+            <Box sx={{ py: 6 }}>
+              <CircularProgress size={28} />
+              <Typography variant="body2" sx={{ mt: 1.5 }} color="text.secondary">
+                Loading facility QR…
+              </Typography>
             </Box>
           )}
         </Paper>
@@ -570,12 +723,41 @@ const ScanAndShare: React.FC = () => {
           )}
 
           {!scannedData && !lookupLoading && (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Person sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">No QR Code Scanned</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Scan a patient's ABHA QR code or enter their ABHA number manually.
+            <Paper
+              sx={{
+                p: 4,
+                textAlign: 'center',
+                height: '100%',
+                minHeight: 360,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: (t) => alpha(t.palette.primary.main, 0.02),
+                border: (t) => `1px dashed ${alpha(t.palette.primary.main, 0.25)}`,
+              }}
+            >
+              <Box
+                sx={{
+                  width: 80, height: 80, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  bgcolor: (t) => alpha(t.palette.primary.main, 0.08),
+                  mb: 2,
+                }}
+              >
+                <QrCodeScanner sx={{ fontSize: 40, color: 'primary.main' }} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Waiting for an ABHA scan
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320, mt: 0.75 }}>
+                Click <strong>Start Camera</strong> on the left, or paste an ABHA number / address into the manual field — patient details will appear here.
+              </Typography>
+              <Box sx={{ mt: 2.5, display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Chip size="small" label="14-digit ABHA #" variant="outlined" />
+                <Chip size="small" label="name@abdm" variant="outlined" />
+                <Chip size="small" label="Live QR scan" variant="outlined" />
+              </Box>
             </Paper>
           )}
         </Grid>

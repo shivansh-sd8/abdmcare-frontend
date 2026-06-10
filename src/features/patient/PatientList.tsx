@@ -15,6 +15,12 @@ import {
   Grid,
   alpha,
   useTheme,
+  Stack,
+  Popover,
+  Divider,
+  ToggleButton,
+  ToggleButtonGroup,
+  Badge as MuiBadge,
 } from '@mui/material';
 import {
   Add,
@@ -30,6 +36,10 @@ import {
   CalendarToday,
   PersonAdd,
   EventAvailable,
+  Clear as ClearIcon,
+  Female as FemaleIcon,
+  Male as MaleIcon,
+  Wc as AnyGenderIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -37,6 +47,9 @@ import patientService from '../../services/patientService';
 import { toast } from 'react-toastify';
 import { PermissionGuard } from '../../components/common/PermissionGuard';
 import { PageHeader, StatCard } from '../../components/ui';
+
+type AbhaFilter = 'ANY' | 'LINKED' | 'UNLINKED';
+type GenderFilter = 'ANY' | 'Male' | 'Female' | 'Other';
 
 const PatientList: React.FC = () => {
   const navigate = useNavigate();
@@ -53,24 +66,40 @@ const PatientList: React.FC = () => {
     appointments: 0,
   });
 
+  // ── Filters
+  const [filterEl, setFilterEl] = useState<null | HTMLElement>(null);
+  const [abhaFilter, setAbhaFilter] = useState<AbhaFilter>('ANY');
+  const [genderFilter, setGenderFilter] = useState<GenderFilter>('ANY');
+
+  const activeFilterCount =
+    (abhaFilter !== 'ANY' ? 1 : 0) + (genderFilter !== 'ANY' ? 1 : 0);
+
   useEffect(() => {
     fetchStats();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced search: re-fetch whenever searchQuery changes (also fires on mount)
+  // Debounced search + filter changes → refetch
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchPatients(searchQuery);
+      fetchPatients(searchQuery, abhaFilter, genderFilter);
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchQuery, abhaFilter, genderFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchPatients = async (search?: string) => {
+  const fetchPatients = async (
+    search?: string,
+    abha: AbhaFilter = 'ANY',
+    gender: GenderFilter = 'ANY',
+  ) => {
     try {
       setLoading(true);
-      const response = await patientService.searchPatients(search ? { search } : {});
+      const params: any = {};
+      if (search) params.search = search;
+      if (abha === 'LINKED') params.abhaLinked = true;
+      if (abha === 'UNLINKED') params.abhaLinked = false;
+      if (gender !== 'ANY') params.gender = gender;
+      const response = await patientService.searchPatients(params);
       const data = response as any;
-      // Handle both wrapped and unwrapped responses
       const list = data.data?.patients || data.data?.data || data.data || [];
       setPatients(Array.isArray(list) ? list : []);
     } catch (error: any) {
@@ -263,9 +292,22 @@ const PatientList: React.FC = () => {
         icon={<Person />}
         actions={
           <>
-            <Button variant="outlined" size="small" startIcon={<FilterList />}>
-              Filters
-            </Button>
+            <MuiBadge
+              color="primary"
+              badgeContent={activeFilterCount}
+              invisible={activeFilterCount === 0}
+              overlap="rectangular"
+            >
+              <Button
+                variant={activeFilterCount > 0 ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={<FilterList />}
+                onClick={(e) => setFilterEl(e.currentTarget)}
+                sx={{ textTransform: 'none', borderRadius: 1.75 }}
+              >
+                Filters
+              </Button>
+            </MuiBadge>
             <PermissionGuard requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'RECEPTIONIST']}>
               <Button
                 variant="contained"
@@ -295,25 +337,66 @@ const PatientList: React.FC = () => {
       </Grid>
 
       <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search by name, UHID, mobile, or ABHA number…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            sx: {
-              borderRadius: 2,
-              '& fieldset': { border: 'none' },
-              backgroundColor: 'transparent',
-            },
-          }}
-        />
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.25}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by name, UHID, mobile, or ABHA number…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')}>
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined,
+              sx: {
+                borderRadius: 2,
+                '& fieldset': { border: 'none' },
+                backgroundColor: 'transparent',
+              },
+            }}
+          />
+          {activeFilterCount > 0 && (
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {abhaFilter !== 'ANY' && (
+                <Chip
+                  size="small"
+                  icon={<HealthAndSafety sx={{ fontSize: 14 }} />}
+                  label={abhaFilter === 'LINKED' ? 'ABHA Linked' : 'No ABHA'}
+                  color={abhaFilter === 'LINKED' ? 'success' : 'default'}
+                  onDelete={() => setAbhaFilter('ANY')}
+                  sx={{ fontWeight: 600 }}
+                />
+              )}
+              {genderFilter !== 'ANY' && (
+                <Chip
+                  size="small"
+                  label={genderFilter}
+                  onDelete={() => setGenderFilter('ANY')}
+                  sx={{ fontWeight: 600 }}
+                />
+              )}
+              <Chip
+                size="small"
+                label="Clear all"
+                variant="outlined"
+                onClick={() => { setAbhaFilter('ANY'); setGenderFilter('ANY'); }}
+              />
+            </Stack>
+          )}
+        </Stack>
       </Paper>
 
       <Paper
@@ -332,14 +415,81 @@ const PatientList: React.FC = () => {
             pagination: { paginationModel: { page: 0, pageSize: 10 } },
           }}
           pageSizeOptions={[10, 25, 50]}
-          checkboxSelection
           disableRowSelectionOnClick
           sx={{
             border: 'none',
             '& .MuiDataGrid-cell': { py: 1.5 },
+            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
           }}
         />
       </Paper>
+
+      {/* ── Filters Popover ───────────────────────────────────────── */}
+      <Popover
+        open={Boolean(filterEl)}
+        anchorEl={filterEl}
+        onClose={() => setFilterEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{ sx: { p: 2.25, minWidth: 280, borderRadius: 2.5 } }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+          <Typography variant="subtitle2" fontWeight={700}>Filter patients</Typography>
+          {activeFilterCount > 0 && (
+            <Button
+              size="small"
+              onClick={() => { setAbhaFilter('ANY'); setGenderFilter('ANY'); }}
+              sx={{ textTransform: 'none', fontSize: 12 }}
+            >
+              Reset
+            </Button>
+          )}
+        </Stack>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+          ABHA status
+        </Typography>
+        <ToggleButtonGroup
+          fullWidth
+          exclusive
+          size="small"
+          value={abhaFilter}
+          onChange={(_, v) => { if (v) setAbhaFilter(v as AbhaFilter); }}
+          sx={{
+            mb: 1.75,
+            '& .MuiToggleButton-root': {
+              textTransform: 'none', fontSize: 12, fontWeight: 600, py: 0.6,
+            },
+          }}
+        >
+          <ToggleButton value="ANY">Any</ToggleButton>
+          <ToggleButton value="LINKED">Linked</ToggleButton>
+          <ToggleButton value="UNLINKED">Not linked</ToggleButton>
+        </ToggleButtonGroup>
+
+        <Divider sx={{ my: 1.25 }} />
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+          Gender
+        </Typography>
+        <ToggleButtonGroup
+          fullWidth
+          exclusive
+          size="small"
+          value={genderFilter}
+          onChange={(_, v) => { if (v) setGenderFilter(v as GenderFilter); }}
+          sx={{
+            '& .MuiToggleButton-root': {
+              textTransform: 'none', fontSize: 12, fontWeight: 600, py: 0.6, gap: 0.4,
+            },
+          }}
+        >
+          <ToggleButton value="ANY"><AnyGenderIcon sx={{ fontSize: 14 }} /> Any</ToggleButton>
+          <ToggleButton value="Male"><MaleIcon sx={{ fontSize: 14 }} /> M</ToggleButton>
+          <ToggleButton value="Female"><FemaleIcon sx={{ fontSize: 14 }} /> F</ToggleButton>
+          <ToggleButton value="Other">Other</ToggleButton>
+        </ToggleButtonGroup>
+      </Popover>
 
       <Menu
         anchorEl={anchorEl}

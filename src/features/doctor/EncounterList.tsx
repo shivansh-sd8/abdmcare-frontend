@@ -4,12 +4,14 @@ import {
   TableHead, TableRow, Chip, IconButton, Tooltip, CircularProgress,
   Alert, Grid, alpha, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, ToggleButton, ToggleButtonGroup,
+  InputAdornment,
 } from '@mui/material';
 import { PageHeader, StatCard } from '../../components/ui';
 import {
   MedicalInformation, LocalHospital, Assignment, Schedule,
   CheckCircle, Edit as EditIcon, Visibility, HourglassEmpty, Hotel as AdmitIcon,
   CurrencyRupee, Money, PhoneAndroid, AccountBalance,
+  Search as SearchIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
@@ -80,6 +82,7 @@ const EncounterList: React.FC = () => {
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
   const [statusTab,         setStatusTab]         = useState(0);    // 0=All 1=Waiting 2=In Progress 3=Completed
+  const [searchQuery,       setSearchQuery]       = useState('');
 
   const [consultOpen,       setConsultOpen]       = useState(false);
   const [selectedEncounter, setSelectedEncounter] = useState<any>(null);
@@ -139,20 +142,33 @@ const EncounterList: React.FC = () => {
 
   // ── Filtering ─────────────────────────────────────────────────────────────
 
-  const waiting    = encounters.filter((e) => ACTIVE_STATUSES.has(e.status));
-  const completed  = encounters.filter((e) => e.status === 'COMPLETED');
-  const pending    = encounters.filter((e) => PENDING_STATUSES.has(e.status));
-  const cancelled  = encounters.filter((e) => e.status === 'CANCELLED');
+  // Search filter applied first so tab counts also reflect the search
+  const searched = searchQuery.trim()
+    ? encounters.filter((e) => {
+        const q = searchQuery.toLowerCase();
+        const name = `${e.patient?.firstName || ''} ${e.patient?.lastName || ''}`.toLowerCase();
+        const uhid = (e.patient?.uhid || '').toLowerCase();
+        const cc = (e.chiefComplaint || '').toLowerCase();
+        const dx = ((e.finalDiagnosis || e.diagnosis) || '').toLowerCase();
+        const docName = `${e.doctor?.firstName || ''} ${e.doctor?.lastName || ''}`.toLowerCase();
+        return name.includes(q) || uhid.includes(q) || cc.includes(q) || dx.includes(q) || docName.includes(q);
+      })
+    : encounters;
+
+  const waiting    = searched.filter((e) => ACTIVE_STATUSES.has(e.status));
+  const completed  = searched.filter((e) => e.status === 'COMPLETED');
+  const pending    = searched.filter((e) => PENDING_STATUSES.has(e.status));
+  const cancelled  = searched.filter((e) => e.status === 'CANCELLED');
 
   const TAB_FILTERS: { label: string; count: number; data: Encounter[] }[] = [
-    { label: 'All',       count: encounters.length, data: encounters },
+    { label: 'All',       count: searched.length,   data: searched   },
     { label: 'Waiting',   count: waiting.length,    data: waiting    },
     { label: 'Completed', count: completed.length,  data: completed  },
     { label: 'Pending',   count: pending.length,    data: pending    },
     { label: 'Cancelled', count: cancelled.length,  data: cancelled  },
   ];
 
-  const visibleEncounters = TAB_FILTERS[statusTab]?.data ?? encounters;
+  const visibleEncounters = TAB_FILTERS[statusTab]?.data ?? searched;
 
   // ── Stat cards ────────────────────────────────────────────────────────────
 
@@ -196,6 +212,35 @@ const EncounterList: React.FC = () => {
           </Grid>
         ))}
       </Grid>
+
+      {/* ── Search ── */}
+      <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5, borderRadius: 2 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search by patient, UHID, chief complaint, diagnosis, or doctor…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery ? (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
+            sx: {
+              borderRadius: 2,
+              '& fieldset': { border: 'none' },
+            },
+          }}
+        />
+      </Paper>
 
       {/* ── Status filter tabs ── */}
       <Paper sx={{ borderRadius: '12px 12px 0 0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>

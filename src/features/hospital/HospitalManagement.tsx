@@ -73,7 +73,7 @@ const HospitalManagement: React.FC = () => {
     // Per-hospital ABDM credentials. Empty = fall back to env-level config.
     hipId: '', hipName: '', hiuId: '', hiuName: '',
     abdmClientId: '', abdmClientSecret: '', abdmCallbackUrl: '',
-    hfrFacilityId: '', hprId: '',
+    hfrFacilityId: '',
     // Optional initial ADMIN bootstrap so the hospital can self-serve from day 1.
     adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
   });
@@ -295,7 +295,7 @@ const HospitalManagement: React.FC = () => {
         hiuId: h.hiuId || '', hiuName: h.hiuName || '',
         abdmClientId: h.abdmClientId || '', abdmClientSecret: h.abdmClientSecret || '',
         abdmCallbackUrl: h.abdmCallbackUrl || '',
-        hfrFacilityId: h.hfrFacilityId || '', hprId: h.hprId || '',
+        hfrFacilityId: h.hfrFacilityId || '',
         // Admin bootstrap fields are write-only on create.
         adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
       });
@@ -311,7 +311,7 @@ const HospitalManagement: React.FC = () => {
         plan: 'FREE', defaultOpdCharge: '',
         hipId: '', hipName: '', hiuId: '', hiuName: '',
         abdmClientId: '', abdmClientSecret: '', abdmCallbackUrl: '',
-        hfrFacilityId: '', hprId: '',
+        hfrFacilityId: '',
         adminUsername: '', adminPassword: '', adminFirstName: '', adminLastName: '',
       });
     }
@@ -927,16 +927,16 @@ const HospitalManagement: React.FC = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="HFR Facility ID"
-                placeholder="e.g. F-NHA-XXXX"
+                placeholder="e.g. IN3410000260"
+                helperText="ABDM Health Facility Registry ID — required to issue a working facility QR"
                 value={formData.hfrFacilityId} onChange={(e) => handleFieldChange('hfrFacilityId', e.target.value)}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField fullWidth size="small" label="HPR ID (Owner)"
-                placeholder="e.g. drsmith@hpr"
-                value={formData.hprId} onChange={(e) => handleFieldChange('hprId', e.target.value)}
-              />
-            </Grid>
+            {/*
+              HPR (Healthcare Professional Registry) IDs belong on individual
+              doctors, not on the hospital. The per-doctor HPR field lives in
+              Doctor Registration / User Management.
+            */}
 
             {editingHospital && formData.hipId && !editingHospital.abdmEnabled && (
               <Grid item xs={12}>

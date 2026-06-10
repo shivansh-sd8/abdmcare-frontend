@@ -59,6 +59,10 @@ const DoctorList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState({ total: 0, active: 0, specializations: 0 });
+
+  // Filters
+  const [specFilter, setSpecFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [editFeeDoctor, setEditFeeDoctor] = useState<any>(null);
   const [editFeeValue, setEditFeeValue] = useState('');
 
@@ -260,15 +264,22 @@ const DoctorList: React.FC = () => {
     },
   ];
 
-  const filteredDoctors = searchQuery.trim()
-    ? doctors.filter((doc) => {
-        const q = searchQuery.toLowerCase();
-        const name = `${doc.firstName || ''} ${doc.lastName || ''}`.toLowerCase();
-        const spec = (doc.specialization || '').toLowerCase();
-        const regNo = (doc.registrationNo || '').toLowerCase();
-        return name.includes(q) || spec.includes(q) || regNo.includes(q);
-      })
-    : doctors;
+  const filteredDoctors = doctors.filter((doc) => {
+    if (specFilter && (doc.specialization || '') !== specFilter) return false;
+    if (statusFilter === 'ACTIVE' && !doc.isActive) return false;
+    if (statusFilter === 'INACTIVE' && doc.isActive) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const name = `${doc.firstName || ''} ${doc.lastName || ''}`.toLowerCase();
+    const spec = (doc.specialization || '').toLowerCase();
+    const regNo = (doc.registrationNo || '').toLowerCase();
+    return name.includes(q) || spec.includes(q) || regNo.includes(q);
+  });
+
+  // Extract distinct specialisations from current dataset for chip filter
+  const distinctSpecs = Array.from(
+    new Set(doctors.map((d) => d.specialization).filter(Boolean) as string[])
+  ).sort();
 
   return (
     <Box>
@@ -311,27 +322,75 @@ const DoctorList: React.FC = () => {
       )}
 
       <Paper sx={{ p: 1.5, mb: 2, borderRadius: 2 }} variant="outlined">
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search by name, specialisation, or registration #"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search fontSize="small" sx={{ color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            endAdornment: searchQuery ? (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setSearchQuery('')}>
-                  <Clear fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ) : undefined,
-          }}
-        />
+        <Stack spacing={1.25}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by name, specialisation, or registration #"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search fontSize="small" sx={{ color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')}>
+                    <Clear fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined,
+            }}
+          />
+
+          {/* Quick filter chips */}
+          {(distinctSpecs.length > 0 || (permissions.isAdmin || permissions.isSuperAdmin)) && (
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center">
+              <Chip
+                size="small"
+                label="All"
+                color={!specFilter && statusFilter === 'ALL' ? 'primary' : 'default'}
+                variant={!specFilter && statusFilter === 'ALL' ? 'filled' : 'outlined'}
+                onClick={() => { setSpecFilter(''); setStatusFilter('ALL'); }}
+                sx={{ fontWeight: 600 }}
+              />
+              {(permissions.isAdmin || permissions.isSuperAdmin) && (
+                <>
+                  <Chip
+                    size="small"
+                    label="Active"
+                    color={statusFilter === 'ACTIVE' ? 'success' : 'default'}
+                    variant={statusFilter === 'ACTIVE' ? 'filled' : 'outlined'}
+                    onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')}
+                    sx={{ fontWeight: 600 }}
+                  />
+                  <Chip
+                    size="small"
+                    label="Inactive"
+                    color={statusFilter === 'INACTIVE' ? 'warning' : 'default'}
+                    variant={statusFilter === 'INACTIVE' ? 'filled' : 'outlined'}
+                    onClick={() => setStatusFilter(statusFilter === 'INACTIVE' ? 'ALL' : 'INACTIVE')}
+                    sx={{ fontWeight: 600 }}
+                  />
+                  <Box sx={{ width: 1, height: 20, bgcolor: 'divider', mx: 0.5 }} />
+                </>
+              )}
+              {distinctSpecs.slice(0, 8).map((sp) => (
+                <Chip
+                  key={sp}
+                  size="small"
+                  label={sp}
+                  variant={specFilter === sp ? 'filled' : 'outlined'}
+                  color={specFilter === sp ? 'secondary' : 'default'}
+                  onClick={() => setSpecFilter(specFilter === sp ? '' : sp)}
+                  sx={{ fontWeight: 500 }}
+                />
+              ))}
+            </Stack>
+          )}
+        </Stack>
       </Paper>
 
       {/* Mobile: card list. Desktop: DataGrid. */}
@@ -422,7 +481,6 @@ const DoctorList: React.FC = () => {
             columns={columns}
             initialState={{ pagination: { paginationModel: { page: 0, pageSize: 10 } } }}
             pageSizeOptions={[10, 25, 50]}
-            checkboxSelection
             disableRowSelectionOnClick
             sx={{
               border: 0,

@@ -305,9 +305,11 @@ const CompliancePack: React.FC = () => {
             tone: 'success' as const,
             details: [
               'Per-hospital HIP and HIU service registration via /api/v1/hip/register and /register-hiu',
-              'Hospital model stores hipId, hiuId, abdmClientId, abdmClientSecret, hfrFacilityId, hprId',
+              'Hospital model stores facility-level identifiers: hipId, hiuId, hfrFacilityId, abdmClientId, abdmClientSecret',
+              'Per-doctor HPR ID lives on the Doctor row (used by FHIR Practitioner builder)',
               'SUPER_ADMIN can register HIP/HIU for any hospital; ADMIN locked to their own',
               'abdmEnabled + abdmRegisteredAt flags drive UI badges on the hospital list',
+              'Facility QR uses hfrFacilityId / hipId as the hip-id parameter — strictly DB-driven, no env fallback',
             ],
           },
           {

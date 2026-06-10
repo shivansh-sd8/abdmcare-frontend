@@ -159,6 +159,18 @@ const MainLayout: React.FC = () => {
     [menuGroups],
   );
 
+  // Pick the longest menu path that matches the current location so a nested
+  // route like /app/pharmacy/medicines highlights only Pharmacy Manager and
+  // not also Dispense Queue (/app/pharmacy). Match must be either exact or
+  // bounded by a trailing slash so /app/patients does not steal /app/patient.
+  const bestMatchPath = useMemo(() => {
+    const paths = menuGroups.flatMap(g => g.items.map(i => i.path));
+    const hits = paths.filter(p =>
+      location.pathname === p || location.pathname.startsWith(p + '/')
+    );
+    return hits.sort((a, b) => b.length - a.length)[0] || '';
+  }, [menuGroups, location.pathname]);
+
   // ── Cmd-K binding ──────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -351,8 +363,7 @@ const MainLayout: React.FC = () => {
               <Collapse in={isUngrouped || !isCollapsed} timeout="auto">
                 <List disablePadding sx={{ px: 1.25 }}>
                   {group.items.map(item => {
-                    const isActive = location.pathname === item.path
-                      || (item.path !== '/app/dashboard' && location.pathname.startsWith(item.path));
+                    const isActive = item.path === bestMatchPath;
                     return (
                       <ListItem key={item.path} disablePadding sx={{ mb: 0.25 }}>
                         <ListItemButton

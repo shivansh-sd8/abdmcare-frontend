@@ -5,7 +5,7 @@ import {
   InputAdornment, IconButton,
 } from '@mui/material';
 import {
-  Search, QrCodeScanner, PersonAdd, CheckCircle, HealthAndSafety,
+  Search, QrCodeScanner, PersonAdd, CheckCircle,
   ContentCopy, Person, Phone, Badge,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
@@ -56,23 +56,24 @@ const PatientCheckIn: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>Patient Check-In</Typography>
+          <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5, letterSpacing: '-0.01em' }}>
+            Patient Check-In
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            Identify new vs returning patients via ABHA (M1 mandatory)
+            Look up a patient by ABHA Number, ABHA Address, or mobile to see whether they're new to this facility.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<QrCodeScanner />}
-            onClick={() => navigate('/app/scan-share')}
-          >
-            Scan QR Instead
-          </Button>
-          <Chip icon={<HealthAndSafety />} label="ABDM V3 M1" color="success" variant="outlined" />
-        </Box>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<QrCodeScanner />}
+          onClick={() => navigate('/app/scan-share')}
+          sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600, flexShrink: 0 }}
+        >
+          Scan QR instead
+        </Button>
       </Box>
 
       <Paper sx={{ p: 3, mb: 3 }}>

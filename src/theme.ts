@@ -210,6 +210,14 @@ export const createAppTheme = (mode: PaletteMode) => {
               transform: 'translateY(-1px)',
             },
             '&:active': { transform: 'translateY(0)' },
+            // Default MUI disabled state turns the gradient off and renders
+            // text at rgba(0,0,0,0.26) which makes contained CTAs ("Send OTP",
+            // "Look Up", etc.) practically invisible. Force a readable
+            // light-on-tint disabled look instead.
+            '&.Mui-disabled': {
+              background: alpha(BRAND.primary.main, isDark ? 0.18 : 0.22),
+              color: alpha('#ffffff', isDark ? 0.78 : 0.92),
+            },
           },
           containedSecondary: {
             background: `linear-gradient(135deg, ${BRAND.secondary.main} 0%, ${BRAND.secondary.dark} 100%)`,
@@ -217,6 +225,10 @@ export const createAppTheme = (mode: PaletteMode) => {
               background: `linear-gradient(135deg, ${BRAND.secondary.light} 0%, ${BRAND.secondary.main} 100%)`,
               boxShadow: `0 6px 16px ${alpha(BRAND.secondary.main, 0.30)}`,
               transform: 'translateY(-1px)',
+            },
+            '&.Mui-disabled': {
+              background: alpha(BRAND.secondary.main, isDark ? 0.18 : 0.22),
+              color: alpha('#ffffff', isDark ? 0.78 : 0.92),
             },
           },
           outlined: {

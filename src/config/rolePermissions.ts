@@ -43,14 +43,12 @@ export const menuGroups: MenuGroup[] = [
         text: 'ABHA Management',
         path: '/app/abha',
         icon: 'HealthAndSafety',
-        badge: 'ABDM',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
       },
       {
         text: 'Consent Manager',
         path: '/app/consent',
         icon: 'Assignment',
-        badge: 'M3',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'],
       },
     ],
@@ -99,21 +97,11 @@ export const menuGroups: MenuGroup[] = [
         icon: 'Science',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'],
       },
-      {
-        text: 'Dispense Queue',
-        path: '/app/pharmacy',
-        icon: 'LocalPharmacy',
-        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
-      },
-      {
-        text: 'Pharmacy Manager',
-        path: '/app/pharmacy/medicines',
-        icon: 'Inventory',
-        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
-      },
     ],
   },
   {
+    // Inpatient: receptionist/nurse/doctor work the floor. Bed/ward setup is
+    // a configuration task and lives under Administration.
     label: 'Inpatient',
     items: [
       {
@@ -122,15 +110,44 @@ export const menuGroups: MenuGroup[] = [
         icon: 'LocalHospital',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
       },
+    ],
+  },
+  {
+    // Pharmacy: pharmacist-centric workspace. Dispense Queue is the daily
+    // queue; Inventory is the master catalogue & stock manager. Admins keep
+    // visibility for oversight.
+    label: 'Pharmacy',
+    items: [
       {
-        text: 'Ward & Bed Manager',
-        path: '/app/ward-manager',
-        icon: 'Hotel',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'NURSE'],
+        text: 'Dispense Queue',
+        path: '/app/pharmacy',
+        icon: 'LocalPharmacy',
+        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'Inventory',
+        path: '/app/pharmacy/medicines',
+        icon: 'Inventory',
+        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
       },
     ],
   },
   {
+    // Billing belongs in its own group: Receptionist also accesses it for
+    // collections, so it does not fit the admin-only "Administration" group.
+    label: 'Finance',
+    items: [
+      {
+        text: 'Billing & Payments',
+        path: '/app/billing',
+        icon: 'Receipt',
+        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN'],
+      },
+    ],
+  },
+  {
+    // "Administration" is strictly SUPER_ADMIN / ADMIN. Setup-style tools
+    // (hospitals, users, ward & bed master, ABDM ops, compliance) live here.
     label: 'Administration',
     items: [
       {
@@ -146,10 +163,10 @@ export const menuGroups: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN'],
       },
       {
-        text: 'Billing & Payments',
-        path: '/app/billing',
-        icon: 'Receipt',
-        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN'],
+        text: 'Ward & Bed Manager',
+        path: '/app/ward-manager',
+        icon: 'Hotel',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
       },
       {
         text: 'ABDM Activity',

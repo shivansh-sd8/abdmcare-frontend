@@ -48,9 +48,13 @@ import {
   Block,
   AccessTime,
   Close,
+  CloudDownload,
+  OpenInNew,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import consentService from '../../services/consentService';
+import hiuService from '../../services/hiuService';
 import patientService from '../../services/patientService';
 import ConsentStatusChip from '../../components/ConsentStatusChip';
 import { toast } from 'react-toastify';
@@ -102,10 +106,19 @@ const PURPOSE_LABELS: Record<string, string> = {
 };
 
 const ConsentManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [consents, setConsents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'REQUESTED' | 'GRANTED' | 'DENIED' | 'EXPIRED' | 'REVOKED'>('ALL');
   const [stats, setStats] = useState({ total: 0, granted: 0, requested: 0, expired: 0 });
+
+  // Fetch records dialog state
+  const [fetchOpen, setFetchOpen] = useState(false);
+  const [fetchConsent, setFetchConsent] = useState<any>(null);
+  const [fetchSubmitting, setFetchSubmitting] = useState(false);
+  const [fetchFrom, setFetchFrom] = useState('');
+  const [fetchTo, setFetchTo] = useState('');
 
   // New Consent Request dialog state
   const [newConsentOpen, setNewConsentOpen] = useState(false);
@@ -266,6 +279,50 @@ const ConsentManagement: React.FC = () => {
     }
   };
 
+  // ── Fetch Records (post-grant): pulls health information from PHR via HIU ───
+  const openFetchDialog = (consent: any) => {
+    setFetchConsent(consent);
+    // Pre-fill from artefact / consent-stored date range when available; else
+    // fall back to "last 1 year".
+    const today = new Date().toISOString().split('T')[0];
+    const oneYrAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const from = consent.dateRangeFrom
+      ? new Date(consent.dateRangeFrom).toISOString().split('T')[0]
+      : oneYrAgo;
+    const to = consent.dateRangeTo
+      ? new Date(consent.dateRangeTo).toISOString().split('T')[0]
+      : today;
+    setFetchFrom(from);
+    setFetchTo(to);
+    setFetchOpen(true);
+  };
+
+  const handleFetchRecords = async () => {
+    if (!fetchConsent) return;
+    if (!fetchFrom || !fetchTo) {
+      toast.warning('Please pick a date range');
+      return;
+    }
+    try {
+      setFetchSubmitting(true);
+      await hiuService.requestHealthInformation({
+        consentId: fetchConsent.id,
+        dateRangeFrom: new Date(fetchFrom).toISOString(),
+        dateRangeTo: new Date(fetchTo).toISOString(),
+      });
+      toast.success(
+        'Records request sent — they\'ll appear in the patient\'s profile shortly',
+        { autoClose: 4000 },
+      );
+      setFetchOpen(false);
+      setFetchConsent(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to request records');
+    } finally {
+      setFetchSubmitting(false);
+    }
+  };
+
   const handleViewDetails = async (consent: any) => {
     setSelectedConsent(consent);
     setArtefactData(null);
@@ -382,28 +439,55 @@ const ConsentManagement: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 90,
+      width: 170,
       sortable: false,
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Tooltip title="View Details">
-            <IconButton size="small" color="primary" onClick={() => handleViewDetails(params.row)}>
-              <Visibility fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          {params.row.status === 'REQUESTED' && (
-            <Tooltip title="Cancel Request">
-              <IconButton size="small" color="error" onClick={() => handleCancelConsent(params.row.id)}>
-                <Cancel fontSize="small" />
+      renderCell: (params: GridRenderCellParams) => {
+        const status = params.row.status;
+        const patientId = params.row.patient?.id || params.row.patientId;
+        return (
+          <Box sx={{ display: 'flex', gap: 0.25, alignItems: 'center' }}>
+            {status === 'GRANTED' && (
+              <Tooltip title="Pull patient's records from PHR using this consent">
+                <IconButton
+                  size="small"
+                  sx={{ color: 'success.main' }}
+                  onClick={() => openFetchDialog(params.row)}
+                >
+                  <CloudDownload fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="View Details">
+              <IconButton size="small" color="primary" onClick={() => handleViewDetails(params.row)}>
+                <Visibility fontSize="small" />
               </IconButton>
             </Tooltip>
-          )}
-        </Box>
-      ),
+            {patientId && (
+              <Tooltip title="Open patient profile">
+                <IconButton
+                  size="small"
+                  sx={{ color: 'info.main' }}
+                  onClick={() => navigate(`/app/patients/${patientId}`)}
+                >
+                  <OpenInNew fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {status === 'REQUESTED' && (
+              <Tooltip title="Cancel Request">
+                <IconButton size="small" color="error" onClick={() => handleCancelConsent(params.row.id)}>
+                  <Cancel fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        );
+      },
     },
   ];
 
   const filteredConsents = consents.filter((c) => {
+    if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -427,7 +511,7 @@ const ConsentManagement: React.FC = () => {
     <Box sx={{ overflow: 'hidden', maxWidth: '100%' }}>
       <GradientHero
         title="Consent Management"
-        subtitle="Patient consent requests, grants, revocations and ABDM artefacts"
+        subtitle="Request, track and act on patient consents — once granted, pull their records from any ABDM-linked hospital straight into the patient profile."
         icon={<VerifiedUser />}
         badge={
           consents.some(c => c.status === 'REQUESTED') ? (
@@ -475,26 +559,49 @@ const ConsentManagement: React.FC = () => {
         ))}
       </Grid>
 
-      <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Search by consent ID, patient name, or purpose…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            sx: {
-              borderRadius: 2,
-              '& fieldset': { border: 'none' },
-              backgroundColor: 'transparent',
-            },
-          }}
-        />
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search by consent ID, patient name, or purpose…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search sx={{ fontSize: 18, color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 2,
+                '& fieldset': { border: 'none' },
+                backgroundColor: 'transparent',
+              },
+            }}
+          />
+
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+            {([
+              { id: 'ALL',        label: 'All',          color: 'primary'   as const },
+              { id: 'REQUESTED',  label: 'Pending',      color: 'warning'   as const },
+              { id: 'GRANTED',    label: 'Granted',      color: 'success'   as const },
+              { id: 'DENIED',     label: 'Denied',       color: 'error'     as const },
+              { id: 'EXPIRED',    label: 'Expired',      color: 'default'   as const },
+              { id: 'REVOKED',    label: 'Revoked',      color: 'error'     as const },
+            ] as const).map((opt) => (
+              <Chip
+                key={opt.id}
+                label={opt.label}
+                size="small"
+                color={statusFilter === opt.id ? opt.color : 'default'}
+                variant={statusFilter === opt.id ? 'filled' : 'outlined'}
+                onClick={() => setStatusFilter(opt.id as any)}
+                sx={{ fontWeight: 600 }}
+              />
+            ))}
+          </Box>
+        </Box>
       </Paper>
 
       <Paper
@@ -849,6 +956,16 @@ const ConsentManagement: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
+          {selectedConsent?.status === 'GRANTED' && (
+            <Button
+              color="success"
+              variant="contained"
+              startIcon={<CloudDownload />}
+              onClick={() => { setDetailsOpen(false); openFetchDialog(selectedConsent); }}
+            >
+              Fetch Records
+            </Button>
+          )}
           {selectedConsent?.status === 'REQUESTED' && (
             <Button
               color="error"
@@ -859,6 +976,68 @@ const ConsentManagement: React.FC = () => {
             </Button>
           )}
           <Button onClick={() => setDetailsOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Fetch Records Dialog ─────────────────────────────────────── */}
+      <Dialog open={fetchOpen} onClose={() => !fetchSubmitting && setFetchOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CloudDownload color="success" />
+              Pull Records from PHR
+            </Box>
+            <IconButton onClick={() => setFetchOpen(false)} size="small" disabled={fetchSubmitting}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {fetchConsent && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                We'll request <strong>
+                  {Array.isArray(fetchConsent.hiTypes) ? fetchConsent.hiTypes.join(', ') : 'all granted health info types'}
+                </strong> for{' '}
+                <strong>{fetchConsent.patient?.firstName} {fetchConsent.patient?.lastName}</strong>.
+                Records arrive over ABDM and appear automatically in the patient's profile.
+              </Alert>
+
+              <Box sx={{ display: 'flex', gap: 1.25 }}>
+                <TextField
+                  label="From"
+                  type="date"
+                  size="small"
+                  fullWidth
+                  value={fetchFrom}
+                  onChange={(e) => setFetchFrom(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="To"
+                  type="date"
+                  size="small"
+                  fullWidth
+                  value={fetchTo}
+                  onChange={(e) => setFetchTo(e.target.value)}
+                  inputProps={{ max: new Date().toISOString().split('T')[0] }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setFetchOpen(false)} disabled={fetchSubmitting}>Cancel</Button>
+          <Button
+            color="success"
+            variant="contained"
+            onClick={handleFetchRecords}
+            disabled={fetchSubmitting || !fetchFrom || !fetchTo}
+            startIcon={fetchSubmitting ? <CircularProgress size={16} /> : <CloudDownload />}
+          >
+            {fetchSubmitting ? 'Requesting…' : 'Fetch Records'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
