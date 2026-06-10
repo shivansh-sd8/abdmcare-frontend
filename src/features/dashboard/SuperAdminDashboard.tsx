@@ -52,7 +52,7 @@ const SuperAdminDashboard: React.FC = () => {
           api.get<any>('/api/v1/hospitals/stats'),
           api.get<any>('/api/v1/patients/stats'),
           api.get<any>('/api/v1/doctors/stats'),
-          api.get<any>('/api/v1/abdm-diagnostics/transaction-stats'),
+          api.get<any>('/api/v1/abdm/diagnostics/transaction-stats'),
           api.get<any>('/api/v1/hospitals?limit=12'),
         ]);
 
@@ -113,7 +113,7 @@ const SuperAdminDashboard: React.FC = () => {
         await Promise.all([
           checkEndpoint('API Gateway', '/api/v1/health'),
           checkEndpoint('Database', '/api/v1/patients/stats'),
-          checkEndpoint('ABDM Sandbox', '/api/v1/abdm-diagnostics/transaction-stats'),
+          checkEndpoint('ABDM Sandbox', '/api/v1/abdm/diagnostics/transaction-stats'),
         ]);
         if (!cancelled) setSystemHealth(checks);
       } finally {

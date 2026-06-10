@@ -94,8 +94,8 @@ const AbdmActivity: React.FC = () => {
     try {
       setLoading(true);
       const [statsRes, configRes] = await Promise.all([
-        api.get<any>('/api/v1/abdm-diagnostics/transaction-stats').catch(() => ({ data: null })),
-        api.get<any>('/api/v1/abdm-diagnostics/config').catch(() => ({ data: null })),
+        api.get<any>('/api/v1/abdm/diagnostics/transaction-stats').catch(() => ({ data: null })),
+        api.get<any>('/api/v1/abdm/diagnostics/config').catch(() => ({ data: null })),
       ]);
       const s = (statsRes as any).data?.data || (statsRes as any).data;
       const c = (configRes as any).data?.data || (configRes as any).data;
