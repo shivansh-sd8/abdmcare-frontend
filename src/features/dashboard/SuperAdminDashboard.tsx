@@ -14,6 +14,8 @@ import {
 } from 'recharts';
 import api from '../../services/api';
 import { StatCard, SectionCard, EmptyState } from '../../components/ui';
+import { useAppSelector, useAppDispatch } from '../../hooks/redux';
+import { clearSelectedHospitalId } from '../../store/slices/uiSlice';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const last7Days = (): string[] => {
@@ -29,6 +31,23 @@ const last7Days = (): string[] => {
 const SuperAdminDashboard: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const selectedHospitalId = useAppSelector((s) => s.ui.selectedHospitalId);
+  const [scopedHospital, setScopedHospital] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (!selectedHospitalId) { setScopedHospital(null); return; }
+    let cancelled = false;
+    api.get<any>(`/api/v1/hospitals/${selectedHospitalId}`)
+      .then((resp: any) => {
+        if (cancelled) return;
+        const h = resp?.data || resp?.data?.data || null;
+        if (h) setScopedHospital({ id: h.id, name: h.name });
+      })
+      .catch(() => { /* ignore — chip just won't show name */ });
+    return () => { cancelled = true; };
+  }, [selectedHospitalId]);
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalHospitals: 0,
@@ -147,13 +166,51 @@ const SuperAdminDashboard: React.FC = () => {
 
   return (
     <Box>
-      <Stack spacing={1} sx={{ mb: { xs: 2, sm: 2.5 } }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
-          Platform Overview
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          System-wide operations, ABDM adoption, and infrastructure health.
-        </Typography>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1.5}
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        justifyContent="space-between"
+        sx={{ mb: { xs: 2, sm: 2.5 } }}
+      >
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
+            {scopedHospital ? `${scopedHospital.name} Overview` : 'Platform Overview'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {scopedHospital
+              ? 'You are viewing data scoped to this hospital. All charts, lists, and counts below are filtered.'
+              : 'System-wide operations, ABDM adoption, and infrastructure health.'}
+          </Typography>
+        </Box>
+        {scopedHospital && (
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Chip
+              size="small"
+              icon={<Business sx={{ fontSize: 14 }} />}
+              label={`Scoped to ${scopedHospital.name}`}
+              color="primary"
+              sx={{ fontWeight: 700 }}
+            />
+            <IconButton
+              size="small"
+              onClick={() => navigate(`/app/hospitals/${scopedHospital.id}/performance`)}
+              title="Open hospital performance"
+              sx={{ color: 'primary.main', border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}` }}
+            >
+              <ArrowForward fontSize="small" />
+            </IconButton>
+            <Tooltip title="Clear scope (view all hospitals)">
+              <IconButton
+                size="small"
+                onClick={() => dispatch(clearSelectedHospitalId())}
+                sx={{ color: 'text.secondary' }}
+              >
+                <Public fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
       </Stack>
 
       <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 3 } }}>

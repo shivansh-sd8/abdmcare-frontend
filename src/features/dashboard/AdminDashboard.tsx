@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Grid, useTheme, Typography, Stack, alpha, Skeleton, Chip,
-  IconButton, Tooltip,
+  IconButton, Tooltip, Avatar, LinearProgress,
 } from '@mui/material';
 import {
   People, LocalHospital, CalendarToday, HealthAndSafety,
   TrendingUp, ArrowForward, Receipt, Hotel,
-  Schedule, MedicalServices, Bolt,
+  Schedule, MedicalServices, Bolt, EmojiEvents, Storefront,
+  Science, Psychology,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   AreaChart, Area, RadialBarChart, RadialBar,
-  LineChart, Line,
+  LineChart, Line, Legend,
 } from 'recharts';
 import patientService from '../../services/patientService';
 import doctorService from '../../services/doctorService';
@@ -21,14 +22,30 @@ import appointmentService from '../../services/appointmentService';
 import api from '../../services/api';
 import { StatCard, SectionCard, EmptyState } from '../../components/ui';
 
-const last7Days = (): string[] => {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toLocaleDateString('en-IN', { weekday: 'short' }));
-  }
-  return days;
+type TrendRow = {
+  date: string;
+  label: string;
+  patients: number;
+  appointments: number;
+  encounters: number;
+  admissions: number;
+  revenue: number;
+};
+
+type RevenueSources = {
+  consultation: number;
+  pharmacy: number;
+  labs: number;
+  scans: number;
+  total: number;
+};
+
+type TopDoctor = {
+  doctorId: string | null;
+  name: string;
+  specialization: string | null;
+  encounters: number;
+  revenue: number;
 };
 
 const AdminDashboard: React.FC = () => {
@@ -49,18 +66,27 @@ const AdminDashboard: React.FC = () => {
   const [appointmentStatusData, setAppointmentStatusData] = useState<any[]>([]);
   const [genderData, setGenderData] = useState<any[]>([]);
   const [departmentData, setDepartmentData] = useState<any[]>([]);
+  const [trends, setTrends] = useState<TrendRow[]>([]);
+  const [revenueSources, setRevenueSources] = useState<RevenueSources | null>(null);
+  const [topDoctors, setTopDoctors] = useState<TopDoctor[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       try {
-        const [pRes, dRes, aRes, payRes, ipdRes, labRes] = await Promise.allSettled([
+        const [
+          pRes, dRes, aRes, payRes, ipdRes, labRes,
+          trendsRes, revRes, topDocRes,
+        ] = await Promise.allSettled([
           patientService.getPatientStats(),
           doctorService.getDoctorStats(),
           appointmentService.getAppointmentStats(),
           api.get<any>('/api/v1/payments/stats'),
           api.get<any>('/api/v1/ipd/overview'),
           api.get<any>('/api/v1/investigations/stats'),
+          api.get<any>('/api/v1/dashboard/trends?days=7'),
+          api.get<any>('/api/v1/dashboard/revenue-sources?days=7'),
+          api.get<any>('/api/v1/dashboard/top-doctors?days=7&limit=5'),
         ]);
         if (cancelled) return;
 
@@ -70,6 +96,9 @@ const AdminDashboard: React.FC = () => {
         const payData: any = payRes.status === 'fulfilled' ? (payRes.value as any)?.data?.data || (payRes.value as any)?.data : {};
         const ipdData: any = ipdRes.status === 'fulfilled' ? (ipdRes.value as any)?.data : {};
         const labData: any = labRes.status === 'fulfilled' ? (labRes.value as any)?.data : {};
+        const trendData: any = trendsRes.status === 'fulfilled' ? (trendsRes.value as any)?.data?.data || (trendsRes.value as any)?.data : [];
+        const revData: any = revRes.status === 'fulfilled' ? (revRes.value as any)?.data?.data || (revRes.value as any)?.data : null;
+        const topDocData: any = topDocRes.status === 'fulfilled' ? (topDocRes.value as any)?.data?.data || (topDocRes.value as any)?.data : [];
 
         const totalPatients = pData?.total || 0;
         const abhaLinked = pData?.abhaLinked || 0;
@@ -122,6 +151,10 @@ const AdminDashboard: React.FC = () => {
             name: spec.name, value: spec.count, color: colors[i % colors.length],
           })));
         }
+
+        if (Array.isArray(trendData)) setTrends(trendData);
+        if (revData) setRevenueSources(revData);
+        if (Array.isArray(topDocData)) setTopDoctors(topDocData);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -130,18 +163,37 @@ const AdminDashboard: React.FC = () => {
     return () => { cancelled = true; };
   }, [theme]);
 
-  // 7-day patient registration trend
-  const registrationTrend = useMemo(() => last7Days().map((day, i) => ({
-    day,
-    patients: Math.max(0, Math.round(stats.totalPatients * 0.04 * (0.4 + i * 0.12))),
-    appointments: Math.max(0, Math.round(stats.todayAppointments * (0.5 + i * 0.08))),
-  })), [stats]);
+  // Real 7-day trend (already padded server-side with one row per day, even
+  // when the count is zero — so the chart never flatlines as "empty" again).
+  const registrationTrend = trends.map((t) => ({
+    day: t.label,
+    patients: t.patients,
+    appointments: t.appointments,
+  }));
 
-  // Revenue trend
-  const revenueTrend = useMemo(() => last7Days().map((day, i) => ({
-    day,
-    revenue: Math.max(0, Math.round(stats.revenueToday * (0.55 + i * 0.085))),
-  })), [stats.revenueToday]);
+  const trendHasData = trends.some(
+    (t) => t.patients > 0 || t.appointments > 0,
+  );
+
+  const revenueTrendReal = trends.map((t) => ({
+    day: t.label,
+    revenue: t.revenue,
+  }));
+
+  const revenueHasData = trends.some((t) => t.revenue > 0);
+
+  const revenueSourceChart = useMemo(() => {
+    if (!revenueSources) return [];
+    const items = [
+      { name: 'Consultation', value: revenueSources.consultation, fill: theme.palette.primary.main, icon: <MedicalServices /> },
+      { name: 'Pharmacy',     value: revenueSources.pharmacy,     fill: theme.palette.secondary.main, icon: <Storefront /> },
+      { name: 'Labs',         value: revenueSources.labs,         fill: theme.palette.warning.main, icon: <Science /> },
+      { name: 'Scans',        value: revenueSources.scans,        fill: theme.palette.info.main, icon: <Psychology /> },
+    ].filter((it) => it.value > 0);
+    return items;
+  }, [revenueSources, theme]);
+
+  const revenueSourceTotal = revenueSourceChart.reduce((a, b) => a + b.value, 0);
 
   const radial = [{ name: 'ABHA', value: stats.abhaPercent, fill: theme.palette.success.main }];
 
@@ -209,6 +261,13 @@ const AdminDashboard: React.FC = () => {
           <SectionCard title="Patient & appointment trend" subtitle="Last 7 days" icon={<TrendingUp />}>
             {loading ? (
               <Skeleton variant="rectangular" height={280} sx={{ borderRadius: 2 }} />
+            ) : !trendHasData ? (
+              <EmptyState
+                small
+                title="No activity yet"
+                message="Once patients are registered or appointments are booked, the trend will appear here."
+                action={{ label: 'Register patient', onClick: () => navigate('/app/patients') }}
+              />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={registrationTrend}>
@@ -224,10 +283,11 @@ const AdminDashboard: React.FC = () => {
                   </defs>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" />
                   <XAxis dataKey="day" fontSize={11} stroke={theme.palette.text.secondary} />
-                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} />
+                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
                   <RTooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area type="monotone" dataKey="patients" stroke={theme.palette.primary.main}
-                    strokeWidth={2} fill="url(#adminPatients)" name="Patients" />
+                    strokeWidth={2} fill="url(#adminPatients)" name="New patients" />
                   <Area type="monotone" dataKey="appointments" stroke={theme.palette.warning.main}
                     strokeWidth={2} fill="url(#adminAppts)" name="Appointments" />
                 </AreaChart>
@@ -264,6 +324,132 @@ const AdminDashboard: React.FC = () => {
         </Grid>
       </Grid>
 
+      {/* Revenue source split + Top doctors */}
+      <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
+        <Grid item xs={12} md={5}>
+          <SectionCard
+            title="Revenue by source"
+            subtitle="Last 7 days · paid encounters"
+            icon={<Receipt />}
+            sx={{ height: '100%' }}
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height={260} sx={{ borderRadius: 2 }} />
+            ) : revenueSourceChart.length === 0 ? (
+              <EmptyState
+                small
+                title="No revenue yet"
+                message="Once a paid consultation is recorded, this breakdown will populate."
+              />
+            ) : (
+              <Box>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={revenueSourceChart}
+                      cx="50%" cy="50%"
+                      innerRadius={56} outerRadius={86}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {revenueSourceChart.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Pie>
+                    <RTooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, 'Amount']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <Stack spacing={0.75} sx={{ mt: 1 }}>
+                  {revenueSourceChart.map((d) => {
+                    const pct = revenueSourceTotal > 0 ? Math.round((d.value / revenueSourceTotal) * 100) : 0;
+                    return (
+                      <Stack key={d.name} direction="row" alignItems="center" spacing={1}>
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: d.fill }} />
+                        <Typography variant="caption" sx={{ flex: 1 }}>{d.name}</Typography>
+                        <Typography variant="caption" fontWeight={700}>₹{d.value.toLocaleString()}</Typography>
+                        <Chip size="small" label={`${pct}%`} sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: alpha(d.fill, 0.12), color: d.fill }} />
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            )}
+          </SectionCard>
+        </Grid>
+
+        <Grid item xs={12} md={7}>
+          <SectionCard
+            title="Top doctors"
+            subtitle="By completed encounters · last 7 days"
+            icon={<EmojiEvents />}
+            action={
+              <Tooltip title="Open doctors">
+                <IconButton size="small" onClick={() => navigate('/app/doctors')}>
+                  <ArrowForward fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            }
+            sx={{ height: '100%' }}
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height={260} sx={{ borderRadius: 2 }} />
+            ) : topDoctors.length === 0 ? (
+              <EmptyState
+                small
+                title="No completed encounters"
+                message="Once your team finishes some consultations, the leaderboard will fill up here."
+              />
+            ) : (
+              <Stack spacing={1.25}>
+                {topDoctors.map((d, i) => {
+                  const max = topDoctors[0]?.encounters || 1;
+                  const pct = Math.round((d.encounters / max) * 100);
+                  const tone = i === 0 ? theme.palette.warning.main : i === 1 ? theme.palette.info.main : theme.palette.success.main;
+                  return (
+                    <Box key={d.doctorId || i} sx={{
+                      p: 1.25, borderRadius: 2,
+                      border: `1px solid ${theme.palette.divider}`,
+                      cursor: d.doctorId ? 'pointer' : 'default',
+                      transition: 'all 150ms ease',
+                      '&:hover': { borderColor: alpha(tone, 0.4) },
+                    }} onClick={() => d.doctorId && navigate(`/app/doctors/${d.doctorId}`)}>
+                      <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 0.75 }}>
+                        <Avatar sx={{
+                          width: 36, height: 36, fontSize: '0.78rem', fontWeight: 700,
+                          bgcolor: alpha(tone, 0.14), color: tone,
+                        }}>
+                          {`${i + 1}`}
+                        </Avatar>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={700} noWrap>{d.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {d.specialization || 'General'}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant="body2" fontWeight={800}>{d.encounters}</Typography>
+                          <Typography variant="caption" color="text.secondary">consults</Typography>
+                        </Box>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        value={pct}
+                        sx={{
+                          height: 6, borderRadius: 3,
+                          bgcolor: alpha(tone, 0.10),
+                          '& .MuiLinearProgress-bar': { backgroundColor: tone, borderRadius: 3 },
+                        }}
+                      />
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
+          </SectionCard>
+        </Grid>
+      </Grid>
+
       {/* Mid charts row */}
       <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
         <Grid item xs={12} md={4}>
@@ -277,7 +463,7 @@ const AdminDashboard: React.FC = () => {
                 <BarChart data={appointmentStatusData}>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={11} stroke={theme.palette.text.secondary} />
-                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} />
+                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
                   <RTooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={32}>
                     {appointmentStatusData.map((e, i) => <Cell key={i} fill={e.fill} />)}
@@ -329,7 +515,7 @@ const AdminDashboard: React.FC = () => {
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={departmentData} layout="vertical" margin={{ left: 12, right: 16 }}>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" fontSize={11} stroke={theme.palette.text.secondary} />
+                  <XAxis type="number" fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" fontSize={11} stroke={theme.palette.text.secondary} width={84} />
                   <RTooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={16}>
@@ -356,9 +542,16 @@ const AdminDashboard: React.FC = () => {
           >
             {loading ? (
               <Skeleton variant="rectangular" height={240} sx={{ borderRadius: 2 }} />
+            ) : !revenueHasData ? (
+              <EmptyState
+                small
+                title="No revenue recorded"
+                message="Revenue trends fill in as payments are collected. Open billing to record one."
+                action={{ label: 'Open billing', onClick: () => navigate('/app/billing') }}
+              />
             ) : (
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={revenueTrend}>
+                <LineChart data={revenueTrendReal}>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" />
                   <XAxis dataKey="day" fontSize={11} stroke={theme.palette.text.secondary} />
                   <YAxis fontSize={11} stroke={theme.palette.text.secondary}

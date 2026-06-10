@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   People, Science, MedicalServices, CalendarToday, ArrowForward,
-  TrendingUp, Schedule, AccessTime,
+  TrendingUp, Schedule, AccessTime, AssignmentTurnedIn,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -15,15 +15,19 @@ import {
 import api from '../../services/api';
 import { StatCard, SectionCard, EmptyState } from '../../components/ui';
 
-const last7Days = (): string[] => {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toLocaleDateString('en-IN', { weekday: 'short' }));
-  }
-  return days;
+type TrendRow = {
+  date: string;
+  label: string;
+  patients: number;
+  appointments: number;
+  encounters: number;
+  admissions: number;
+  revenue: number;
 };
+
+type HourlyBucket = { hour: string; total: number; completed: number };
+
+type EncounterStatusRow = { status: string; count: number };
 
 const DoctorDashboard: React.FC = () => {
   const theme = useTheme();
@@ -38,17 +42,26 @@ const DoctorDashboard: React.FC = () => {
   });
   const [recentEncounters, setRecentEncounters] = useState<any[]>([]);
   const [todayAppts, setTodayAppts] = useState<any[]>([]);
+  const [trends, setTrends] = useState<TrendRow[]>([]);
+  const [hourly, setHourly] = useState<HourlyBucket[]>([]);
+  const [encounterStatus, setEncounterStatus] = useState<EncounterStatusRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       try {
-        const [apptRes, encounterRes, labRes, todayApptRes, prescriptionRes] = await Promise.allSettled([
+        const [
+          apptRes, encounterRes, labRes, todayApptRes, prescriptionRes,
+          trendRes, hourlyRes, statusRes,
+        ] = await Promise.allSettled([
           api.get<any>('/api/v1/appointments/stats'),
           api.get<any>('/api/v1/encounters?limit=5'),
           api.get<any>('/api/v1/investigations/stats'),
           api.get<any>('/api/v1/appointments/search?limit=10'),
           api.get<any>('/api/v1/prescriptions?limit=1'),
+          api.get<any>('/api/v1/dashboard/trends?days=7'),
+          api.get<any>('/api/v1/dashboard/hourly-load'),
+          api.get<any>('/api/v1/dashboard/encounter-status?days=7'),
         ]);
 
         if (cancelled) return;
@@ -58,6 +71,9 @@ const DoctorDashboard: React.FC = () => {
         const labData: any = labRes.status === 'fulfilled' ? (labRes.value as any)?.data : {};
         const tApptData: any = todayApptRes.status === 'fulfilled' ? (todayApptRes.value as any)?.data : {};
         const rxData: any = prescriptionRes.status === 'fulfilled' ? (prescriptionRes.value as any)?.data : {};
+        const trendData: any = trendRes.status === 'fulfilled' ? (trendRes.value as any)?.data?.data || (trendRes.value as any)?.data : [];
+        const hourlyData: any = hourlyRes.status === 'fulfilled' ? (hourlyRes.value as any)?.data?.data || (hourlyRes.value as any)?.data : [];
+        const statusData: any = statusRes.status === 'fulfilled' ? (statusRes.value as any)?.data?.data || (statusRes.value as any)?.data : [];
 
         setStats({
           todayQueue: apptData?.today || 0,
@@ -77,6 +93,10 @@ const DoctorDashboard: React.FC = () => {
           return d.toDateString() === today.toDateString();
         }).slice(0, 6);
         setTodayAppts(todays);
+
+        if (Array.isArray(trendData)) setTrends(trendData);
+        if (Array.isArray(hourlyData)) setHourly(hourlyData);
+        if (Array.isArray(statusData)) setEncounterStatus(statusData);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -85,21 +105,47 @@ const DoctorDashboard: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // 7-day patient trend (derived)
-  const trendData = useMemo(() => last7Days().map((day, i) => ({
-    day,
-    consults: Math.max(0, Math.round(stats.completed * (0.6 + i * 0.07) / 7)),
-    queued: Math.max(0, Math.round(stats.waiting * (0.5 + i * 0.08) / 7)),
-  })), [stats]);
+  // Real 7-day series. The backend returns one row per day even when empty,
+  // so the chart never goes blank on a quiet week — it shows a flat baseline.
+  const trendData = trends.map((t) => ({
+    day: t.label,
+    consults: t.encounters,
+    queued: t.appointments,
+  }));
+  const trendHasData = trends.some((t) => t.encounters > 0 || t.appointments > 0);
 
-  // Hourly distribution today (derived)
-  const hourlyData = useMemo(() => {
-    const hours = ['8 AM', '10 AM', '12 PM', '2 PM', '4 PM', '6 PM'];
-    return hours.map((h) => ({
-      hour: h,
-      appts: Math.round(Math.max(0, stats.todayQueue / 6 * (0.7 + Math.random() * 0.7))),
-    }));
-  }, [stats]);
+  // Real hourly distribution for today.
+  const hourlyData = hourly.map((b) => ({
+    hour: b.hour, appts: b.total, completed: b.completed,
+  }));
+  const hourlyHasData = hourly.some((b) => b.total > 0);
+
+  // Encounter status mix — gives the doctor a quick view of bottlenecks
+  // (lots of LAB_PENDING / SCAN_PENDING / PHARMACY_PENDING etc.).
+  const statusChart = useMemo(() => {
+    const labelMap: Record<string, { label: string; tone: string }> = {
+      SCHEDULED:        { label: 'Scheduled',     tone: theme.palette.info.main },
+      CHECKED_IN:       { label: 'Checked-in',    tone: theme.palette.info.dark },
+      CONSULTING:       { label: 'Consulting',    tone: theme.palette.primary.main },
+      LAB_PENDING:      { label: 'Lab pending',   tone: theme.palette.warning.main },
+      LAB_IN_PROGRESS:  { label: 'Labs running',  tone: theme.palette.warning.dark },
+      LAB_COMPLETED:    { label: 'Labs done',     tone: theme.palette.success.main },
+      SCAN_PENDING:     { label: 'Scan pending',  tone: theme.palette.warning.main },
+      SCAN_COMPLETED:   { label: 'Scan done',     tone: theme.palette.success.main },
+      PHARMACY_PENDING: { label: 'Rx pending',    tone: theme.palette.secondary.main },
+      COMPLETED:        { label: 'Completed',     tone: theme.palette.success.main },
+      CANCELLED:        { label: 'Cancelled',     tone: theme.palette.error.main },
+    };
+    return encounterStatus
+      .filter((r) => r.count > 0)
+      .map((r) => ({
+        name: labelMap[r.status]?.label || r.status,
+        value: r.count,
+        fill: labelMap[r.status]?.tone || theme.palette.grey[500],
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [encounterStatus, theme]);
 
   const completionRate = stats.todayQueue > 0
     ? Math.round((stats.completed / Math.max(stats.todayQueue, stats.completed)) * 100)
@@ -148,9 +194,16 @@ const DoctorDashboard: React.FC = () => {
       {/* Charts row */}
       <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
         <Grid item xs={12} lg={8}>
-          <SectionCard title="Consultation trend" subtitle="Last 7 days" icon={<TrendingUp />}>
+          <SectionCard title="Consultation trend" subtitle="Last 7 days · encounters opened vs. appointments" icon={<TrendingUp />}>
             {loading ? (
               <Skeleton variant="rectangular" height={260} sx={{ borderRadius: 2 }} />
+            ) : !trendHasData ? (
+              <EmptyState
+                small
+                title="No activity yet"
+                message="Once consultations are recorded, the trend will populate."
+                action={{ label: 'Open queue', onClick: () => navigate('/app/appointments') }}
+              />
             ) : (
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={trendData}>
@@ -166,17 +219,18 @@ const DoctorDashboard: React.FC = () => {
                   </defs>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" />
                   <XAxis dataKey="day" fontSize={11} stroke={theme.palette.text.secondary} />
-                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} />
+                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
                   <RTooltip
                     contentStyle={{
                       borderRadius: 12, border: `1px solid ${theme.palette.divider}`,
                       background: theme.palette.background.paper, fontSize: '0.8125rem',
                     }}
                   />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area type="monotone" dataKey="consults" stroke={theme.palette.primary.main}
-                    strokeWidth={2} fill="url(#docArea1)" name="Completed" />
+                    strokeWidth={2} fill="url(#docArea1)" name="Encounters" />
                   <Area type="monotone" dataKey="queued" stroke={theme.palette.warning.main}
-                    strokeWidth={2} fill="url(#docArea2)" name="Queued" />
+                    strokeWidth={2} fill="url(#docArea2)" name="Appointments" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -217,26 +271,32 @@ const DoctorDashboard: React.FC = () => {
       {/* Charts row 2 */}
       <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
         <Grid item xs={12} md={6}>
-          <SectionCard title="Hourly load" subtitle="Today" icon={<AccessTime />} sx={{ height: '100%' }}>
+          <SectionCard title="Hourly load" subtitle="Your appointments today" icon={<AccessTime />} sx={{ height: '100%' }}>
             {loading ? (
               <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
+            ) : !hourlyHasData ? (
+              <EmptyState
+                small
+                title="Clear day"
+                message="No appointments scheduled in the working hours today."
+              />
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={hourlyData}>
                   <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" />
                   <XAxis dataKey="hour" fontSize={11} stroke={theme.palette.text.secondary} />
-                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} />
+                  <YAxis fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
                   <RTooltip
                     contentStyle={{
                       borderRadius: 12, border: `1px solid ${theme.palette.divider}`,
                       background: theme.palette.background.paper, fontSize: '0.8125rem',
                     }}
                   />
-                  <Bar dataKey="appts" radius={[8, 8, 0, 0]} barSize={26}>
-                    {hourlyData.map((_, i) => (
-                      <Cell key={i} fill={theme.palette.primary.main} fillOpacity={0.55 + (i * 0.06)} />
-                    ))}
-                  </Bar>
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="appts" name="Booked" radius={[8, 8, 0, 0]} barSize={20}
+                    fill={theme.palette.primary.main} fillOpacity={0.7} />
+                  <Bar dataKey="completed" name="Completed" radius={[8, 8, 0, 0]} barSize={20}
+                    fill={theme.palette.success.main} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -288,6 +348,51 @@ const DoctorDashboard: React.FC = () => {
                   );
                 })}
               </Stack>
+            )}
+          </SectionCard>
+        </Grid>
+      </Grid>
+
+      {/* Encounter status mix — quick read on where the bottlenecks are */}
+      <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
+        <Grid item xs={12}>
+          <SectionCard
+            title="Where are encounters stuck?"
+            subtitle="Status mix · last 7 days"
+            icon={<AssignmentTurnedIn />}
+            action={
+              <Tooltip title="Open encounters">
+                <IconButton size="small" onClick={() => navigate('/app/encounters')}>
+                  <ArrowForward fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 2 }} />
+            ) : statusChart.length === 0 ? (
+              <EmptyState
+                small
+                title="No encounters this week"
+                message="As consultations happen, you'll see how many are stuck in labs, scans or pharmacy here."
+              />
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={statusChart} layout="vertical" margin={{ left: 12, right: 16 }}>
+                  <CartesianGrid stroke={theme.palette.divider} strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" fontSize={11} stroke={theme.palette.text.secondary} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" fontSize={11} stroke={theme.palette.text.secondary} width={120} />
+                  <RTooltip
+                    contentStyle={{
+                      borderRadius: 12, border: `1px solid ${theme.palette.divider}`,
+                      background: theme.palette.background.paper, fontSize: '0.8125rem',
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={16}>
+                    {statusChart.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </SectionCard>
         </Grid>

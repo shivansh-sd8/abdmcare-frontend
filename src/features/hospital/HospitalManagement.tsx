@@ -8,9 +8,10 @@ import {
 import {
   Add, Edit, Delete, Search, CheckCircle, LocalHospital, FilterList,
   Clear, Business, People, MedicalServices, CreditCard, Schedule, Save,
-  HealthAndSafety,
+  HealthAndSafety, Insights,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { useNavigate } from 'react-router-dom';
 import hospitalService from '../../services/hospitalService';
 import hipService from '../../services/hipService';
 import { toast } from 'react-toastify';
@@ -52,6 +53,7 @@ const planConfig: Record<string, { color: string; label: string }> = {
 
 const HospitalManagement: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [allHospitals, setAllHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -545,13 +547,22 @@ const HospitalManagement: React.FC = () => {
     {
       field: 'actions',
       headerName: '',
-      width: 170,
+      width: 210,
       sortable: false,
       disableColumnMenu: true,
       renderCell: (params) => {
         const isSuspended = params.row.status === 'SUSPENDED' || params.row.status === 'EXPIRED';
         return (
           <Stack direction="row" spacing={0.5}>
+            <Tooltip title="View performance">
+              <IconButton
+                size="small"
+                onClick={() => navigate(`/app/hospitals/${params.row.id}/performance`)}
+                sx={{ color: theme.palette.primary.main }}
+              >
+                <Insights fontSize="small" />
+              </IconButton>
+            </Tooltip>
             {params.row.hipId && !params.row.abdmEnabled && (
               <Tooltip title="Register with ABDM">
                 <IconButton size="small" onClick={() => handleAbdmRegister(params.row)} sx={{ color: '#059669' }} disabled={abdmRegistering}>

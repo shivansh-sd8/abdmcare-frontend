@@ -1,7 +1,40 @@
 import axios, { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { toast } from 'react-toastify';
+import { getSelectedHospitalIdFromStorage } from '../store/slices/uiSlice';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082';
+
+/**
+ * URL prefixes where we MUST NOT inject `?hospitalId=` even when a SUPER_ADMIN
+ * has selected a hospital scope. These endpoints are either:
+ *   - about hospitals themselves (the entity, not data inside them), or
+ *   - inherently global (auth, refresh, health, public docs, etc.)
+ */
+const SCOPE_INJECT_DENYLIST: ReadonlyArray<string> = [
+  '/api/v1/hospitals',         // list / get / create / update of hospitals
+  '/api/v1/auth',              // login, refresh, logout
+  '/api/v1/users',             // platform user management
+  '/api/v1/enquiry',           // public enquiry form
+  '/health',                   // service health check
+];
+
+const shouldInjectHospitalScope = (url: string | undefined): boolean => {
+  if (!url) return false;
+  // Anything not under /api/v1 (assets, static) → don't inject.
+  if (!url.startsWith('/api/')) return false;
+  return !SCOPE_INJECT_DENYLIST.some((prefix) => url.startsWith(prefix));
+};
+
+const readCurrentUserRole = (): string | null => {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return u?.role || null;
+  } catch {
+    return null;
+  }
+};
 
 class ApiService {
   private axiosInstance: AxiosInstance;
@@ -36,6 +69,29 @@ class ApiService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // ── SUPER_ADMIN hospital scope injection ──────────────────────────
+        // When a Super Admin picks a hospital from the global scope selector,
+        // we transparently propagate it as ?hospitalId=<id> on every API call
+        // so all list / chart / detail screens reflect just that hospital.
+        // The caller can always override by passing its own hospitalId in
+        // params or in the URL — we never clobber an explicit value.
+        const selectedHospitalId = getSelectedHospitalIdFromStorage();
+        const role = readCurrentUserRole();
+        if (
+          role === 'SUPER_ADMIN' &&
+          selectedHospitalId &&
+          shouldInjectHospitalScope(config.url)
+        ) {
+          // axios merges params with URL query string at send time; respect
+          // an explicit hospitalId already supplied by the caller.
+          const params = (config.params || {}) as Record<string, unknown>;
+          const urlHasParam = (config.url || '').includes('hospitalId=');
+          if (!urlHasParam && params.hospitalId === undefined) {
+            config.params = { ...params, hospitalId: selectedHospitalId };
+          }
+        }
+
         return config;
       },
       (error) => {

@@ -15,14 +15,10 @@ import {
 import api from '../../services/api';
 import { StatCard, SectionCard, EmptyState } from '../../components/ui';
 
-const last7Days = (): string[] => {
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toLocaleDateString('en-IN', { weekday: 'short' }));
-  }
-  return days;
+type TrendRow = {
+  date: string; label: string;
+  patients: number; appointments: number; encounters: number;
+  admissions: number; revenue: number;
 };
 
 const ReceptionistDashboard: React.FC = () => {
@@ -38,15 +34,17 @@ const ReceptionistDashboard: React.FC = () => {
     paymentsToday: 0,
   });
   const [todayAppts, setTodayAppts] = useState<any[]>([]);
+  const [trends, setTrends] = useState<TrendRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       try {
-        const [apptStatsRes, payRes, todayApptRes] = await Promise.allSettled([
+        const [apptStatsRes, payRes, todayApptRes, trendRes] = await Promise.allSettled([
           api.get<any>('/api/v1/appointments/stats'),
           api.get<any>('/api/v1/payments/stats'),
           api.get<any>('/api/v1/appointments/search?limit=20'),
+          api.get<any>('/api/v1/dashboard/trends?days=7'),
         ]);
 
         if (cancelled) return;
@@ -54,6 +52,7 @@ const ReceptionistDashboard: React.FC = () => {
         const apptStats: any = apptStatsRes.status === 'fulfilled' ? (apptStatsRes.value as any)?.data : {};
         const payData: any = payRes.status === 'fulfilled' ? (payRes.value as any)?.data?.data || (payRes.value as any)?.data : {};
         const apptList: any = todayApptRes.status === 'fulfilled' ? (todayApptRes.value as any)?.data : {};
+        const trendData: any = trendRes.status === 'fulfilled' ? (trendRes.value as any)?.data?.data || (trendRes.value as any)?.data : [];
 
         const today = new Date();
         const all = apptList?.appointments || apptList?.data || [];
@@ -71,6 +70,7 @@ const ReceptionistDashboard: React.FC = () => {
           paymentsToday: payData?.todayRevenue || payData?.todayTotal || payData?.totalCollected || 0,
         });
         setTodayAppts(todays.slice(0, 8));
+        if (Array.isArray(trendData)) setTrends(trendData);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -92,14 +92,14 @@ const ReceptionistDashboard: React.FC = () => {
     return buckets.map((b) => ({ hour: b, appts: counts[b] }));
   }, [todayAppts]);
 
-  // Revenue trend (mocked from todays)
-  const revenueTrend = useMemo(() => {
-    const days = last7Days();
-    return days.map((day, i) => ({
-      day,
-      revenue: Math.max(0, Math.round(stats.paymentsToday * (0.55 + i * 0.085))),
-    }));
-  }, [stats.paymentsToday]);
+  // Real revenue trend from /api/v1/dashboard/trends. The backend returns
+  // one row per day even when zero, so the area chart never renders empty
+  // — it shows a flat baseline with a clear empty-state CTA on quiet days.
+  const revenueTrend = useMemo(
+    () => trends.map((t) => ({ day: t.label, revenue: t.revenue })),
+    [trends],
+  );
+  const revenueHasData = trends.some((t) => t.revenue > 0);
 
   // Appt status breakdown
   const statusBreakdown = useMemo(() => {
@@ -176,6 +176,13 @@ const ReceptionistDashboard: React.FC = () => {
           <SectionCard title="Revenue trend" subtitle="Last 7 days" icon={<TrendingUp />} sx={{ height: '100%' }}>
             {loading ? (
               <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2 }} />
+            ) : !revenueHasData ? (
+              <EmptyState
+                small
+                title="No revenue recorded"
+                message="The chart fills in as payments are collected. Open billing to record one."
+                action={{ label: 'Open billing', onClick: () => navigate('/app/billing') }}
+              />
             ) : (
               <ResponsiveContainer width="100%" height={250}>
                 <AreaChart data={revenueTrend}>

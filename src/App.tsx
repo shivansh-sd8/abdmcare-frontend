@@ -23,6 +23,7 @@ const Settings = React.lazy(() => import('./features/settings/Settings'));
 const Notifications = React.lazy(() => import('./features/notifications/Notifications'));
 
 const HospitalManagement = React.lazy(() => import('./features/hospital/HospitalManagement'));
+const HospitalPerformance = React.lazy(() => import('./features/hospital/HospitalPerformance'));
 const UserManagement = React.lazy(() => import('./features/user/UserManagement'));
 const PaymentManagement = React.lazy(() => import('./features/receptionist/PaymentManagement'));
 const EncounterList = React.lazy(() => import('./features/doctor/EncounterList'));
@@ -287,6 +288,15 @@ const App: React.FC = () => {
                   <HospitalManagement />
                 </RoleProtectedRoute>
               } 
+            />
+
+            <Route
+              path="hospitals/:id/performance"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <HospitalPerformance />
+                </RoleProtectedRoute>
+              }
             />
             
             <Route 

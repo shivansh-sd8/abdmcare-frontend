@@ -61,11 +61,12 @@ import {
   KeyboardCommandKey,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
-import { useAppDispatch } from '../../hooks/redux';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { logout } from '../../store/slices/authSlice';
 import { getMenuGroupsForRole, UserRole } from '../../config/rolePermissions';
 import api from '../../services/api';
 import { useThemeMode } from '../../context/ThemeContext';
+import HospitalScopeSelector from '../common/HospitalScopeSelector';
 
 const drawerWidth = 264;
 const drawerWidthMobile = 280;
@@ -127,6 +128,12 @@ const MainLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [hospitalName, setHospitalName] = useState<string>('');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  // SUPER_ADMIN-only — when this changes we want all child pages to refetch
+  // their data (because the axios interceptor will now scope every API call
+  // to a different hospital). The cheapest way is to remount the routed view
+  // by keying it on the selected scope.
+  const selectedHospitalId = useAppSelector((s) => s.ui.selectedHospitalId);
 
   // Profile menu
   const [profileAnchor, setProfileAnchor] = useState<null | HTMLElement>(null);
@@ -502,6 +509,8 @@ const MainLayout: React.FC = () => {
                 </Typography>
               </Stack>
             )}
+            {/* SUPER_ADMIN-only: pick a hospital to scope every page to. */}
+            {userRole === 'SUPER_ADMIN' && <HospitalScopeSelector />}
           </Stack>
 
           {/* Center — global search */}
@@ -695,7 +704,9 @@ const MainLayout: React.FC = () => {
               />
             </Box>
           }>
-            <Outlet />
+            {/* Re-mount routed view when SUPER_ADMIN switches hospital scope
+                so every page does a fresh fetch under the new scope. */}
+            <Outlet key={selectedHospitalId || '__all__'} />
           </Suspense>
         </Box>
       </Box>
