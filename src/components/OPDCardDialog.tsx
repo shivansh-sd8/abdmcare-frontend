@@ -399,7 +399,7 @@ const OPDCardDialog: React.FC<OPDCardDialogProps> = ({
     }
   };
 
-  const hName = hospitalInfo?.name || 'MediSync Hospital';
+  const hName = hospitalInfo?.name || 'AbhaAyushman Hospital';
   const hAddr = [hospitalInfo?.addressLine1, hospitalInfo?.city, hospitalInfo?.state].filter(Boolean).join(', ');
   const hContact = [hospitalInfo?.phone, hospitalInfo?.email].filter(Boolean).join('  ·  ');
   const initials = hName

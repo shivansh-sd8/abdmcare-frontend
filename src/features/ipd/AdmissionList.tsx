@@ -293,7 +293,7 @@ const AdmissionList: React.FC = () => {
     }
 
     const base64 = generateIPDBill({
-      hospital: { name: authUser?.hospitalName || 'MediSync Hospital' },
+      hospital: { name: authUser?.hospitalName || 'AbhaAyushman Hospital' },
       patient: {
         name:   `${adm.patient.firstName} ${adm.patient.lastName}`,
         uhid:    adm.patient.uhid,

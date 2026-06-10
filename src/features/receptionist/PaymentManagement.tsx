@@ -96,7 +96,7 @@ const PaymentManagement: React.FC = () => {
     try {
       const base64 = generateAdvanceSlip({
         hospital: {
-          name: authUser?.hospitalName || 'MediSync Hospital',
+          name: authUser?.hospitalName || 'AbhaAyushman Hospital',
         },
         patient: {
           name: `${payment.patient?.firstName ?? ''} ${payment.patient?.lastName ?? ''}`.trim(),

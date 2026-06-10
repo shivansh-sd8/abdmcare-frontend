@@ -1,7 +1,7 @@
 {
-  "name": "medisync-abdm-frontend",
+  "name": "abhaayushman-abdm-frontend",
   "version": "1.0.0",
-  "description": "MediSync ABDM - Frontend Application",
+  "description": "AbhaAyushman ABDM - Frontend Application",
   "private": true,
   "type": "module",
   "scripts": {

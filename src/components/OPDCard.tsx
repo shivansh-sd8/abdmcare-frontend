@@ -34,7 +34,7 @@ interface OPDCardProps {
   hospitalName?: string;
 }
 
-const OPDCard: React.FC<OPDCardProps> = ({ appointment, hospitalName = 'MediSync Hospital' }) => {
+const OPDCard: React.FC<OPDCardProps> = ({ appointment, hospitalName = 'AbhaAyushman Hospital' }) => {
   const { patient, doctor } = appointment;
 
   return (
