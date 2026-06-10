@@ -117,7 +117,7 @@ const ConsentManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'REQUESTED' | 'GRANTED' | 'DENIED' | 'EXPIRED' | 'REVOKED'>('ALL');
-  const [stats, setStats] = useState({ total: 0, granted: 0, requested: 0, expired: 0 });
+  const [stats, setStats] = useState({ total: 0, granted: 0, requested: 0, expired: 0, revoked: 0, denied: 0 });
 
   // Fetch records dialog state
   const [fetchOpen, setFetchOpen] = useState(false);
@@ -173,7 +173,14 @@ const ConsentManagement: React.FC = () => {
       const res = await consentService.getConsentStats() as any;
       const s = res?.data || res;
       if (s && typeof s.total === 'number') {
-        setStats({ total: s.total, granted: s.granted || 0, requested: s.pending || s.requested || 0, expired: s.expired || 0 });
+        setStats({
+          total: s.total,
+          granted: s.granted || 0,
+          requested: s.pending || s.requested || 0,
+          expired: s.expired || 0,
+          revoked: s.revoked || 0,
+          denied: s.denied || 0,
+        });
         return;
       }
     } catch { /* fall through to client-side */ }
@@ -184,6 +191,8 @@ const ConsentManagement: React.FC = () => {
         granted: fallbackData.filter((c: any) => c.status === 'GRANTED').length,
         requested: fallbackData.filter((c: any) => c.status === 'REQUESTED').length,
         expired: fallbackData.filter((c: any) => c.status === 'EXPIRED').length,
+        revoked: fallbackData.filter((c: any) => c.status === 'REVOKED').length,
+        denied: fallbackData.filter((c: any) => c.status === 'DENIED').length,
       });
     }
   }, []);
@@ -552,13 +561,15 @@ const ConsentManagement: React.FC = () => {
   });
 
   const statsCards: { label: string; value: number; tone: 'info' | 'success' | 'warning' | 'error' }[] = [
-    { label: 'Total Consents', value: stats.total,     tone: 'info' },
-    { label: 'Granted',        value: stats.granted,   tone: 'success' },
-    { label: 'Requested',      value: stats.requested, tone: 'warning' },
-    { label: 'Expired',        value: stats.expired,   tone: 'error' },
+    { label: 'Total',     value: stats.total,     tone: 'info' },
+    { label: 'Granted',   value: stats.granted,   tone: 'success' },
+    { label: 'Requested', value: stats.requested, tone: 'warning' },
+    { label: 'Expired',   value: stats.expired,   tone: 'error' },
+    { label: 'Revoked',   value: stats.revoked,   tone: 'error' },
+    { label: 'Denied',    value: stats.denied,    tone: 'warning' },
   ];
 
-  const statsIcons = [<VerifiedUser />, <CheckCircle />, <HourglassEmpty />, <Cancel />];
+  const statsIcons = [<VerifiedUser />, <CheckCircle />, <HourglassEmpty />, <AccessTime />, <Block />, <Cancel />];
 
   return (
     <Box sx={{ overflow: 'hidden', maxWidth: '100%' }}>
@@ -600,7 +611,7 @@ const ConsentManagement: React.FC = () => {
 
       <Grid container spacing={2.25} sx={{ mb: 3 }}>
         {statsCards.map((s, i) => (
-          <Grid item xs={12} sm={6} md={3} key={s.label}>
+          <Grid item xs={6} sm={4} md={2} key={s.label}>
             <StatCard
               label={s.label}
               value={s.value.toLocaleString()}

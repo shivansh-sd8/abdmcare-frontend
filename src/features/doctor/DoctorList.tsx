@@ -12,18 +12,7 @@ import {
   InputAdornment,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Switch,
-  FormControlLabel,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Stack,
-  CircularProgress,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -36,12 +25,8 @@ import {
   MedicalServices,
   Phone,
   Email,
-  Edit,
   Visibility,
   VerifiedUser,
-  Schedule,
-  Save,
-  Delete,
   Clear,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -63,52 +48,10 @@ const DoctorList: React.FC = () => {
   // Filters
   const [specFilter, setSpecFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  const [editFeeDoctor, setEditFeeDoctor] = useState<any>(null);
-  const [editFeeValue, setEditFeeValue] = useState('');
 
-  // ── Doctor Schedule state ─────────────────────────────────────────────
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduleDoctor, setScheduleDoctor] = useState<any>(null);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-  const DAY_LABELS: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-  const [doctorSched, setDoctorSched] = useState<{
-    workingHours: Record<string, { start: string; end: string } | null>;
-    slotDuration: number | null;
-    maxPatientsPerDay: number;
-    breakTimes: { start: string; end: string; label: string }[];
-  }>({ workingHours: {}, slotDuration: null, maxPatientsPerDay: 30, breakTimes: [] });
-
-  const handleOpenSchedule = async (doc: any) => {
-    setScheduleDoctor(doc);
-    setScheduleOpen(true);
-    try {
-      setScheduleLoading(true);
-      const res: any = await doctorService.getSchedule(doc.id);
-      const d = res.data || res;
-      setDoctorSched({
-        workingHours: d.workingHours || {},
-        slotDuration: d.slotDuration || null,
-        maxPatientsPerDay: d.maxPatientsPerDay || 30,
-        breakTimes: d.breakTimes || [],
-      });
-    } catch { /* defaults */ }
-    finally { setScheduleLoading(false); }
-  };
-
-  const handleSaveSchedule = async () => {
-    if (!scheduleDoctor) return;
-    try {
-      setScheduleLoading(true);
-      const payload: any = { ...doctorSched };
-      if (Object.keys(payload.workingHours).length === 0) payload.workingHours = null;
-      if (!payload.slotDuration) payload.slotDuration = null;
-      await doctorService.updateSchedule(scheduleDoctor.id, payload);
-      toast.success('Doctor schedule updated');
-      setScheduleOpen(false);
-    } catch (e: any) { toast.error(e.response?.data?.message || 'Failed to update schedule'); }
-    finally { setScheduleLoading(false); }
-  };
+  // Editing the doctor's profile, fee or schedule now lives entirely inside
+  // the Doctor Profile page (DoctorEditDialog) — keeps the list focused on
+  // search/discovery and avoids duplicating the same forms in two places.
 
   useEffect(() => {
     fetchDoctors();
@@ -235,30 +178,15 @@ const DoctorList: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 160,
+      width: 100,
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Tooltip title="View Profile">
+          <Tooltip title="View profile">
             <IconButton size="small" color="primary" onClick={() => navigate(`/app/doctors/${params.row.id}`)}>
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
-          {(permissions.isAdmin || permissions.isSuperAdmin) && (
-            <>
-              <Tooltip title="Schedule">
-                <IconButton size="small" sx={{ color: '#6366f1' }} onClick={() => handleOpenSchedule(params.row)}>
-                  <Schedule fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Set Consultation Fee">
-                <IconButton size="small" color="primary"
-                  onClick={() => { setEditFeeDoctor(params.row); setEditFeeValue(String(params.row.consultationFee ?? '')); }}>
-                  <Edit fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
         </Box>
       ),
     },
@@ -450,22 +378,12 @@ const DoctorList: React.FC = () => {
                       />
                     </Stack>
                   </Box>
-                  <Stack spacing={0.25}>
-                    {(permissions.isAdmin || permissions.isSuperAdmin) && (
-                      <Tooltip title="Schedule">
-                        <IconButton size="small" sx={{ color: 'secondary.main' }}
-                          onClick={(e) => { e.stopPropagation(); handleOpenSchedule(doc); }}>
-                          <Schedule fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    <Tooltip title="View">
-                      <IconButton size="small" color="primary"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/app/doctors/${doc.id}`); }}>
-                        <Visibility fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
+                  <Tooltip title="View profile">
+                    <IconButton size="small" color="primary"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/app/doctors/${doc.id}`); }}>
+                      <Visibility fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Stack>
               </Paper>
             ))
@@ -504,148 +422,6 @@ const DoctorList: React.FC = () => {
         </Paper>
       )}
 
-      {/* Edit Consultation Fee Dialog */}
-      <Dialog open={!!editFeeDoctor} onClose={() => setEditFeeDoctor(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Set Consultation Fee</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Dr. {editFeeDoctor?.firstName} {editFeeDoctor?.lastName} — {editFeeDoctor?.specialization}
-          </Typography>
-          <TextField
-            fullWidth autoFocus type="number" label="OPD Consultation Fee (₹)"
-            value={editFeeValue}
-            onChange={e => setEditFeeValue(e.target.value)}
-            InputProps={{ startAdornment: <InputAdornment position="start">₹</InputAdornment> }}
-            helperText="Leave blank to use hospital-level default fee"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditFeeDoctor(null)}>Cancel</Button>
-          <Button variant="contained" onClick={async () => {
-            try {
-              await doctorService.updateDoctor(editFeeDoctor.id, {
-                consultationFee: editFeeValue ? parseFloat(editFeeValue) : null,
-              } as any);
-              toast.success('Consultation fee updated');
-              setEditFeeDoctor(null);
-              fetchDoctors();
-            } catch { toast.error('Failed to update fee'); }
-          }}>Save</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── Doctor Schedule Dialog ──────────────────────────────────────── */}
-      <Dialog open={scheduleOpen} onClose={() => setScheduleOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" fontWeight={700}>
-              Schedule — Dr. {scheduleDoctor?.firstName} {scheduleDoctor?.lastName}
-            </Typography>
-            <IconButton onClick={() => setScheduleOpen(false)}><Clear /></IconButton>
-          </Box>
-          <Typography variant="caption" color="text.secondary">
-            Leave blank to use hospital defaults. Only set overrides here.
-          </Typography>
-        </DialogTitle>
-        <DialogContent dividers>
-          {scheduleLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-          ) : (
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Stack direction="row" spacing={3} alignItems="center">
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>Slot Duration</InputLabel>
-                    <Select value={doctorSched.slotDuration || ''} label="Slot Duration"
-                      onChange={e => setDoctorSched(p => ({ ...p, slotDuration: e.target.value ? Number(e.target.value) : null }))}>
-                      <MenuItem value="">Hospital default</MenuItem>
-                      {[10, 15, 20, 30, 45, 60].map(m => <MenuItem key={m} value={m}>{m} min</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <TextField size="small" label="Max Patients/Day" type="number" value={doctorSched.maxPatientsPerDay} sx={{ width: 160 }}
-                    onChange={e => setDoctorSched(p => ({ ...p, maxPatientsPerDay: Math.max(1, Math.min(200, Number(e.target.value) || 30)) }))}
-                    inputProps={{ min: 1, max: 200 }} />
-                </Stack>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 1 }}>Working Hours (overrides hospital)</Typography>
-              </Grid>
-              {DAYS.map(day => {
-                const hours = doctorSched.workingHours[day];
-                const hasOverride = hours !== undefined && hours !== null;
-                return (
-                  <Grid item xs={12} key={day}>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Typography sx={{ width: 50, fontWeight: 500, fontSize: '0.85rem' }}>{DAY_LABELS[day]}</Typography>
-                      <FormControlLabel
-                        control={<Switch size="small" checked={hasOverride}
-                          onChange={() => {
-                            setDoctorSched(p => {
-                              const wh = { ...p.workingHours };
-                              if (hasOverride) { delete wh[day]; } else { wh[day] = { start: '09:00', end: '17:00' }; }
-                              return { ...p, workingHours: wh };
-                            });
-                          }} />}
-                        label={hasOverride ? (hours === null ? 'Off' : 'Custom') : 'Default'}
-                        sx={{ width: 100 }}
-                      />
-                      {hasOverride && hours && (
-                        <>
-                          <TextField size="small" type="time" label="Start" value={hours.start}
-                            onChange={e => setDoctorSched(p => ({ ...p, workingHours: { ...p.workingHours, [day]: { ...hours, start: e.target.value } } }))}
-                            InputLabelProps={{ shrink: true }} sx={{ width: 130 }} />
-                          <Typography variant="body2">to</Typography>
-                          <TextField size="small" type="time" label="End" value={hours.end}
-                            onChange={e => setDoctorSched(p => ({ ...p, workingHours: { ...p.workingHours, [day]: { ...hours, end: e.target.value } } }))}
-                            InputLabelProps={{ shrink: true }} sx={{ width: 130 }} />
-                        </>
-                      )}
-                      {hasOverride && (
-                        <Button size="small" color="warning"
-                          onClick={() => setDoctorSched(p => {
-                            const wh = { ...p.workingHours };
-                            if (hours) wh[day] = null; else wh[day] = { start: '09:00', end: '17:00' };
-                            return { ...p, workingHours: wh };
-                          })}>
-                          {hours ? 'Mark Off' : 'Set Hours'}
-                        </Button>
-                      )}
-                    </Stack>
-                  </Grid>
-                );
-              })}
-
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 1 }}>Break Times</Typography>
-                {doctorSched.breakTimes.map((b, i) => (
-                  <Stack key={i} direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                    <TextField size="small" type="time" value={b.start} label="Start" InputLabelProps={{ shrink: true }} sx={{ width: 120 }}
-                      onChange={e => { const bt = [...doctorSched.breakTimes]; bt[i] = { ...bt[i], start: e.target.value }; setDoctorSched(p => ({ ...p, breakTimes: bt })); }} />
-                    <TextField size="small" type="time" value={b.end} label="End" InputLabelProps={{ shrink: true }} sx={{ width: 120 }}
-                      onChange={e => { const bt = [...doctorSched.breakTimes]; bt[i] = { ...bt[i], end: e.target.value }; setDoctorSched(p => ({ ...p, breakTimes: bt })); }} />
-                    <TextField size="small" value={b.label} label="Label" sx={{ width: 120 }}
-                      onChange={e => { const bt = [...doctorSched.breakTimes]; bt[i] = { ...bt[i], label: e.target.value }; setDoctorSched(p => ({ ...p, breakTimes: bt })); }} />
-                    <IconButton size="small" color="error" onClick={() => setDoctorSched(p => ({ ...p, breakTimes: p.breakTimes.filter((_, idx) => idx !== i) }))}>
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Stack>
-                ))}
-                <Button size="small" onClick={() => setDoctorSched(p => ({ ...p, breakTimes: [...p.breakTimes, { start: '13:00', end: '14:00', label: 'Lunch' }] }))} sx={{ mt: 1 }}>
-                  + Add Break
-                </Button>
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setScheduleOpen(false)} sx={{ borderRadius: 2 }}>Cancel</Button>
-          <Button onClick={handleSaveSchedule} variant="contained" disabled={scheduleLoading}
-            startIcon={scheduleLoading ? <CircularProgress size={16} /> : <Save />} sx={{ borderRadius: 2, px: 3 }}>
-            Save Schedule
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
