@@ -607,8 +607,11 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
               </Button>
             )}
 
-            {/* Doctor only → Mark Discharge Ready when ADMITTED */}
-            {isDoctor && admission?.status === 'ADMITTED' && (
+            {/* Doctor / admin → Mark Discharge Ready when ADMITTED. Admins
+                inherit the doctor's clinical sign-off path because they have
+                all-access — but the actual discharge billing still belongs to
+                billing roles below. */}
+            {(isDoctor || isAdminRole) && admission?.status === 'ADMITTED' && (
               <Tooltip title="Mark patient clinically ready for discharge (receptionist will collect payment)">
                 <Button variant="outlined" color="warning" size="small"
                   startIcon={markingReady ? <CircularProgress size={14} /> : <CheckCircle />}
@@ -865,7 +868,9 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
               {/* ── Tab 1: Prescriptions ───────────────────────────────────── */}
               {tab === 1 && (
                 <Box>
-                  {admission.status !== 'DISCHARGED' && (
+                  {/* Prescriptions are a doctor / admin action — nurses
+                      see the list but not the "Add" button (scope of practice). */}
+                  {admission.status !== 'DISCHARGED' && (isDoctor || isAdminRole) && (
                     <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
                       <Button variant="contained" color="success" startIcon={<Medication />}
                         onClick={() => { setQuickMeds([emptyMed()]); setSelectedDoctorId(''); setRxDialogOpen(true); }}
@@ -913,7 +918,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
               {/* ── Tab 2: Investigations ──────────────────────────────────── */}
               {tab === 2 && (
                 <Box>
-                  {admission.status !== 'DISCHARGED' && (
+                  {admission.status !== 'DISCHARGED' && (isDoctor || isAdminRole) && (
                     <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
                       <Button variant="contained" color="info" startIcon={<Science />}
                         onClick={() => { setQuickLabs([emptyLab()]); setSelectedDoctorId(''); setLabDialogOpen(true); }}
@@ -966,7 +971,7 @@ export default function IPDAdmissionDetail({ open, admissionId, onClose, onDisch
               {/* ── Tab 3: Daily Rounds ────────────────────────────────────── */}
               {tab === 3 && (
                 <Box>
-                  {admission.status === 'ADMITTED' && (
+                  {admission.status === 'ADMITTED' && (isDoctor || isAdminRole) && (
                     <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
                       <Button variant="contained" startIcon={<NoteAdd />} onClick={openRoundDialog}>
                         Add Daily Round

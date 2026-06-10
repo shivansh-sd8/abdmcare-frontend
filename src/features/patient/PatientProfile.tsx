@@ -194,7 +194,7 @@ const PatientProfile: React.FC = () => {
   if (loading) return <Box sx={{ p: 3 }}><Skeleton variant="rectangular" height={80} sx={{ mb: 2, borderRadius: 2 }} /><Skeleton variant="rectangular" height={400} sx={{ borderRadius: 2 }} /></Box>;
   if (!data) return <Box sx={{ p: 3 }}><Alert severity="error">Patient not found</Alert><Button sx={{ mt: 2 }} onClick={() => navigate(-1)}>Go Back</Button></Box>;
 
-  const { patient, summary, billingOverview, chargeItems, latestVitals, activeAdmission, encounters, prescriptions, vitals, investigations, admissions, consents, appointments } = data;
+  const { patient, summary, billingOverview, chargeItems, latestVitals, activeAdmission, pendingAdmissionRecommendation, encounters, prescriptions, vitals, investigations, admissions, consents, appointments } = data;
   const age = patient.dob ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / 31557600000) : null;
   const address = patient.address
     ? typeof patient.address === 'object'
@@ -295,8 +295,67 @@ const PatientProfile: React.FC = () => {
       </Paper>
 
       {activeAdmission && (
-        <Alert severity="warning" icon={<Hotel />} sx={{ mb: 2, borderRadius: 2 }}>
-          <strong>Currently Admitted</strong> — {activeAdmission.admissionNumber} | Ward: {activeAdmission.ward?.name} | Bed: {activeAdmission.bed?.bedNumber}
+        <Alert
+          severity={activeAdmission.status === 'DISCHARGE_READY' ? 'info' : 'warning'}
+          icon={<Hotel />}
+          sx={{ mb: 2, borderRadius: 2 }}
+          action={
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => navigate(`/app/ipd?openId=${activeAdmission.id}`)}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Open admission
+            </Button>
+          }
+        >
+          <strong>
+            {activeAdmission.status === 'DISCHARGE_READY' ? 'Ready for discharge' : 'Currently admitted'}
+          </strong>
+          {' — '}
+          {activeAdmission.admissionNumber}
+          {activeAdmission.ward?.name ? ` | Ward: ${activeAdmission.ward.name}` : ''}
+          {activeAdmission.bed?.bedNumber ? ` | Bed: ${activeAdmission.bed.bedNumber}` : ''}
+          {activeAdmission.admittedAt ? ` | Since ${fmtTime(activeAdmission.admittedAt)}` : ''}
+        </Alert>
+      )}
+
+      {/* Doctor recommended admission, but the patient hasn't been admitted
+          yet. Surfaces the doctor's reason and a one-click "Admit now" CTA so
+          admin/receptionist can act without hunting through encounters. */}
+      {!activeAdmission && pendingAdmissionRecommendation && (
+        <Alert
+          severity="warning"
+          icon={<Hotel />}
+          sx={{ mb: 2, borderRadius: 2 }}
+          action={
+            <Button
+              size="small"
+              variant="contained"
+              color="warning"
+              onClick={() => {
+                const enc = pendingAdmissionRecommendation;
+                const qs = new URLSearchParams({
+                  admit: '1',
+                  patientId: patient.id,
+                  encounterId: enc.id || '',
+                  patientName: `${patient.firstName} ${patient.lastName} (${patient.uhid || ''})`.trim(),
+                  diagnosis: enc.finalDiagnosis || enc.provisionalDiagnosis || enc.diagnosis || '',
+                  reason: enc.admissionReason || '',
+                }).toString();
+                navigate(`/app/ipd?${qs}`);
+              }}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Admit now
+            </Button>
+          }
+        >
+          <strong>Admission recommended</strong>
+          {pendingAdmissionRecommendation.admissionReason
+            ? ` — ${pendingAdmissionRecommendation.admissionReason}`
+            : ' — by the consulting doctor.'}
         </Alert>
       )}
 

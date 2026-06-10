@@ -67,7 +67,11 @@ const NurseDashboard: React.FC = () => {
           const data: any = (admRes.value as any)?.data;
           admList = data?.admissions || data?.data || [];
           if (!Array.isArray(admList)) admList = [];
-          activeAdm = admList.filter(a => a.status === 'ADMITTED' || a.status === 'IN_PROGRESS').length;
+          // Bed is still occupied during DISCHARGE_READY — the patient is
+          // clinically cleared but hasn't been billed-out yet, so for the
+          // nurse station this counts as an active stay. (`IN_PROGRESS`
+          // never appears on `Admission.status`; was a leftover bug.)
+          activeAdm = admList.filter(a => a.status === 'ADMITTED' || a.status === 'DISCHARGE_READY').length;
           const today = new Date().toDateString();
           todayAdm = admList.filter(a => new Date(a.admissionDate || a.createdAt).toDateString() === today).length;
           todayDisch = admList.filter(a =>

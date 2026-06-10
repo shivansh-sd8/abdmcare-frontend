@@ -126,7 +126,13 @@ const AdmissionList: React.FC = () => {
     } finally { setCheckingAdmission(false); }
   }, []);
 
-  // ── Auto-open admit dialog from URL params (doctor/receptionist deep-link) ──
+  // ── Auto-open admit dialog OR detail modal from URL params ──────────────
+  // Two deep-link shapes are supported:
+  //   ?admit=1&patientId=…&encounterId=…   → opens the Admit dialog pre-filled
+  //   ?openId=<admissionId>                → opens the existing IPDAdmissionDetail
+  // The latter is what "Open admission" / "Admit now" CTAs from the patient
+  // profile / encounter / appointment screens use, so the user lands in the
+  // right place without us adding a new route.
   useEffect(() => {
     const params     = new URLSearchParams(location.search);
     const autoAdmit  = params.get('admit') === '1';
@@ -135,6 +141,7 @@ const AdmissionList: React.FC = () => {
     const patientName= params.get('patientName') || '';
     const diagnosis  = params.get('diagnosis')   || '';
     const reason     = params.get('reason')      || '';
+    const openId     = params.get('openId')      || '';
 
     if (autoAdmit && patientId) {
       setAdmitForm((f) => ({
@@ -147,6 +154,8 @@ const AdmissionList: React.FC = () => {
       }));
       checkActiveAdmission(patientId);
       setTimeout(() => setShowAdmitDialog(true), 400);
+    } else if (openId) {
+      setDetailAdmissionId(openId);
     }
   }, [location.search, checkActiveAdmission]);
 

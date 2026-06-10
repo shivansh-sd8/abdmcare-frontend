@@ -46,7 +46,7 @@ const ReceptionistDashboard: React.FC = () => {
         const [apptStatsRes, payRes, todayApptRes] = await Promise.allSettled([
           api.get<any>('/api/v1/appointments/stats'),
           api.get<any>('/api/v1/payments/stats'),
-          api.get<any>('/api/v1/appointments?limit=20'),
+          api.get<any>('/api/v1/appointments/search?limit=20'),
         ]);
 
         if (cancelled) return;

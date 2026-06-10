@@ -4,6 +4,7 @@ import {
   Button, TextField, Box, Typography, IconButton, Grid,
   Divider, Chip, Autocomplete, CircularProgress, Tooltip,
   Paper, Alert, Tabs, Tab, Badge, useTheme,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon,
@@ -263,6 +264,12 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
   const [finalDiagnosis,          setFinalDiagnosis]          = useState('');
   const [notes,                   setNotes]                   = useState('');
   const [followUpDays,            setFollowUpDays]            = useState('');
+  // Doctor's "Recommend admission" toggle. When true, the encounter carries
+  // an admissionRequired flag + reason, which surfaces a clear "ADMISSION
+  // RECOMMENDED" badge on the appointment row, patient profile and IPD admit
+  // dialog so the receptionist / admin doesn't need to chase the doctor.
+  const [admissionRequired,  setAdmissionRequired]  = useState(false);
+  const [admissionReason,    setAdmissionReason]    = useState('');
 
   // Rx + investigations
   const [medicines, setMedicines] = useState<Medicine[]>([]);
@@ -291,6 +298,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
         setFinalDiagnosis(e.finalDiagnosis || e.diagnosis || '');
         setNotes(e.notes || '');
         setFollowUpDays('');
+        setAdmissionRequired(!!e.admissionRequired);
+        setAdmissionReason(e.admissionReason || '');
         setMedicines(
           (e.prescriptions || []).map((rx: any) => ({
             medicineName: rx.medicineName || '',
@@ -328,10 +337,13 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
     followUpDate: followUpDays
       ? new Date(Date.now() + parseInt(followUpDays) * 86400000).toISOString()
       : undefined,
+    admissionRequired,
+    admissionReason: admissionRequired ? admissionReason : undefined,
     prescriptions: medicines.filter((m) => m.medicineName.trim()),
     labOrders:     labOrders.filter((l) => l.testName.trim()),
   }), [chiefComplaint, historyOfPresentIllness, physicalExamination,
-       provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders]);
+       provisionalDiagnosis, finalDiagnosis, notes, followUpDays,
+       admissionRequired, admissionReason, medicines, labOrders]);
 
   // ── Auto-save ───────────────────────────────────────────────────────────────
 
@@ -351,7 +363,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
 
   useEffect(() => { triggerAutoSave(); }, [
     chiefComplaint, historyOfPresentIllness, physicalExamination,
-    provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders,
+    provisionalDiagnosis, finalDiagnosis, notes, followUpDays,
+    admissionRequired, admissionReason, medicines, labOrders,
     triggerAutoSave,
   ]);
 
@@ -546,6 +559,23 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                 <Chip label={encounter.type} size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', height: 18, fontSize: 10 }} />
               )}
+              {/* Quick visual cue when this consult already carries an
+                  admission recommendation. Saves the doctor from looking down
+                  at the disposition panel just to know what they decided. */}
+              {admissionRequired && (
+                <Chip
+                  label="ADMIT RECOMMENDED"
+                  size="small"
+                  sx={{
+                    bgcolor: '#F39C12',
+                    color: 'white',
+                    fontWeight: 700,
+                    height: 18,
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                  }}
+                />
+              )}
               {autoSaved && (
                 <Typography variant="caption" sx={{ opacity: 0.7, fontStyle: 'italic' }}>
                   Auto-saved {autoSaved.toLocaleTimeString()}
@@ -665,6 +695,61 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                       .toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </Typography>
                 )}
+              </Grid>
+
+              {/* ─── Plan & Disposition ────────────────────────────────────
+                  The doctor's "what next?" decision. Recommending admission
+                  here flips Encounter.admissionRequired = true with a reason,
+                  which surfaces a clear "ADMISSION RECOMMENDED" badge on the
+                  appointment row, patient profile and IPD admit dialog so
+                  whoever picks up the next step (admin / receptionist) sees
+                  it without asking the doctor again. */}
+              <Grid item xs={12}><Divider /></Grid>
+              <Grid item xs={12}>
+                <SLabel text="Disposition" />
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: admissionRequired ? 'warning.main' : 'divider',
+                    bgcolor: admissionRequired ? 'warning.light' : 'transparent',
+                    transition: 'all 150ms ease',
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={admissionRequired}
+                        onChange={(e) => setAdmissionRequired(e.target.checked)}
+                        color="warning"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" fontWeight={700}>
+                          Recommend admission
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          The receptionist will see "Admission recommended" on this patient
+                          and can admit them from the appointment list, encounter list, or patient profile.
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ alignItems: 'flex-start', m: 0 }}
+                  />
+                  {admissionRequired && (
+                    <TextField
+                      fullWidth multiline rows={2} size="small"
+                      sx={{ mt: 1.5 }}
+                      placeholder="Clinical reason for admission (e.g. moderate dehydration needing IV fluids, fever > 102°F unresponsive to OPD treatment)"
+                      value={admissionReason}
+                      onChange={(e) => setAdmissionReason(e.target.value)}
+                      label="Reason for admission"
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  )}
+                </Box>
               </Grid>
             </Grid>
 

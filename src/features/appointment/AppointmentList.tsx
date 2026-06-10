@@ -51,12 +51,18 @@ import encounterService from '../../services/encounterService';
 import ipdService from '../../services/ipdService';
 import OPDCardDialog from '../../components/OPDCardDialog';
 
+// "ADMITTED" is a pseudo-filter — there's no Appointment.status === 'ADMITTED'.
+// We send no status to the server and instead client-side filter to rows whose
+// patient currently has an active admission (ADMITTED or DISCHARGE_READY).
+const ADMITTED_PSEUDO = '__ADMITTED__';
+
 const STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'SCHEDULED', label: 'Scheduled' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: '',              label: 'All' },
+  { value: 'SCHEDULED',     label: 'Scheduled' },
+  { value: 'IN_PROGRESS',   label: 'In Progress' },
+  { value: ADMITTED_PSEUDO, label: 'Admitted' },
+  { value: 'COMPLETED',     label: 'Completed' },
+  { value: 'CANCELLED',     label: 'Cancelled' },
 ];
 
 const AppointmentList: React.FC = () => {
@@ -105,7 +111,10 @@ const AppointmentList: React.FC = () => {
         page: pageRef.current.page + 1,
         limit: pageRef.current.pageSize,
       };
-      if (statusRef.current) params.status = statusRef.current;
+      // "Admitted" is a pseudo-filter — client-side, no server status param.
+      if (statusRef.current && statusRef.current !== ADMITTED_PSEUDO) {
+        params.status = statusRef.current;
+      }
       if (dateRef.current) params.date = dateRef.current;
 
       const response = await appointmentService.searchAppointments(params);
@@ -326,17 +335,27 @@ const AppointmentList: React.FC = () => {
     }
   };
 
-  // Client-side search on already-fetched rows (name / doctor / ID)
-  const filteredRows = searchQuery.trim()
-    ? appointments.filter((apt) => {
-        const q = searchQuery.toLowerCase();
+  // Client-side search on already-fetched rows (name / doctor / ID).
+  // The "Admitted" pseudo-filter is also applied here because it depends on
+  // the admittedPatientIds set, which is computed client-side from
+  // listAdmissions; we can't push it into the appointments search API.
+  const filteredRows = (() => {
+    let rows = appointments;
+    if (statusFilter === ADMITTED_PSEUDO) {
+      rows = rows.filter((apt) => admittedPatientIds.has(apt.patient?.id));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      rows = rows.filter((apt) => {
         const patientName = `${apt.patient?.firstName || ''} ${apt.patient?.lastName || ''}`.toLowerCase();
         const doctorName = `${apt.doctor?.firstName || ''} ${apt.doctor?.lastName || ''}`.toLowerCase();
         const id = (apt.id || '').toLowerCase();
         const uhid = (apt.patient?.uhid || '').toLowerCase();
         return patientName.includes(q) || doctorName.includes(q) || id.includes(q) || uhid.includes(q);
-      })
-    : appointments;
+      });
+    }
+    return rows;
+  })();
 
   const columns: GridColDef[] = [
     {
@@ -437,22 +456,53 @@ const AppointmentList: React.FC = () => {
     {
       field: 'status',
       headerName: 'Status',
-      width: 140,
+      width: 200,
       renderCell: (params: GridRenderCellParams) => {
         const status = params.row.status || 'SCHEDULED';
         const color = getStatusColor(status);
+        const activeAdm = admissionByPatientId[params.row.patient?.id];
+        const isAdmitted = !!activeAdm;
+        const isDischargeReady = activeAdm?.status === 'DISCHARGE_READY';
+        const admissionRecommended = !!params.row.encounter?.admissionRequired && !isAdmitted;
         return (
-          <Chip
-            icon={getStatusIcon(status)}
-            label={status.replace('_', ' ')}
-            size="small"
-            sx={{
-              bgcolor: alpha(color, 0.1),
-              color,
-              fontWeight: 500,
-              textTransform: 'capitalize',
-            }}
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start', py: 0.5 }}>
+            <Chip
+              icon={getStatusIcon(status)}
+              label={status.replace('_', ' ')}
+              size="small"
+              sx={{
+                bgcolor: alpha(color, 0.1),
+                color,
+                fontWeight: 500,
+                textTransform: 'capitalize',
+              }}
+            />
+            {/* Show the doctor's disposition next to the routine status so
+                whoever's looking at the queue sees "the doctor wants this
+                patient admitted" without opening the encounter. */}
+            {admissionRecommended && (
+              <Tooltip title={params.row.encounter?.admissionReason || 'Doctor recommends admission'}>
+                <Chip
+                  label="Admission recommended"
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ fontWeight: 700, fontSize: '0.65rem', height: 18 }}
+                />
+              </Tooltip>
+            )}
+            {isAdmitted && (
+              <Tooltip title={`${activeAdm.admissionNumber}${activeAdm.ward?.name ? ` · ${activeAdm.ward.name}` : ''}${activeAdm.bed?.bedNumber ? ` · Bed ${activeAdm.bed.bedNumber}` : ''}`}>
+                <Chip
+                  label={isDischargeReady ? 'Ready for discharge' : 'Admitted'}
+                  size="small"
+                  color="warning"
+                  variant={isDischargeReady ? 'outlined' : 'filled'}
+                  sx={{ fontWeight: 700, fontSize: '0.65rem', height: 18 }}
+                />
+              </Tooltip>
+            )}
+          </Box>
         );
       },
     },
@@ -501,26 +551,43 @@ const AppointmentList: React.FC = () => {
               </Button>
             )}
             {canAdmit && (permissions.isReceptionist || permissions.isAdmin || permissions.isDoctor) && !admittedPatientIds.has(params.row.patient?.id) && (
-              <Tooltip title="Admit to IPD">
-                <IconButton
-                  size="small"
-                  color="warning"
-                  onClick={() => {
-                    const p = params.row;
-                    const qs = new URLSearchParams({
-                      admit: '1',
-                      patientId: p.patientId || '',
-                      encounterId: p.encounterId || '',
-                      patientName: `${p.patient?.firstName || ''} ${p.patient?.lastName || ''} (${p.patient?.uhid || ''})`.trim(),
-                      diagnosis: p.encounter?.diagnosis || p.encounter?.provisionalDiagnosis || '',
-                      reason: p.notes || p.reason || '',
-                    }).toString();
-                    navigate(`/app/ipd?${qs}`);
-                  }}
-                >
-                  <AdmitIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              (() => {
+                const recommended = !!params.row.encounter?.admissionRequired;
+                // When the doctor has flagged admission, surface a labeled
+                // "Admit" button so the admin / receptionist doesn't have to
+                // hunt for an icon. Carry the admissionReason forward to the
+                // IPD dialog so they don't have to retype it.
+                const onClick = () => {
+                  const p = params.row;
+                  const qs = new URLSearchParams({
+                    admit: '1',
+                    patientId: p.patientId || '',
+                    encounterId: p.encounterId || '',
+                    patientName: `${p.patient?.firstName || ''} ${p.patient?.lastName || ''} (${p.patient?.uhid || ''})`.trim(),
+                    diagnosis: p.encounter?.finalDiagnosis || p.encounter?.diagnosis || p.encounter?.provisionalDiagnosis || '',
+                    reason: p.encounter?.admissionReason || p.notes || p.reason || '',
+                  }).toString();
+                  navigate(`/app/ipd?${qs}`);
+                };
+                return recommended ? (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="warning"
+                    onClick={onClick}
+                    startIcon={<AdmitIcon sx={{ fontSize: 16 }} />}
+                    sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.72rem', px: 1.25, py: 0.4 }}
+                  >
+                    Admit now
+                  </Button>
+                ) : (
+                  <Tooltip title="Admit to IPD">
+                    <IconButton size="small" color="warning" onClick={onClick}>
+                      <AdmitIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                );
+              })()
             )}
             {params.row.opdCardNumber && (
               <>
@@ -685,7 +752,9 @@ const AppointmentList: React.FC = () => {
             />
           ) : (
             filteredRows.map((apt: any) => {
-              const isAdmitted = admittedPatientIds.has(apt.patient?.id);
+              const activeAdm = admissionByPatientId[apt.patient?.id];
+              const isAdmitted = !!activeAdm;
+              const isDischargeReady = activeAdm?.status === 'DISCHARGE_READY';
               const status = (apt.status || 'SCHEDULED').toUpperCase();
               const time = apt.scheduledAt
                 ? format(new Date(apt.scheduledAt), 'dd MMM · hh:mm a')
@@ -719,17 +788,28 @@ const AppointmentList: React.FC = () => {
                           Dr. {apt.doctor?.firstName} {apt.doctor?.lastName} · {apt.patient?.uhid || '—'}
                         </Typography>
                       </Box>
-                      <Chip
-                        size="small"
-                        label={status.replace('_', ' ').toLowerCase()}
-                        sx={{
-                          textTransform: 'capitalize',
-                          height: 22, fontSize: '0.65rem',
-                          bgcolor: alpha(getStatusColor(status), 0.1),
-                          color: getStatusColor(status),
-                          fontWeight: 600,
-                        }}
-                      />
+                      <Stack direction="column" spacing={0.4} alignItems="flex-end">
+                        <Chip
+                          size="small"
+                          label={status.replace('_', ' ').toLowerCase()}
+                          sx={{
+                            textTransform: 'capitalize',
+                            height: 22, fontSize: '0.65rem',
+                            bgcolor: alpha(getStatusColor(status), 0.1),
+                            color: getStatusColor(status),
+                            fontWeight: 600,
+                          }}
+                        />
+                        {isAdmitted && (
+                          <Chip
+                            size="small"
+                            label={isDischargeReady ? 'Ready for discharge' : 'Admitted'}
+                            color="warning"
+                            variant={isDischargeReady ? 'outlined' : 'filled'}
+                            sx={{ height: 18, fontSize: '0.6rem', fontWeight: 700 }}
+                          />
+                        )}
+                      </Stack>
                     </Stack>
                     <Stack direction="row" alignItems="center" justifyContent="space-between">
                       <Stack direction="row" spacing={0.5} alignItems="center">

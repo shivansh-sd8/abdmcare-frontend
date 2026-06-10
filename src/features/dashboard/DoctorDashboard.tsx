@@ -47,7 +47,7 @@ const DoctorDashboard: React.FC = () => {
           api.get<any>('/api/v1/appointments/stats'),
           api.get<any>('/api/v1/encounters?limit=5'),
           api.get<any>('/api/v1/investigations/stats'),
-          api.get<any>('/api/v1/appointments?limit=10'),
+          api.get<any>('/api/v1/appointments/search?limit=10'),
           api.get<any>('/api/v1/prescriptions?limit=1'),
         ]);
 
