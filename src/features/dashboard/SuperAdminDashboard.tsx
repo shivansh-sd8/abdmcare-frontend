@@ -111,7 +111,7 @@ const SuperAdminDashboard: React.FC = () => {
           }
         };
         await Promise.all([
-          checkEndpoint('API Gateway', '/api/v1/health'),
+          checkEndpoint('API Gateway', '/health'),
           checkEndpoint('Database', '/api/v1/patients/stats'),
           checkEndpoint('ABDM Sandbox', '/api/v1/abdm/diagnostics/transaction-stats'),
         ]);
