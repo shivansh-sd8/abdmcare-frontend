@@ -65,6 +65,16 @@ const ScanAndShare: React.FC = () => {
     loadReceivedShares();
   }, [loadFacilityQr, loadReceivedShares]);
 
+  // Auto-refresh the Received Shares list while the receptionist has the
+  // tab open. A patient who scans the facility QR shouldn't have to wait for
+  // someone to click "Refresh" — the row should appear within ~6s. We stop
+  // polling when the user navigates away to keep the page idle.
+  useEffect(() => {
+    if (activeTab !== 2) return;
+    const id = setInterval(() => loadReceivedShares(), 6000);
+    return () => clearInterval(id);
+  }, [activeTab, loadReceivedShares]);
+
   const parseQrData = useCallback((raw: string): ScanResult | null => {
     try { return JSON.parse(raw); } catch {}
 
@@ -441,43 +451,151 @@ const ScanAndShare: React.FC = () => {
       {/* ── Tab 2: Received Shares ──────────────────────────────────── */}
       {activeTab === 2 && (
         <Paper sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Received Profile Shares</Typography>
-            <Button size="small" startIcon={sharesLoading ? <CircularProgress size={16} /> : <Refresh />}
-              onClick={loadReceivedShares} disabled={sharesLoading}>
-              Refresh
-            </Button>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 2, gap: 1.25, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>Received Profile Shares</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Patients who scanned your facility QR. Auto-refreshes every few seconds. Tokens stay valid for 60 minutes.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Chip
+                size="small"
+                color={sharesLoading ? 'primary' : 'default'}
+                variant="outlined"
+                icon={sharesLoading ? <CircularProgress size={12} sx={{ ml: 1 }} /> : undefined}
+                label={sharesLoading ? 'Updating…' : 'Live'}
+                sx={{ fontWeight: 600 }}
+              />
+              <Button
+                size="small"
+                startIcon={<Refresh />}
+                onClick={loadReceivedShares}
+                disabled={sharesLoading}
+                sx={{ textTransform: 'none', borderRadius: 1.75 }}
+              >
+                Refresh
+              </Button>
+            </Box>
           </Box>
+
           {receivedShares.length === 0 ? (
-            <Alert severity="info">
-              No profile shares received yet. When patients scan your facility QR with their PHR app, their profiles will appear here.
-            </Alert>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 4, textAlign: 'center', borderStyle: 'dashed',
+                bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+              }}
+            >
+              <QrCodeScanner sx={{ fontSize: 36, color: 'text.disabled', mb: 1 }} />
+              <Typography variant="body2" fontWeight={600} sx={{ mb: 0.25 }}>
+                No profile shares received yet
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 420, mx: 'auto' }}>
+                Ask the patient to open their ABHA / PHR app, tap <strong>Scan & Share</strong>, and scan your facility QR. They'll appear here within seconds.
+              </Typography>
+            </Paper>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {receivedShares.map((share: any) => (
-                <Card key={share.id} variant="outlined">
-                  <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>{share.name?.[0] || 'P'}</Avatar>
-                        <Box>
-                          <Typography fontWeight={600}>{share.name || 'Unknown'}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            ABHA: {share.abhaNumber || '—'} | Token: {share.tokenNumber}
-                          </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {receivedShares.map((share: any) => {
+                const receivedAt = share.receivedAt ? new Date(share.receivedAt) : null;
+                const expiresAt = share.expiresAt
+                  ? new Date(share.expiresAt)
+                  : (receivedAt ? new Date(receivedAt.getTime() + 60 * 60 * 1000) : null);
+                const minutesLeft = expiresAt
+                  ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 60000))
+                  : 0;
+                const expired = !!share.expired || (expiresAt && expiresAt.getTime() <= Date.now());
+                const ttlColor: 'success' | 'warning' | 'error' | 'default' =
+                  expired ? 'default'
+                  : minutesLeft >= 30 ? 'success'
+                  : minutesLeft >= 10 ? 'warning'
+                  : 'error';
+                return (
+                  <Card
+                    key={share.id}
+                    variant="outlined"
+                    sx={{
+                      borderRadius: 2,
+                      borderColor: expired ? 'divider' : alpha('#50C878', 0.3),
+                      bgcolor: expired ? 'action.hover' : 'background.paper',
+                      transition: 'border-color .2s, box-shadow .2s',
+                      '&:hover': { boxShadow: (t) => `0 4px 14px ${alpha(t.palette.primary.main, 0.08)}` },
+                    }}
+                  >
+                    <CardContent sx={{ py: 1.75, '&:last-child': { pb: 1.75 } }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: { xs: 'column', md: 'row' },
+                          alignItems: { xs: 'flex-start', md: 'center' },
+                          justifyContent: 'space-between',
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75, minWidth: 0 }}>
+                          <Avatar sx={{ bgcolor: expired ? 'grey.400' : 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
+                            {share.name?.[0]?.toUpperCase() || 'P'}
+                          </Avatar>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                              <Typography fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                                {share.name || 'Unknown'}
+                              </Typography>
+                              {share.uhid && (
+                                <Chip size="small" label={share.uhid} sx={{ height: 18, fontSize: 11 }} />
+                              )}
+                              {share.gender && (
+                                <Chip size="small" label={share.gender} variant="outlined" sx={{ height: 18, fontSize: 11 }} />
+                              )}
+                            </Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                              ABHA {share.abhaNumber || '—'}
+                              {share.abhaAddress ? ` · ${share.abhaAddress}` : ''}
+                              {share.mobile ? ` · ${share.mobile}` : ''}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              Token <strong>{share.tokenNumber}</strong>
+                              {receivedAt ? ` · received ${receivedAt.toLocaleTimeString()}` : ''}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+                          <Chip
+                            size="small"
+                            color={ttlColor}
+                            variant={expired ? 'outlined' : 'filled'}
+                            label={expired ? 'Expired' : `Expires in ${minutesLeft}m`}
+                            sx={{ fontWeight: 700 }}
+                          />
+                          {share.patientId ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              startIcon={<Person fontSize="small" />}
+                              onClick={() => navigate(`/app/patients/${share.patientId}`)}
+                              sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600 }}
+                            >
+                              Open profile
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Visibility fontSize="small" />}
+                              onClick={() => { setActiveTab(0); setManualInput(share.abhaNumber || share.abhaAddress || ''); }}
+                              sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600 }}
+                            >
+                              Look Up
+                            </Button>
+                          )}
                         </Box>
                       </Box>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Chip size="small" label={new Date(share.receivedAt).toLocaleTimeString()} variant="outlined" />
-                        <Button size="small" variant="contained"
-                          onClick={() => { setActiveTab(0); setManualInput(share.abhaNumber || share.abhaAddress || ''); }}>
-                          Look Up
-                        </Button>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </Box>
           )}
         </Paper>
