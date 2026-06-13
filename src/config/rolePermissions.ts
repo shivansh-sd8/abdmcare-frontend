@@ -146,6 +146,20 @@ export const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    // Insights: admin-only analytics & exports. Lives between Finance and
+    // Administration so an admin's "see-the-business / change-the-business"
+    // mental flow is preserved (read first, then act).
+    label: 'Insights',
+    items: [
+      {
+        text: 'Hospital Reports',
+        path: '/app/reports',
+        icon: 'Insights',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
+    ],
+  },
+  {
     // "Administration" is strictly SUPER_ADMIN / ADMIN. Setup-style tools
     // (hospitals, users, ward & bed master, ABDM ops, compliance) live here.
     label: 'Administration',

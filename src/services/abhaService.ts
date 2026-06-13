@@ -158,8 +158,19 @@ class AbhaService {
   // ══════════════════════════════════════════════════════════════════════════
   // PATIENT LINKING
   // ══════════════════════════════════════════════════════════════════════════
-  async linkToPatient(abhaNumber: string, patientId: string, abhaAddress?: string) {
-    return api.post(`${BASE}/link`, { abhaNumber, patientId, abhaAddress });
+  async linkToPatient(
+    abhaNumber: string,
+    patientId: string,
+    abhaAddress?: string,
+    opts?: { verified?: boolean; profile?: any },
+  ) {
+    return api.post(`${BASE}/link`, {
+      abhaNumber,
+      patientId,
+      abhaAddress,
+      ...(opts?.verified ? { verified: true } : {}),
+      ...(opts?.profile ? { profile: opts.profile } : {}),
+    });
   }
 
   async unlinkFromPatient(abhaNumber: string, patientId: string) {

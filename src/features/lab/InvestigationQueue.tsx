@@ -151,28 +151,36 @@ export default function InvestigationQueue() {
     total:       investigations.length,
   }), [investigations]);
 
+  /**
+   * Open the full "Enter Test Results" dialog (template + parameters +
+   * charge). Extracted so it can be used both from the "Mark Complete"
+   * fast-path on IN_PROGRESS rows and from the manual Advance Status
+   * dropdown when the user jumps straight to COMPLETED — both paths must
+   * collect results and a charge before saving.
+   */
+  const openResultsDialog = (inv: Investigation) => {
+    setSelected(inv);
+    setTechName(authUser ? `${authUser.firstName || ''} ${authUser.lastName || ''}`.trim() : '');
+    setResultParams([emptyParam()]);
+    setSampleType('');
+    setValidatedBy('');
+    setResultNotes(inv.instructions || '');
+    setTestCharge('');
+    const matched = matchTemplate(inv.testName);
+    if (matched) {
+      setSelectedTemplateId(matched.id);
+      setSampleType(matched.sampleType);
+      setResultParams(matched.parameters.map(p => ({ ...p, value: '', flag: 'N' as const })));
+    } else {
+      setSelectedTemplateId('');
+    }
+    setResultsOpen(true);
+  };
+
   const handleAdvance = (inv: Investigation) => {
     const next = STATUS_FLOW[STATUS_FLOW.indexOf(inv.status) + 1];
-    // For "Mark Complete" open the full results entry dialog
     if (inv.status === 'IN_PROGRESS') {
-      setSelected(inv);
-      // Pre-fill tech name from auth user
-      setTechName(authUser ? `${authUser.firstName || ''} ${authUser.lastName || ''}`.trim() : '');
-      setResultParams([emptyParam()]);
-      setSampleType('');
-      setValidatedBy('');
-      setResultNotes(inv.instructions || '');
-      setResultsOpen(true);
-      setTestCharge('');
-      // Auto-match template from test name
-      const matched = matchTemplate(inv.testName);
-      if (matched) {
-        setSelectedTemplateId(matched.id);
-        setSampleType(matched.sampleType);
-        setResultParams(matched.parameters.map(p => ({ ...p, value: '', flag: 'N' as const })));
-      } else {
-        setSelectedTemplateId('');
-      }
+      openResultsDialog(inv);
       return;
     }
     setSelected(inv);
@@ -248,6 +256,19 @@ export default function InvestigationQueue() {
 
   const handleSaveStatus = async () => {
     if (!selected) return;
+
+    // If the lab tech is jumping straight to COMPLETED from the Advance
+    // Status dropdown (instead of stepping through IN_PROGRESS first),
+    // hand off to the full results dialog so we still collect the
+    // template parameters + the test charge. Otherwise the bill never
+    // gets the line item and the patient receipt can't show the result.
+    if (updateData.status === 'COMPLETED') {
+      const inv = selected;
+      setUpdateOpen(false);
+      openResultsDialog(inv);
+      return;
+    }
+
     setSaving(true);
     try {
       await investigationService.updateInvestigationStatus(selected.id, {

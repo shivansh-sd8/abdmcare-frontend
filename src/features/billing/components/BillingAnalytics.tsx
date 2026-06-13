@@ -161,8 +161,22 @@ const BillingAnalytics: React.FC<Props> = ({ loading, allBills, completedPayment
       { key: 'IPD',      label: 'IPD',      color: '#ea580c', icon: <Hotel        sx={{ fontSize: 14 }} /> },
       { key: 'LAB',      label: 'Lab',      color: '#7c3aed', icon: <Science      sx={{ fontSize: 14 }} /> },
       { key: 'PHARMACY', label: 'Pharmacy', color: '#059669', icon: <Medication   sx={{ fontSize: 14 }} /> },
+      // Standalone payment-row bills (receptionist generates a charge that
+      // isn't tied to an OPD/IPD/Lab/Pharmacy item) used to be silently
+      // dropped from the chart. Surface them under "Other" so a desk
+      // staff balance is never invisible to the admin.
+      { key: 'OTHER',    label: 'Other',    color: '#64748b', icon: <CurrencyRupee sx={{ fontSize: 14 }} /> },
     ];
-    return { rows: meta.map((m) => ({ ...m, value: agg[m.key] })), total, other: agg.OTHER };
+    return {
+      rows: meta
+        .map((m) => ({ ...m, value: agg[m.key] }))
+        // Hide rows worth zero so a quiet hospital doesn't show five
+        // empty bars; if everything is zero we still render OPD as a
+        // calm placeholder via the empty fallback total below.
+        .filter((r) => r.value > 0),
+      total,
+      other: agg.OTHER,
+    };
   }, [allBills]);
 
   // ── 4. Aging buckets ─────────────────────────────────────────────────────

@@ -193,6 +193,35 @@ const PaymentManagement: React.FC = () => {
       width: 200,
     },
     {
+      field: 'collectedBy',
+      headerName: 'Collected by',
+      width: 180,
+      // The DataGrid sorts/filters off `value`, so we expose a clean string
+      // there; the renderer adds the role chip on top of that name.
+      valueGetter: (params: any) =>
+        params.row.collectedBy
+          ? `${params.row.collectedBy.firstName} ${params.row.collectedBy.lastName}`.trim()
+          : '—',
+      renderCell: (params: any) => {
+        const u = params.row.collectedBy;
+        if (!u) {
+          return (
+            <Typography variant="caption" color="text.secondary">—</Typography>
+          );
+        }
+        return (
+          <Box>
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {u.firstName} {u.lastName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {u.role}
+            </Typography>
+          </Box>
+        );
+      },
+    },
+    {
       field: 'createdAt',
       headerName: 'Date',
       width: 150,

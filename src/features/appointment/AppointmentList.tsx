@@ -364,7 +364,12 @@ const AppointmentList: React.FC = () => {
       flex: 1,
       minWidth: 150,
       renderCell: (params: GridRenderCellParams) => {
-        const isAdmitted = admittedPatientIds.has(params.row.patient?.id);
+        // The "IPD" chip / admit-orange avatar belongs to the visit that
+        // triggered the bed, not to every future/past appointment for the
+        // same patient. Match the active admission's originating encounter
+        // against this row's encounter so unrelated rows stay clean.
+        const activeAdm = admissionByPatientId[params.row.patient?.id];
+        const isAdmitted = !!(activeAdm?.encounterId && params.row.encounter?.id && activeAdm.encounterId === params.row.encounter.id);
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Avatar sx={{ bgcolor: isAdmitted ? '#F39C12' : '#4A90E2', width: 36, height: 36 }}>
@@ -438,7 +443,12 @@ const AppointmentList: React.FC = () => {
       headerName: 'Type',
       width: 110,
       renderCell: (params: GridRenderCellParams) => {
-        const isAdmitted = admittedPatientIds.has(params.row.patient?.id);
+        // Only override the appointment's declared type to "IPD" when this
+        // is the visit that actually became the admission. A patient with a
+        // future/unrelated OPD appointment shouldn't see it relabeled IPD
+        // just because they're currently in a bed from a different visit.
+        const activeAdm = admissionByPatientId[params.row.patient?.id];
+        const isAdmitted = !!(activeAdm?.encounterId && params.row.encounter?.id && activeAdm.encounterId === params.row.encounter.id);
         return (
           <Chip
             label={isAdmitted ? 'IPD' : (params.row.type || 'OPD')}
@@ -461,8 +471,17 @@ const AppointmentList: React.FC = () => {
         const status = params.row.status || 'SCHEDULED';
         const color = getStatusColor(status);
         const activeAdm = admissionByPatientId[params.row.patient?.id];
-        const isAdmitted = !!activeAdm;
-        const isDischargeReady = activeAdm?.status === 'DISCHARGE_READY';
+        // The "Admitted / Ready for discharge" badge belongs to a specific
+        // admission, not to the patient. A patient can have unrelated
+        // appointments (never checked-in, future visits, other doctors) that
+        // are NOT the visit that triggered the admission. We only paint the
+        // chip on the appointment whose encounter is the originating encounter
+        // of the active admission, so other rows for the same patient stay
+        // clean.
+        const encId = params.row.encounter?.id;
+        const linkedToAdmission = !!(activeAdm?.encounterId && encId && activeAdm.encounterId === encId);
+        const isAdmitted = linkedToAdmission;
+        const isDischargeReady = isAdmitted && activeAdm?.status === 'DISCHARGE_READY';
         const admissionRecommended = !!params.row.encounter?.admissionRequired && !isAdmitted;
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start', py: 0.5 }}>
@@ -531,10 +550,16 @@ const AppointmentList: React.FC = () => {
         const isTerminal = ['COMPLETED', 'CANCELLED'].includes(status);
         const canCheckIn = status === 'SCHEDULED' && !params.row.checkedInAt && !params.row.opdCardNumber;
         const canAdmit = !isTerminal && (['CHECKED_IN', 'IN_PROGRESS'].includes(status) || !!params.row.opdCardNumber);
+        // Doctors may check in only their own appointments. We compare the
+        // doctor row's userId (joined into the appointment) with the auth
+        // user id; the backend enforces the same rule.
+        const isOwnAppointment = !!authUser?.id && params.row.doctor?.userId === authUser.id;
+        const canCheckInThisRow =
+          canCheckIn && (permissions.isReceptionist || permissions.isAdmin || (permissions.isDoctor && isOwnAppointment));
 
         return (
           <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-            {canCheckIn && (permissions.isReceptionist || permissions.isAdmin) && (
+            {canCheckInThisRow && (
               <Button
                 variant="contained"
                 size="small"
@@ -753,8 +778,14 @@ const AppointmentList: React.FC = () => {
           ) : (
             filteredRows.map((apt: any) => {
               const activeAdm = admissionByPatientId[apt.patient?.id];
-              const isAdmitted = !!activeAdm;
-              const isDischargeReady = activeAdm?.status === 'DISCHARGE_READY';
+              // Only flag the row as admitted if THIS appointment's encounter
+              // is the one tied to the active admission (see desktop grid
+              // renderer for the full reasoning). Prevents the badge from
+              // bleeding onto unrelated scheduled visits for the same patient.
+              const aptEncId = apt.encounter?.id;
+              const linkedToAdmission = !!(activeAdm?.encounterId && aptEncId && activeAdm.encounterId === aptEncId);
+              const isAdmitted = linkedToAdmission;
+              const isDischargeReady = isAdmitted && activeAdm?.status === 'DISCHARGE_READY';
               const status = (apt.status || 'SCHEDULED').toUpperCase();
               const time = apt.scheduledAt
                 ? format(new Date(apt.scheduledAt), 'dd MMM · hh:mm a')
@@ -817,7 +848,11 @@ const AppointmentList: React.FC = () => {
                         <Typography variant="caption" color="text.secondary">{time}</Typography>
                       </Stack>
                       <Stack direction="row" spacing={0.25}>
-                        {status === 'SCHEDULED' && !apt.opdCardNumber && (permissions.isReceptionist || permissions.isAdmin) && (
+                        {status === 'SCHEDULED' && !apt.opdCardNumber && (
+                          permissions.isReceptionist
+                          || permissions.isAdmin
+                          || (permissions.isDoctor && !!authUser?.id && apt.doctor?.userId === authUser.id)
+                        ) && (
                           <Button size="small" variant="contained" color="success"
                             sx={{ minWidth: 'auto', px: 1.5, py: 0.25, fontSize: '0.7rem', textTransform: 'none' }}
                             onClick={() => handleCheckIn(apt)}>

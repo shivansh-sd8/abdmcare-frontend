@@ -43,6 +43,7 @@ const QueueDisplay = React.lazy(() => import('./features/queue/QueueDisplay'));
 const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
 const AbdmActivity = React.lazy(() => import('./features/abdm/AbdmActivity'));
 const CompliancePack = React.lazy(() => import('./features/compliance/CompliancePack'));
+const HospitalReports = React.lazy(() => import('./features/reports/HospitalReports'));
 
 const PageLoader = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -277,6 +278,14 @@ const App: React.FC = () => {
               element={
                 <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
                   <CompliancePack />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <HospitalReports />
                 </RoleProtectedRoute>
               }
             />

@@ -21,6 +21,13 @@ import {
   Autocomplete,
   Alert,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Stack,
+  alpha,
 } from '@mui/material';
 import {
   PersonAdd,
@@ -36,6 +43,8 @@ import {
   AccessTime,
   Description,
   EventAvailable,
+  HealthAndSafety,
+  Link as LinkIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -225,6 +234,20 @@ const PatientRegistration: React.FC = () => {
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Post-registration "Link ABHA?" prompt ─────────────────────────────────
+  // Shown only when the receptionist created a NEW patient WITHOUT entering an
+  // ABHA up-front. Without this, an unlinked patient quietly lands in the list
+  // and the only path to attach an ABHA is via the row kebab menu — receptionists
+  // miss it. The dialog gives a one-click path into the existing /app/abha
+  // verify-and-link flow, with a "Skip for now" escape so it never blocks
+  // people who genuinely don't have an ABHA on hand.
+  const [linkAbhaPrompt, setLinkAbhaPrompt] = useState<null | {
+    patientId: string;
+    patientName: string;
+    mobile: string;
+    nextRoute: string;
+  }>(null);
 
   // ── Appointment form ──────────────────────────────────────────────────────
   const [scheduleAppt, setScheduleAppt] = useState(true); // checkbox default ON
@@ -457,6 +480,11 @@ const PatientRegistration: React.FC = () => {
       } else {
         const patientRes: any = await patientService.createPatient(patientPayload);
         const newPatientId: string = patientRes.data?.data?.id ?? patientRes.data?.id ?? patientRes.data?.data?.data?.id;
+        // Detect whether the receptionist filled an ABHA on the form. If
+        // they did, the patient is already linked and we don't bother them
+        // with the prompt — fall through to the original flow.
+        const abhaProvided = !!(patientPayload.abhaNumber || patientPayload.abhaId);
+        const patientFullName = `${patientPayload.firstName || ''} ${patientPayload.lastName || ''}`.trim();
 
         if (scheduleAppt && newPatientId) {
           try {
@@ -470,15 +498,42 @@ const PatientRegistration: React.FC = () => {
               notes:     apptData.notes,
             });
             toast.success('Patient registered & appointment scheduled!');
-            navigate('/app/appointments');
+            if (!abhaProvided && newPatientId) {
+              setLinkAbhaPrompt({
+                patientId: newPatientId,
+                patientName: patientFullName,
+                mobile: patientPayload.mobile || '',
+                nextRoute: '/app/appointments',
+              });
+            } else {
+              navigate('/app/appointments');
+            }
           } catch (apptErr: any) {
             const msg = apptErr.response?.data?.message || 'Failed to schedule appointment';
             toast.warning(`Patient registered successfully, but appointment failed: ${msg}. You can schedule from the Appointments page.`);
-            navigate('/app/patients');
+            if (!abhaProvided && newPatientId) {
+              setLinkAbhaPrompt({
+                patientId: newPatientId,
+                patientName: patientFullName,
+                mobile: patientPayload.mobile || '',
+                nextRoute: '/app/patients',
+              });
+            } else {
+              navigate('/app/patients');
+            }
           }
         } else {
           toast.success('Patient registered successfully!');
-          navigate('/app/patients');
+          if (!abhaProvided && newPatientId) {
+            setLinkAbhaPrompt({
+              patientId: newPatientId,
+              patientName: patientFullName,
+              mobile: patientPayload.mobile || '',
+              nextRoute: '/app/patients',
+            });
+          } else {
+            navigate('/app/patients');
+          }
         }
       }
     } catch (error: any) {
@@ -959,6 +1014,88 @@ const PatientRegistration: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+
+      {/* ── Post-registration: offer to link an ABHA ──────────────────────────
+          Fires only when the receptionist created a new patient WITHOUT
+          entering an ABHA. "Link ABHA now" routes to /app/abha pre-populated
+          with the patient context (same payload the patient-list kebab menu
+          uses), opening directly on the Verify / Search tab. "Skip for now"
+          continues to the route the user would have landed on otherwise. */}
+      <Dialog
+        open={!!linkAbhaPrompt}
+        onClose={() => {
+          if (!linkAbhaPrompt) return;
+          const next = linkAbhaPrompt.nextRoute;
+          setLinkAbhaPrompt(null);
+          navigate(next);
+        }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                color: 'primary.main',
+              }}
+            >
+              <HealthAndSafety />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.2 }}>
+                Link an ABHA?
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {linkAbhaPrompt?.patientName || 'Patient'} doesn&rsquo;t have an ABHA yet
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 14 }}>
+            Linking an ABHA now lets this patient use ABDM features &mdash; consent
+            requests, federated health records, and care-context linking.
+            You can also create a fresh ABHA from the same screen.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button
+            onClick={() => {
+              if (!linkAbhaPrompt) return;
+              const next = linkAbhaPrompt.nextRoute;
+              setLinkAbhaPrompt(null);
+              navigate(next);
+            }}
+            sx={{ textTransform: 'none' }}
+            color="inherit"
+          >
+            Skip for now
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<LinkIcon />}
+            onClick={() => {
+              if (!linkAbhaPrompt) return;
+              const { patientId, patientName, mobile } = linkAbhaPrompt;
+              setLinkAbhaPrompt(null);
+              navigate('/app/abha', {
+                state: { patientId, patientName, mobile, mode: 'link' },
+              });
+            }}
+            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+          >
+            Link ABHA
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

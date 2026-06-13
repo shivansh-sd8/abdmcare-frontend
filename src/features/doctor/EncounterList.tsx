@@ -196,10 +196,15 @@ const EncounterList: React.FC = () => {
   const completed  = searched.filter((e) => e.status === 'COMPLETED');
   const pending    = searched.filter((e) => PENDING_STATUSES.has(e.status));
   const cancelled  = searched.filter((e) => e.status === 'CANCELLED');
-  // "Admitted" cuts across status — any encounter whose patient currently
-  // has an active admission. Useful for the doctor / admin to quickly see
-  // who's in-house regardless of the underlying OPD pipeline state.
-  const admittedEncs = searched.filter((e) => e.patient?.id && admissionByPatientId[e.patient.id]);
+  // "Admitted" cuts across status — but only encounters that actually
+  // *triggered* the active admission count. A patient can have many historic
+  // encounters; we don't want every old visit to suddenly look admitted just
+  // because the patient is in a bed today. We match by the originating
+  // encounterId on the active admission.
+  const admittedEncs = searched.filter((e) => {
+    const adm = e.patient?.id ? admissionByPatientId[e.patient.id] : null;
+    return !!(adm?.encounterId && adm.encounterId === e.id);
+  });
 
   const TAB_FILTERS: { label: string; count: number; data: Encounter[] }[] = [
     { label: 'All',       count: searched.length,    data: searched     },
@@ -414,7 +419,13 @@ const EncounterList: React.FC = () => {
                         {/* Status */}
                         <TableCell>
                           {(() => {
-                            const activeAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                            const patientAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                            // Scope the chip to the encounter that *led* to
+                            // the admission. Other encounters for the same
+                            // patient (older OPD visits, follow-ups with
+                            // other doctors, never-checked-in visits) must
+                            // stay clean.
+                            const activeAdm = patientAdm?.encounterId === enc.id ? patientAdm : null;
                             const isAdmittedNow = !!activeAdm;
                             const recommended = !!(enc as any).admissionRequired && !isAdmittedNow;
                             return (
@@ -498,7 +509,11 @@ const EncounterList: React.FC = () => {
                                 dialog; this row icon is now consistently an
                                 "admit" action. */}
                             {(permissions.isDoctor || permissions.isAdmin || permissions.isSuperAdmin || permissions.isReceptionist) && (() => {
-                              const activeAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                              // Same scoping rule as the status column: only
+                              // light up "Open admission" on the encounter
+                              // that actually triggered the bed.
+                              const patientAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                              const activeAdm = patientAdm?.encounterId === enc.id ? patientAdm : null;
                               if (activeAdm) {
                                 return (
                                   <Tooltip title={`Open admission · ${activeAdm.admissionNumber}`}>

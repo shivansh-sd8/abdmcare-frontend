@@ -622,36 +622,109 @@ const PatientProfile: React.FC = () => {
 
           {/* ═══ Tab 3: ABHA & Consent ═══ */}
           <TabPanel value={tab} index={3}>
-            {/* Action Bar */}
-            <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                startIcon={<LinkIcon />}
-                size="small"
-                disabled={!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord}
-                onClick={() => setLinkDialogOpen(true)}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
-              >
-                Link Care Contexts
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<AddCircleOutline />}
-                size="small"
-                color="primary"
-                disabled={!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord}
-                onClick={() => setConsentDialogOpen(true)}
-                sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
-              >
-                Request Consent
-              </Button>
-              {(!patient.abhaNumber && !patient.abhaId && !patient.abhaRecord) && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
-                  Patient needs ABHA number to use ABDM features
-                </Typography>
-              )}
-            </Box>
-            <Grid container spacing={3}>
+            {(() => {
+              // Compute once per render — `hasAbha` controls whether the
+              // tab shows the consent / link-care-contexts toolbar (rich
+              // mode) or a dedicated "no ABHA, link one now" hero (empty
+              // mode). Receptionists kept getting stranded on this tab
+              // for unlinked patients, so the empty mode now carries a
+              // primary CTA instead of a passive caption.
+              const hasAbha = !!(patient.abhaNumber || patient.abhaId || patient.abhaRecord);
+              const linkPayload = {
+                patientId: patient.id,
+                patientName: `${patient.firstName} ${patient.lastName}`,
+                mobile: patient.mobile,
+                mode: 'link' as const,
+              };
+
+              if (!hasAbha) {
+                return (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: { xs: 2.5, sm: 3.5 },
+                      borderRadius: 3,
+                      borderStyle: 'dashed',
+                      bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+                      borderColor: (t) => alpha(t.palette.primary.main, 0.4),
+                      display: 'flex',
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      gap: 2.5,
+                      flexDirection: { xs: 'column', sm: 'row' },
+                    }}
+                  >
+                    <Avatar
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                        color: 'primary.main',
+                      }}
+                    >
+                      <HealthAndSafety />
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                        No ABHA linked yet
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Link this patient&apos;s 14-digit ABHA so you can request consent,
+                        pull federated health records, and link care contexts under
+                        ABDM. If they don&apos;t have one yet, you can create it from the
+                        same page.
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flexShrink: 0 }}>
+                      <Button
+                        variant="contained"
+                        startIcon={<LinkIcon />}
+                        onClick={() => navigate('/app/abha', { state: linkPayload })}
+                        sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+                      >
+                        Link ABHA
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<AddCircleOutline />}
+                        onClick={() =>
+                          navigate('/app/abha', {
+                            state: { ...linkPayload, mode: 'create' },
+                          })
+                        }
+                        sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                      >
+                        Create new ABHA
+                      </Button>
+                    </Box>
+                  </Paper>
+                );
+              }
+
+              return (
+                <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<LinkIcon />}
+                    size="small"
+                    onClick={() => setLinkDialogOpen(true)}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Link Care Contexts
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddCircleOutline />}
+                    size="small"
+                    color="primary"
+                    onClick={() => setConsentDialogOpen(true)}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Request Consent
+                  </Button>
+                </Box>
+              );
+            })()}
+            <Grid container spacing={3} sx={{ mt: 0 }}>
               <Grid item xs={12} md={6}>
                 <SectionCard title="ABHA Record">
                   {(patient.abhaRecord || patient.abhaNumber || patient.abhaId) ? (() => {
@@ -665,7 +738,11 @@ const PatientProfile: React.FC = () => {
                         {patient.abhaRecord?.name && <InfoRow icon={<Person />} label="ABHA Name" value={patient.abhaRecord.name} />}
                       </>
                     );
-                  })() : <EmptyState icon={<HealthAndSafety />} message="No ABHA linked to this patient" small />}
+                  })() : (
+                    <Typography variant="body2" color="text.secondary">
+                      Use &ldquo;Link ABHA&rdquo; above to attach this patient&apos;s health ID.
+                    </Typography>
+                  )}
                 </SectionCard>
               </Grid>
               <Grid item xs={12} md={6}>

@@ -451,9 +451,14 @@ const AbhaManagement: React.FC = () => {
         toast.success('ABHA address verified!');
         if (token) fetchPhrProfile(token);
       } else {
-        const scope: string[] = verifyMethod === 'mobile' && searchResult?._source === 'mobile-search'
-          ? ['abha-login', 'search-abha', 'mobile-verify']
-          : ['abha-login', verifyMethod === 'aadhaar' ? 'aadhaar-verify' : 'mobile-verify'];
+        // ABDM v3 spec — `find-abha-number` flow:
+        //   1. /profile/account/abha/search        scope: ["search-abha"]
+        //   2. /profile/login/request/otp          scope: ["abha-login","search-abha","mobile-verify"]
+        //   3. /profile/login/verify               scope: ["abha-login","mobile-verify"]    ← here
+        // Step 3 must NOT carry "search-abha" — the gateway returns
+        // "scope: Invalid Scope" if you reuse the request-otp scope here.
+        // For Aadhaar verify the second slot becomes "aadhaar-verify".
+        const scope: string[] = ['abha-login', verifyMethod === 'aadhaar' ? 'aadhaar-verify' : 'mobile-verify'];
         const res: any = await abhaService.loginVerifyOtp(scope, txnId, otp);
         const data = res?.data || res;
 
@@ -577,8 +582,17 @@ const AbhaManagement: React.FC = () => {
   const handleLinkToPatient = async (abhaNumber: string, patientId: string, abhaAddress?: string) => {
     setLoading(true);
     try {
-      await abhaService.linkToPatient(abhaNumber, patientId, abhaAddress);
-      toast.success('ABHA linked to patient successfully');
+      // If the operator just completed an ABDM-verified flow on this page
+      // (Verify/Search → OTP → profile), tell the backend so it can mark
+      // the AbhaRecord as KYC=VERIFIED instead of leaving it PENDING.
+      const verified = !!(xToken && verifiedProfile);
+      await abhaService.linkToPatient(
+        abhaNumber,
+        patientId,
+        abhaAddress,
+        verified ? { verified: true, profile: verifiedProfile } : undefined,
+      );
+      toast.success(verified ? 'ABHA verified and linked to patient' : 'ABHA linked to patient successfully');
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to link ABHA'); }
     finally { setLoading(false); }
   };

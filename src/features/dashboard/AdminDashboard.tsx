@@ -48,6 +48,22 @@ type TopDoctor = {
   revenue: number;
 };
 
+type StaffCollectionRow = {
+  collectorId: string | null;
+  name: string;
+  role: string | null;
+  paymentCount: number;
+  total: number;
+  cash: number;
+  digital: number;
+};
+
+// Single, compact INR formatter for the dashboard. Larger amounts ride on
+// the same locale so the UI never shows mixed conventions ("₹1,200" vs
+// "₹1200.00") within the same card.
+const formatCurrency = (n: number): string =>
+  `₹${(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -69,6 +85,8 @@ const AdminDashboard: React.FC = () => {
   const [trends, setTrends] = useState<TrendRow[]>([]);
   const [revenueSources, setRevenueSources] = useState<RevenueSources | null>(null);
   const [topDoctors, setTopDoctors] = useState<TopDoctor[]>([]);
+  const [staffCollections, setStaffCollections] = useState<StaffCollectionRow[]>([]);
+  const [staffWindow, setStaffWindow] = useState<{ days: number; total: number }>({ days: 7, total: 0 });
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +94,7 @@ const AdminDashboard: React.FC = () => {
       try {
         const [
           pRes, dRes, aRes, payRes, ipdRes, labRes,
-          trendsRes, revRes, topDocRes,
+          trendsRes, revRes, topDocRes, staffColRes,
         ] = await Promise.allSettled([
           patientService.getPatientStats(),
           doctorService.getDoctorStats(),
@@ -87,6 +105,7 @@ const AdminDashboard: React.FC = () => {
           api.get<any>('/api/v1/dashboard/trends?days=7'),
           api.get<any>('/api/v1/dashboard/revenue-sources?days=7'),
           api.get<any>('/api/v1/dashboard/top-doctors?days=7&limit=5'),
+          api.get<any>('/api/v1/dashboard/staff-collections?days=7'),
         ]);
         if (cancelled) return;
 
@@ -155,6 +174,18 @@ const AdminDashboard: React.FC = () => {
         if (Array.isArray(trendData)) setTrends(trendData);
         if (revData) setRevenueSources(revData);
         if (Array.isArray(topDocData)) setTopDoctors(topDocData);
+
+        const staffColData: any =
+          staffColRes.status === 'fulfilled'
+            ? (staffColRes.value as any)?.data?.data || (staffColRes.value as any)?.data
+            : null;
+        if (staffColData?.rows) {
+          setStaffCollections(staffColData.rows);
+          setStaffWindow({
+            days: Number(staffColData.windowDays || 7),
+            total: Number(staffColData.totalCollected || 0),
+          });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -439,6 +470,82 @@ const AdminDashboard: React.FC = () => {
                           height: 6, borderRadius: 3,
                           bgcolor: alpha(tone, 0.10),
                           '& .MuiLinearProgress-bar': { backgroundColor: tone, borderRadius: 3 },
+                        }}
+                      />
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
+          </SectionCard>
+        </Grid>
+      </Grid>
+
+      {/* Staff collections — who actually rang up the rupees this week */}
+      <Grid container spacing={2.25} sx={{ mb: { xs: 2, sm: 2.5 } }}>
+        <Grid item xs={12}>
+          <SectionCard
+            title="Collections by staff"
+            subtitle={`Last ${staffWindow.days} days · ${formatCurrency(staffWindow.total)} collected`}
+            icon={<Receipt />}
+            action={
+              <Tooltip title="Open hospital reports">
+                <IconButton size="small" onClick={() => navigate('/app/reports')}>
+                  <ArrowForward fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            }
+          >
+            {loading ? (
+              <Skeleton variant="rectangular" height={180} sx={{ borderRadius: 2 }} />
+            ) : staffCollections.length === 0 ? (
+              <EmptyState
+                small
+                title="No collections yet"
+                message="As soon as staff start ringing up payments, you'll see who collected what here."
+              />
+            ) : (
+              <Stack spacing={1.25}>
+                {staffCollections.slice(0, 6).map((s, i) => {
+                  const max = staffCollections[0]?.total || 1;
+                  const pct = Math.round((s.total / max) * 100);
+                  const accent =
+                    !s.collectorId ? theme.palette.text.disabled
+                      : i === 0 ? theme.palette.success.main
+                      : i === 1 ? theme.palette.info.main
+                      : theme.palette.primary.main;
+                  return (
+                    <Box key={s.collectorId ?? `unattributed-${i}`}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 0.5 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                          <Avatar sx={{ width: 28, height: 28, bgcolor: alpha(accent, 0.18), color: accent, fontSize: 13 }}>
+                            {s.name.charAt(0).toUpperCase()}
+                          </Avatar>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" fontWeight={600} noWrap>
+                              {s.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {s.role || 'Unattributed'} · {s.paymentCount} receipt{s.paymentCount === 1 ? '' : 's'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip size="small" label={`Cash ${formatCurrency(s.cash)}`} sx={{ height: 20 }} />
+                          <Chip size="small" label={`Digital ${formatCurrency(s.digital)}`} sx={{ height: 20 }} />
+                          <Typography variant="body2" fontWeight={700}>
+                            {formatCurrency(s.total)}
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        value={pct}
+                        sx={{
+                          height: 6,
+                          borderRadius: 3,
+                          bgcolor: alpha(accent, 0.12),
+                          '& .MuiLinearProgress-bar': { bgcolor: accent, borderRadius: 3 },
                         }}
                       />
                     </Box>

@@ -90,6 +90,14 @@ const BillingDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // "Collected by" filter — applies only to receipts (i.e. PAID payments).
+  // Sentinel values: 'ALL' = no filter, 'unattributed' = receipts with
+  // null collectedById (legacy / imported). Otherwise it's a userId.
+  const [collectorFilter, setCollectorFilter] = useState<string>('ALL');
+  const [collectors, setCollectors] = useState<
+    Array<{ id: string; name: string; role: string | null }>
+  >([]);
+  const [hasUnattributedReceipts, setHasUnattributedReceipts] = useState(false);
 
   // Patient-wise tab quick filter & pagination
   const [patientFilter, setPatientFilter] = useState<'ALL' | 'DUE' | 'SETTLED' | 'OPD' | 'IPD'>('ALL');
@@ -118,6 +126,25 @@ const BillingDashboard: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Load the distinct collectors list once. We deliberately do NOT block
+  // the rest of the dashboard on this — if it fails the dropdown just
+  // shows "All staff" with no options, which matches the pre-feature UX.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res: any = await api.get('/api/v1/dashboard/payment-collectors?days=90');
+        const body = res.data?.data ?? res.data ?? {};
+        if (cancelled) return;
+        setCollectors(Array.isArray(body.collectors) ? body.collectors : []);
+        setHasUnattributedReceipts(!!body.hasUnattributed);
+      } catch {
+        // Silent: filter dropdown just stays empty.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const stats = data?.stats;
   const allBills: any[] = data?.allBills || [];
   const completedPayments: any[] = data?.completedPayments || [];
@@ -126,6 +153,7 @@ const BillingDashboard: React.FC = () => {
   // ── Filter logic ──
   const activeFilterCount = [
     dateFrom, dateTo, searchQuery, typeFilter !== 'ALL', statusFilter !== 'ALL',
+    collectorFilter !== 'ALL',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -134,7 +162,39 @@ const BillingDashboard: React.FC = () => {
     setStatusFilter('ALL');
     setDateFrom('');
     setDateTo('');
+    setCollectorFilter('ALL');
   };
+
+  // Receipts after the collector filter is applied. The other filters
+  // (date / search / status) don't apply to the Receipts tab today, so
+  // we keep the old "no filter" behaviour for those and only narrow on
+  // collector here.
+  const filteredReceipts = useMemo(() => {
+    if (collectorFilter === 'ALL') return completedPayments;
+    if (collectorFilter === 'unattributed') {
+      return completedPayments.filter((p: any) => !p.collectedBy && !p.collectedById);
+    }
+    return completedPayments.filter(
+      (p: any) => (p.collectedBy?.id || p.collectedById) === collectorFilter,
+    );
+  }, [completedPayments, collectorFilter]);
+
+  const collectorFilterSummary = useMemo(() => {
+    if (collectorFilter === 'ALL') return null;
+    const totalAmt = filteredReceipts.reduce(
+      (s, p: any) => s + Number(p.amount || 0),
+      0,
+    );
+    const cash = filteredReceipts
+      .filter((p: any) => p.paymentMethod === 'CASH')
+      .reduce((s, p: any) => s + Number(p.amount || 0), 0);
+    const digital = totalAmt - cash;
+    const label =
+      collectorFilter === 'unattributed'
+        ? 'Unattributed'
+        : collectors.find((c) => c.id === collectorFilter)?.name || 'Selected staff';
+    return { label, count: filteredReceipts.length, total: totalAmt, cash, digital };
+  }, [collectorFilter, collectors, filteredReceipts]);
 
   const filterBills = useCallback((bills: any[]) => {
     let list = bills;
@@ -766,10 +826,56 @@ const BillingDashboard: React.FC = () => {
     {
       field: 'paymentMethod',
       headerName: 'Method',
-      width: 120,
+      width: 110,
       renderCell: (params: GridRenderCellParams) => (
         <Chip label={params.value || '—'} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
       ),
+    },
+    {
+      field: 'collectedBy',
+      headerName: 'Collected by',
+      width: 180,
+      // valueGetter is used by the DataGrid for sorting/filtering — give it
+      // a stringy "FullName · ROLE" so the built-in column menu still works.
+      valueGetter: (params: any) => {
+        const u = params.row.collectedBy;
+        if (!u) return '';
+        return `${u.firstName || ''} ${u.lastName || ''}`.trim() + (u.role ? ` · ${u.role}` : '');
+      },
+      renderCell: (params: GridRenderCellParams) => {
+        const u = params.row.collectedBy;
+        if (!u) {
+          return (
+            <Typography variant="caption" color="text.secondary">—</Typography>
+          );
+        }
+        const initials = `${u.firstName?.[0] || ''}${u.lastName?.[0] || ''}`.toUpperCase();
+        return (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 0.5, minWidth: 0 }}>
+            <Box
+              sx={{
+                width: 26, height: 26, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                bgcolor: alpha(theme.palette.primary.main, 0.12),
+                color: theme.palette.primary.main,
+                fontWeight: 700, fontSize: 11, flexShrink: 0,
+              }}
+            >
+              {initials || '·'}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {u.firstName} {u.lastName}
+              </Typography>
+              {u.role && (
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {u.role}
+                </Typography>
+              )}
+            </Box>
+          </Stack>
+        );
+      },
     },
     {
       field: 'status',
@@ -927,6 +1033,36 @@ const BillingDashboard: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Collected by</InputLabel>
+                  <Select
+                    value={collectorFilter}
+                    label="Collected by"
+                    onChange={(e) => setCollectorFilter(e.target.value)}
+                  >
+                    <MenuItem value="ALL">Any staff member</MenuItem>
+                    {collectors.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.name}
+                        {c.role ? (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ ml: 0.75 }}
+                          >
+                            · {c.role}
+                          </Typography>
+                        ) : null}
+                      </MenuItem>
+                    ))}
+                    {hasUnattributedReceipts && (
+                      <MenuItem value="unattributed">Unattributed (legacy)</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+              </Grid>
               <Grid item xs={12} md={3}>
                 <Stack direction="row" spacing={1}>
                   <Button
@@ -949,6 +1085,45 @@ const BillingDashboard: React.FC = () => {
                 </Stack>
               </Grid>
             </Grid>
+            {collectorFilterSummary && (
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 1.25,
+                  borderRadius: 2,
+                  bgcolor: alpha(theme.palette.primary.main, 0.06),
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
+                }}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  flexWrap="wrap"
+                >
+                  <Typography variant="body2" fontWeight={700}>
+                    {collectorFilterSummary.label}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={`${collectorFilterSummary.count} receipt${collectorFilterSummary.count === 1 ? '' : 's'}`}
+                    sx={{ fontWeight: 600 }}
+                  />
+                  <Chip
+                    size="small"
+                    color="success"
+                    label={`Total ${currency(collectorFilterSummary.total)}`}
+                    sx={{ fontWeight: 700 }}
+                  />
+                  <Chip size="small" variant="outlined" label={`Cash ${currency(collectorFilterSummary.cash)}`} />
+                  <Chip size="small" variant="outlined" label={`Digital ${currency(collectorFilterSummary.digital)}`} />
+                  <Box sx={{ flex: 1 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    Filter applies to the Payment Receipts tab.
+                  </Typography>
+                </Stack>
+              </Box>
+            )}
           </Box>
         </Collapse>
       </Paper>
@@ -971,7 +1146,13 @@ const BillingDashboard: React.FC = () => {
             label={`Discounts (${discountStats.totalCount})`}
             sx={{ minHeight: 52 }}
           />
-          <Tab label={`Payment Receipts (${completedPayments.length})`} />
+          <Tab
+            label={
+              collectorFilter !== 'ALL'
+                ? `Payment Receipts (${filteredReceipts.length} / ${completedPayments.length})`
+                : `Payment Receipts (${completedPayments.length})`
+            }
+          />
         </Tabs>
 
         <Box sx={{ px: 2, pb: 2 }}>
@@ -1287,7 +1468,7 @@ const BillingDashboard: React.FC = () => {
           <TabPanel value={tab} index={3}>
             <Box sx={{ width: '100%' }}>
               <DataGrid
-                rows={completedPayments}
+                rows={filteredReceipts}
                 columns={receiptColumns}
                 getRowId={(row) => row.id}
                 loading={loading}
