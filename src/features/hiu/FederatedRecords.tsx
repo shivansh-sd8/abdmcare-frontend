@@ -453,6 +453,15 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                           </Stack>
                         </Box>
                       )}
+                      {/* Per-resource structured fallback view.
+                          Only render this when the document has NO narrative
+                          sections — otherwise we'd show the same data twice
+                          (once as a section table above, once as a chip list
+                          here). Legacy bundles from older HIPs that don't
+                          emit Composition.section[].text still need this
+                          fallback so we render meaningful content. */}
+                      {(!p.sections || p.sections.length === 0) && !p.narrative && (
+                        <>
                       {p.conditions.length > 0 && (
                         <Box sx={{ mb: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -597,6 +606,8 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                             </Box>
                           ))}
                         </Box>
+                      )}
+                        </>
                       )}
 
                       {p.encounters.length > 0 && (
