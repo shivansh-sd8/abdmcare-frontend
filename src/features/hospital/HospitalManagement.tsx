@@ -1283,6 +1283,11 @@ const HospitalManagement: React.FC = () => {
                 issued by ABDM's Health Facility Registry (NHA). HPR IDs belong on individual <em>doctors</em>,
                 not the hospital. ABDM <em>client_id</em> / <em>client_secret</em> / <em>callback URL</em>
                 are platform-level and configured at the system level (env), not per hospital.
+                <br />
+                <strong>Multi-tenant:</strong> when you save, this facility's HIP / HIU IDs are auto-registered
+                with the platform's ABDM bridge so they become the unit of consent and the unit of data
+                fulfillment. Without these IDs the hospital cannot link care contexts to ABDM, request
+                consent, or fetch records — every HIP / HIU operation will be rejected.
               </Alert>
             </Grid>
             {editingHospital?.abdmEnabled && (
@@ -1334,6 +1339,15 @@ const HospitalManagement: React.FC = () => {
               <Grid item xs={12}>
                 <Alert severity="info" sx={{ borderRadius: 2 }}>
                   Save the HIP ID first, then click "Register with ABDM" from the hospital list to activate ABDM integration.
+                </Alert>
+              </Grid>
+            )}
+            {!editingHospital && !formData.hipId && !formData.hiuId && (
+              <Grid item xs={12}>
+                <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                  <strong>No ABDM IDs set:</strong> this hospital will be onboarded but will <em>not</em> be
+                  able to participate in ABDM consent, linking, or data flows. Add the HFR / HIP / HIU IDs
+                  to enable ABDM. You can always edit them later.
                 </Alert>
               </Grid>
             )}
