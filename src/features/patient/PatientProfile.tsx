@@ -748,37 +748,49 @@ const PatientProfile: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <SectionCard title="Consent Records">
                   {(consents || []).length === 0 ? <EmptyState icon={<HealthAndSafety />} message="No consent records" small /> : (
-                    consents.map((c: any) => {
-                      const purposeLabel = ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string, string>)[c.purpose] || c.purpose || 'Health Data Consent';
-                      const hiTypes: string[] = Array.isArray(c.hiTypes) ? c.hiTypes : [];
-                      return (
-                        <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="body2" fontWeight={700} noWrap>{purposeLabel}</Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{c.consentId}</Typography>
+                    <Box
+                      sx={{
+                        maxHeight: 360,
+                        overflowY: 'auto',
+                        pr: 0.5,
+                        mr: -0.5,
+                        scrollbarWidth: 'thin',
+                        '&::-webkit-scrollbar': { width: 6 },
+                        '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 3 },
+                      }}
+                    >
+                      {consents.map((c: any) => {
+                        const purposeLabel = ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string, string>)[c.purpose] || c.purpose || 'Health Data Consent';
+                        const hiTypes: string[] = Array.isArray(c.hiTypes) ? c.hiTypes : [];
+                        return (
+                          <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={700} noWrap>{purposeLabel}</Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{c.consentId}</Typography>
+                              </Box>
+                              <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
                             </Box>
-                            <ConsentStatusChip consentId={c.id} initialStatus={c.status} />
-                          </Box>
-                          {hiTypes.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.75 }}>
-                              {hiTypes.map((t) => (
-                                <Chip key={t} label={t} size="small" variant="outlined" sx={{ height: 20, fontSize: 10.5 }} />
-                              ))}
-                            </Box>
-                          )}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                            <Typography variant="caption" color="text.secondary">Requested {fmtTime(c.createdAt)}</Typography>
-                            {c.grantedAt && (
-                              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>Granted {fmtTime(c.grantedAt)}</Typography>
+                            {hiTypes.length > 0 && (
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.75 }}>
+                                {hiTypes.map((t) => (
+                                  <Chip key={t} label={t} size="small" variant="outlined" sx={{ height: 20, fontSize: 10.5 }} />
+                                ))}
+                              </Box>
                             )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                              <Typography variant="caption" color="text.secondary">Requested {fmtTime(c.createdAt)}</Typography>
+                              {c.grantedAt && (
+                                <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>Granted {fmtTime(c.grantedAt)}</Typography>
+                              )}
+                            </Box>
                           </Box>
-                        </Box>
-                      );
-                    })
+                        );
+                      })}
+                    </Box>
                   )}
                   {(consents || []).some((c: any) => c.status === 'GRANTED') && (
-                    <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 0.75 }}>
                       <CloudDownload sx={{ fontSize: 16, color: 'primary.main' }} />
                       <Typography variant="caption" color="text.secondary">
                         Fetched documents appear in the{' '}
@@ -787,6 +799,11 @@ const PatientProfile: React.FC = () => {
                         </Box>{' '}tab.
                       </Typography>
                     </Box>
+                  )}
+                  {(consents || []).length > 3 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, textAlign: 'right' }}>
+                      Showing {consents.length} consent{consents.length === 1 ? '' : 's'} • scroll to see more
+                    </Typography>
                   )}
                 </SectionCard>
               </Grid>
