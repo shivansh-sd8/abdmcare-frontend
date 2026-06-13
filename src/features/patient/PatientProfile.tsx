@@ -12,7 +12,7 @@ import {
   ArrowBack, EventAvailable, TrendingUp, Home,
   ExpandMore, ExpandLess, Download, Verified, Description,
   Assignment, CloudDownload, Link as LinkIcon, AddCircleOutline,
-  Block, PersonAdd,
+  Block, PersonAdd, WarningAmberRounded,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import ehrService from '../../services/ehrService';
@@ -762,8 +762,9 @@ const PatientProfile: React.FC = () => {
                       {consents.map((c: any) => {
                         const purposeLabel = ({ CARE_MANAGEMENT: 'Care Management', BREAK_THE_GLASS: 'Break the Glass', PUBLIC_HEALTH: 'Public Health', DISEASE_SPECIFIC_HEALTHCARE_RESEARCH: 'Disease Specific Research' } as Record<string, string>)[c.purpose] || c.purpose || 'Health Data Consent';
                         const hiTypes: string[] = Array.isArray(c.hiTypes) ? c.hiTypes : [];
+                        const stale = !!c.staleReferences && c.status === 'GRANTED';
                         return (
-                          <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
+                          <Box key={c.id} sx={{ mb: 1.5, p: 1.75, bgcolor: 'background.paper', borderRadius: 2, border: '1px solid', borderColor: stale ? 'warning.light' : 'divider', transition: 'box-shadow .2s', '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.06)' } }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
                               <Box sx={{ minWidth: 0 }}>
                                 <Typography variant="body2" fontWeight={700} noWrap>{purposeLabel}</Typography>
@@ -777,6 +778,30 @@ const PatientProfile: React.FC = () => {
                                   <Chip key={t} label={t} size="small" variant="outlined" sx={{ height: 20, fontSize: 10.5 }} />
                                 ))}
                               </Box>
+                            )}
+                            {stale && (
+                              <Tooltip
+                                arrow
+                                title={
+                                  <Box sx={{ p: 0.5 }}>
+                                    <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.5 }}>
+                                      Stale care-context references
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ display: 'block' }}>
+                                      The {c.missingReferenceCount || 'authorised'} care context{(c.missingReferenceCount || 0) === 1 ? '' : 's'} this consent points to no longer exist in our records (likely due to a re-link or DB reset). Any record fetch will fail. Ask the patient to revoke this consent in their ABHA app and grant a fresh one after care contexts are re-linked.
+                                    </Typography>
+                                  </Box>
+                                }
+                              >
+                                <Chip
+                                  icon={<WarningAmberRounded sx={{ fontSize: 14 }} />}
+                                  label="Stale references"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{ height: 22, fontSize: 11, mb: 0.75 }}
+                                />
+                              </Tooltip>
                             )}
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                               <Typography variant="caption" color="text.secondary">Requested {fmtTime(c.createdAt)}</Typography>
