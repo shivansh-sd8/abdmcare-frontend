@@ -1,8 +1,12 @@
 import api from './api';
 
+// Hospital create/update DTOs are aligned with the backend
+// `HospitalOnboardingData` / `UpdateHospitalData` shapes. Notably:
+//   • `code` is server-generated and not accepted as input.
+//   • `ownerName/Email/Phone` are derived from the primary admin block.
+//   • ABDM `clientId/Secret/CallbackUrl` are platform-level (env vars).
 interface CreateHospitalDTO {
   name: string;
-  code?: string;
   type?: string;
   email: string;
   phone: string;
@@ -19,15 +23,24 @@ interface CreateHospitalDTO {
   gstNumber?: string;
   panNumber?: string;
   licenseNumber?: string;
-  establishedYear?: string;
-  ownerName?: string;
-  ownerEmail?: string;
-  ownerPhone?: string;
-  totalBeds?: string;
-  icuBeds?: string;
-  emergencyBeds?: string;
-  operationTheaters?: string;
+  establishedYear?: number | string;
+  // Primary admin block (REQUIRED on create)
+  adminFirstName: string;
+  adminLastName: string;
+  adminPhone: string;
+  adminUsername: string;
+  adminPassword: string;
+  totalBeds?: number | string;
+  icuBeds?: number | string;
+  emergencyBeds?: number | string;
+  operationTheaters?: number | string;
   plan?: string;
+  defaultOpdCharge?: number;
+  hipId?: string;
+  hipName?: string;
+  hiuId?: string;
+  hiuName?: string;
+  hfrFacilityId?: string;
 }
 
 interface UpdateHospitalDTO {
@@ -47,19 +60,26 @@ interface UpdateHospitalDTO {
   gstNumber?: string;
   panNumber?: string;
   licenseNumber?: string;
-  establishedYear?: string;
-  ownerName?: string;
-  ownerEmail?: string;
-  ownerPhone?: string;
-  totalBeds?: string;
-  icuBeds?: string;
-  emergencyBeds?: string;
-  operationTheaters?: string;
+  establishedYear?: number | string;
+  totalBeds?: number | string;
+  icuBeds?: number | string;
+  emergencyBeds?: number | string;
+  operationTheaters?: number | string;
   isActive?: boolean;
   plan?: string;
   defaultOpdCharge?: number;
+  // Admin propagation (optional)
+  adminFirstName?: string;
+  adminLastName?: string;
+  adminPhone?: string;
+  adminUsername?: string;
+  adminPassword?: string;
+  // ABDM
   hipId?: string;
+  hipName?: string;
   hiuId?: string;
+  hiuName?: string;
+  hfrFacilityId?: string;
 }
 
 class HospitalService {
