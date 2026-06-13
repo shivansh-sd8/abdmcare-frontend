@@ -3,7 +3,7 @@ import api from './api';
 const HIU_BASE = '/api/v1/hiu';
 
 class HiuService {
-  async requestHealthInformation(data: { consentId: string; dateRangeFrom: string; dateRangeTo: string }) {
+  async requestHealthInformation(data: { consentId: string; dateRangeFrom?: string; dateRangeTo?: string }) {
     return api.post(`${HIU_BASE}/request`, data);
   }
 
