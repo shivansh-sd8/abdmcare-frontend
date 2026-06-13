@@ -9,6 +9,7 @@ import {
   Add, Edit, Delete, Search, CheckCircle, LocalHospital, FilterList,
   Clear, Business, People, MedicalServices, CreditCard, Schedule, Save,
   HealthAndSafety, Insights, AdminPanelSettings, Visibility, VisibilityOff,
+  ContactPhone, LocationOn, Gavel, KingBed, Domain, Close,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useNavigate } from 'react-router-dom';
@@ -711,13 +712,60 @@ const HospitalManagement: React.FC = () => {
     },
   ];
 
-  const SectionTitle: React.FC<{ title: string }> = ({ title }) => (
-    <Grid item xs={12}>
-      <Typography variant="subtitle2" fontWeight={700} color="primary" sx={{ mt: 1.5, mb: 0.5, borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.15)}`, pb: 0.5 }}>
-        {title}
-      </Typography>
-    </Grid>
-  );
+  // Richer section header — icon tile + title + sub-copy. Uses a soft tinted
+  // bar on the left so each section reads like a clearly bounded "card"
+  // without forcing us to nest Paper elements inside the dialog grid.
+  type AccentTone = 'primary' | 'success' | 'warning' | 'info' | 'secondary' | 'error';
+  const SectionHeader: React.FC<{
+    icon: React.ReactNode;
+    title: string;
+    description?: string;
+    tone?: AccentTone;
+    badge?: React.ReactNode;
+  }> = ({ icon, title, description, tone = 'primary', badge }) => {
+    const accent = theme.palette[tone].main;
+    return (
+      <Grid item xs={12}>
+        <Box
+          sx={{
+            display: 'flex', alignItems: 'center', gap: 1.5,
+            mt: 2, mb: 0.5, p: 1.5, pl: 1.75,
+            borderRadius: 2,
+            background: `linear-gradient(90deg, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.02)} 80%)`,
+            borderLeft: `4px solid ${accent}`,
+          }}
+        >
+          <Box
+            sx={{
+              width: 36, height: 36, borderRadius: 1.5,
+              bgcolor: alpha(accent, 0.16), color: accent,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="subtitle1" fontWeight={700}
+              sx={{ color: accent, lineHeight: 1.2, letterSpacing: 0.1 }}
+            >
+              {title}
+            </Typography>
+            {description && (
+              <Typography
+                variant="caption" color="text.secondary"
+                sx={{ display: 'block', lineHeight: 1.3, mt: 0.25 }}
+              >
+                {description}
+              </Typography>
+            )}
+          </Box>
+          {badge}
+        </Box>
+      </Grid>
+    );
+  };
 
   const TONE_BY_LABEL: Record<string, 'primary' | 'success' | 'warning' | 'info'> = {
     'Total Hospitals': 'primary',
@@ -837,17 +885,99 @@ const HospitalManagement: React.FC = () => {
       </Paper>
 
       {/* Create / Edit Dialog */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-        <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" fontWeight={700}>{editingHospital ? 'Edit Hospital' : 'Register New Hospital'}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {editingHospital ? 'Update hospital information' : 'Fill in details to register a new hospital'}
-          </Typography>
+      <Dialog
+        open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
+      >
+        {/* Gradient hero title — shows live hospital name + status chip on edit. */}
+        <DialogTitle
+          sx={{
+            p: 0,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.96)} 0%, ${alpha(theme.palette.primary.dark, 0.96)} 100%)`,
+            color: '#fff',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, p: 2.5, pr: 1.5 }}>
+            <Box
+              sx={{
+                width: 48, height: 48, borderRadius: 2,
+                bgcolor: alpha('#fff', 0.18), color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {editingHospital ? <Edit /> : <LocalHospital />}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+                {editingHospital
+                  ? (formData.name?.trim() || editingHospital.name || 'Edit Hospital')
+                  : 'Register a New Hospital'}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.25 }}>
+                {editingHospital
+                  ? `Code: ${editingHospital.code} · ${editingHospital.status} · ${editingHospital.plan}`
+                  : 'Fill in the details below — required fields are marked with *'}
+              </Typography>
+              {editingHospital && (
+                <Stack direction="row" spacing={0.75} sx={{ mt: 1 }}>
+                  <Chip
+                    size="small" label={editingHospital.status}
+                    sx={{ bgcolor: alpha('#fff', 0.18), color: '#fff', fontWeight: 600, height: 22 }}
+                  />
+                  {editingHospital.abdmEnabled ? (
+                    <Chip
+                      size="small" icon={<HealthAndSafety sx={{ fontSize: 14, color: '#fff !important' }} />}
+                      label="ABDM Active"
+                      sx={{ bgcolor: alpha('#16a34a', 0.85), color: '#fff', fontWeight: 600, height: 22 }}
+                    />
+                  ) : editingHospital.hipId ? (
+                    <Chip size="small" label="ABDM Pending"
+                      sx={{ bgcolor: alpha('#f59e0b', 0.85), color: '#fff', fontWeight: 600, height: 22 }} />
+                  ) : null}
+                </Stack>
+              )}
+            </Box>
+            <IconButton
+              onClick={handleCloseDialog}
+              sx={{ color: alpha('#fff', 0.85), '&:hover': { bgcolor: alpha('#fff', 0.12) } }}
+              size="small"
+            >
+              <Close fontSize="small" />
+            </IconButton>
+          </Box>
         </DialogTitle>
-        <DialogContent dividers sx={{ maxHeight: '70vh' }}>
-          <Grid container spacing={2} sx={{ pt: 1 }}>
+        <DialogContent
+          dividers
+          sx={{
+            maxHeight: '70vh',
+            bgcolor: alpha(theme.palette.background.default, 0.6),
+            // subtle inner gutter so sections breathe.
+            px: { xs: 2, sm: 3 }, py: 2,
+            // Unified input shape across the dialog — rounded corners + focus
+            // ring tint for a modern feel without per-field overrides.
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 2,
+              bgcolor: theme.palette.background.paper,
+              transition: 'box-shadow 120ms ease, border-color 120ms ease',
+              '&.Mui-focused': {
+                boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.16)}`,
+              },
+              '&.Mui-error.Mui-focused': {
+                boxShadow: `0 0 0 3px ${alpha(theme.palette.error.main, 0.16)}`,
+              },
+            },
+            '& .MuiFormHelperText-root': { ml: 1, mt: 0.5 },
+          }}
+        >
+          <Grid container spacing={2} sx={{ pt: 0.5 }}>
             {/* ── 1. Hospital Information ─────────────────────────────── */}
-            <SectionTitle title="Hospital Information" />
+            <SectionHeader
+              icon={<Domain />}
+              title="Hospital Information"
+              description="The facility's name and category"
+              tone="primary"
+            />
             <Grid item xs={12} sm={editingHospital ? 6 : 8}>
               <TextField fullWidth size="small" label="Hospital Name" required
                 value={formData.name} onChange={(e) => handleFieldChange('name', e.target.value)}
@@ -871,7 +1001,20 @@ const HospitalManagement: React.FC = () => {
             )}
 
             {/* ── 2. Primary Hospital Admin ──────────────────────────── */}
-            <SectionTitle title="Primary Hospital Admin" />
+            <SectionHeader
+              icon={<AdminPanelSettings />}
+              title="Primary Hospital Admin"
+              description="Owner identity — single login that doubles as the hospital's primary contact"
+              tone="warning"
+              badge={
+                <Chip
+                  size="small"
+                  label={editingHospital ? 'Editable' : 'Required'}
+                  color={editingHospital ? 'default' : 'warning'}
+                  sx={{ height: 22, fontWeight: 600 }}
+                />
+              }
+            />
             <Grid item xs={12}>
               <Alert severity={editingHospital ? 'info' : 'warning'} icon={<AdminPanelSettings />} sx={{ borderRadius: 2 }}>
                 {editingHospital ? (
@@ -955,7 +1098,12 @@ const HospitalManagement: React.FC = () => {
             )}
 
             {/* ── 3. Hospital Contact (front desk / general line) ───── */}
-            <SectionTitle title="Hospital Contact (Reception)" />
+            <SectionHeader
+              icon={<ContactPhone />}
+              title="Hospital Contact"
+              description="Front-desk / reception lines that appear in patient-facing places"
+              tone="info"
+            />
             <Grid item xs={12} sm={4}>
               <TextField fullWidth size="small" label="Reception Phone" required
                 value={formData.phone} onChange={(e) => handleFieldChange('phone', e.target.value)}
@@ -976,7 +1124,12 @@ const HospitalManagement: React.FC = () => {
             </Grid>
 
             {/* ── 4. Address ──────────────────────────────────────────── */}
-            <SectionTitle title="Address" />
+            <SectionHeader
+              icon={<LocationOn />}
+              title="Address"
+              description="Physical location of the facility"
+              tone="primary"
+            />
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" label="Address Line 1" required
                 value={formData.addressLine1} onChange={(e) => handleFieldChange('addressLine1', e.target.value)}
@@ -1015,7 +1168,13 @@ const HospitalManagement: React.FC = () => {
             </Grid>
 
             {/* ── 5. Legal & Registration (optional) ──────────────────── */}
-            <SectionTitle title="Legal & Registration (optional)" />
+            <SectionHeader
+              icon={<Gavel />}
+              title="Legal & Registration"
+              description="Statutory registrations — useful for invoicing and audits"
+              tone="secondary"
+              badge={<Chip size="small" label="Optional" sx={{ height: 22 }} />}
+            />
             <Grid item xs={12} sm={4}>
               <TextField fullWidth size="small" label="Registration Number"
                 value={formData.registrationNumber} onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
@@ -1049,7 +1208,13 @@ const HospitalManagement: React.FC = () => {
             </Grid>
 
             {/* ── 6. Facility Capacity (optional) ─────────────────────── */}
-            <SectionTitle title="Facility Capacity (optional)" />
+            <SectionHeader
+              icon={<KingBed />}
+              title="Facility Capacity"
+              description="Bed and OT counts — drives admission and resource planning"
+              tone="info"
+              badge={<Chip size="small" label="Optional" sx={{ height: 22 }} />}
+            />
             <Grid item xs={6} sm={3}>
               <TextField fullWidth size="small" type="number" label="Total Beds"
                 value={formData.totalBeds} onChange={(e) => handleFieldChange('totalBeds', e.target.value)}
@@ -1076,7 +1241,12 @@ const HospitalManagement: React.FC = () => {
             </Grid>
 
             {/* ── 7. Subscription & Pricing ───────────────────────────── */}
-            <SectionTitle title="Subscription & Pricing" />
+            <SectionHeader
+              icon={<CreditCard />}
+              title="Subscription & Pricing"
+              description="Plan tier and the default OPD fee fallback"
+              tone="success"
+            />
             <Grid item xs={12} sm={6}>
               <TextField fullWidth size="small" select label="Plan" value={formData.plan}
                 onChange={(e) => handleFieldChange('plan', e.target.value)} SelectProps={{ native: true }}>
@@ -1096,7 +1266,17 @@ const HospitalManagement: React.FC = () => {
             </Grid>
 
             {/* ── 8. ABDM Integration (per-facility) ──────────────────── */}
-            <SectionTitle title="ABDM Integration (optional)" />
+            <SectionHeader
+              icon={<HealthAndSafety />}
+              title="ABDM Integration"
+              description="Per-facility identifiers from ABDM's Health Facility Registry"
+              tone="success"
+              badge={
+                editingHospital?.abdmEnabled
+                  ? <Chip size="small" color="success" label="Active" sx={{ height: 22, fontWeight: 600 }} />
+                  : <Chip size="small" label="Optional" sx={{ height: 22 }} />
+              }
+            />
             <Grid item xs={12}>
               <Alert severity="info" sx={{ borderRadius: 2 }} icon={<HealthAndSafety />}>
                 <strong>Per ABDM:</strong> HFR / HIP / HIU IDs are <strong>per-facility</strong> identifiers
@@ -1159,13 +1339,48 @@ const HospitalManagement: React.FC = () => {
             )}
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={handleCloseDialog} sx={{ borderRadius: 2 }} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained" disabled={submitting}
-            sx={{ borderRadius: 2, px: 3 }}
-            startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : undefined}>
-            {submitting ? 'Saving...' : (editingHospital ? 'Update Hospital' : 'Create Hospital')}
-          </Button>
+        <DialogActions
+          sx={{
+            px: 3, py: 2,
+            bgcolor: alpha(theme.palette.background.default, 0.7),
+            borderTop: `1px solid ${theme.palette.divider}`,
+            display: 'flex', justifyContent: 'space-between', gap: 2,
+          }}
+        >
+          {/* Live error count — gives a glanceable signal of "what's blocking save". */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            {Object.keys(fieldErrors).length > 0 ? (
+              <Typography variant="caption" color="error" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'error.main' }} />
+                {Object.keys(fieldErrors).length} field{Object.keys(fieldErrors).length === 1 ? '' : 's'} need attention
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <CheckCircle sx={{ fontSize: 14, color: 'success.main' }} />
+                Ready to save
+              </Typography>
+            )}
+          </Box>
+          <Stack direction="row" spacing={1.25}>
+            <Button onClick={handleCloseDialog} sx={{ borderRadius: 2, px: 2.5 }} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit} variant="contained" disabled={submitting}
+              sx={{
+                borderRadius: 2, px: 3.5, fontWeight: 600,
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.32)}`,
+                '&:hover': { boxShadow: `0 6px 16px ${alpha(theme.palette.primary.main, 0.42)}` },
+              }}
+              startIcon={
+                submitting
+                  ? <CircularProgress size={16} color="inherit" />
+                  : (editingHospital ? <Save fontSize="small" /> : <Add fontSize="small" />)
+              }
+            >
+              {submitting ? 'Saving…' : (editingHospital ? 'Save Changes' : 'Create Hospital')}
+            </Button>
+          </Stack>
         </DialogActions>
       </Dialog>
 
