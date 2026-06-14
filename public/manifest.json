@@ -1,15 +1,16 @@
 {
-  "short_name": "ABDM Care",
-  "name": "ABDM Care",
+  "short_name": "Abha Ayushman",
+  "name": "Abha Ayushman - Caring for your health",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "abhaayushman.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#1976d2",
+  "theme_color": "#1b8a3f",
   "background_color": "#ffffff"
 }

@@ -35,6 +35,7 @@ import {
   Shield,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import BrandLogo from '../../components/common/BrandLogo';
 
 /* ── theme tokens (kept in sync with LandingPage.tsx) ─────────── */
 const BRAND = {
@@ -198,31 +199,8 @@ const Login: React.FC = () => {
         }}
       >
         {/* Brand row */}
-        <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 4 }}>
-          <Box
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: 2,
-              background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: `0 8px 20px ${alpha(BRAND.primary, 0.35)}`,
-              cursor: 'pointer',
-            }}
-            onClick={() => navigate('/')}
-          >
-            <LocalHospital sx={{ color: 'white', fontSize: 22 }} />
-          </Box>
-          <Box>
-            <Typography fontWeight={800} fontSize="1.1rem" sx={{ color: BRAND.ink, letterSpacing: '-0.5px', lineHeight: 1.2 }}>
-              AbhaAyushman
-            </Typography>
-            <Typography variant="caption" sx={{ color: BRAND.ink500 }}>
-              Hospital Information Management
-            </Typography>
-          </Box>
+        <Stack direction="row" alignItems="center" sx={{ mb: 4 }}>
+          <BrandLogo height={64} onClick={() => navigate('/')} />
         </Stack>
 
         <Chip

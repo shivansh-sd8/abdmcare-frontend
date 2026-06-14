@@ -9,6 +9,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EnquiryDialog from '../features/landing/EnquiryDialog';
+import BrandLogo from '../components/common/BrandLogo';
 import {
   AppBar,
   Avatar,
@@ -312,24 +313,8 @@ const LandingPage: React.FC = () => {
         }}
       >
         <Toolbar sx={{ py: 0.75, maxWidth: 1240, mx: 'auto', width: '100%', px: { xs: 2, md: 4 } }}>
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ flexGrow: 1 }}>
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: `0 6px 16px ${alpha(BRAND.primary, 0.35)}`,
-              }}
-            >
-              <LocalHospital sx={{ color: 'white', fontSize: 20 }} />
-            </Box>
-            <Typography fontWeight={800} fontSize="1.18rem" letterSpacing="-0.5px">
-              AbhaAyushman
-            </Typography>
+          <Stack direction="row" alignItems="center" sx={{ flexGrow: 1 }}>
+            <BrandLogo height={48} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
           </Stack>
 
           {!isMobile && (
@@ -402,7 +387,7 @@ const LandingPage: React.FC = () => {
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 280, p: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography fontWeight={800}>AbhaAyushman</Typography>
+            <BrandLogo height={40} />
             <IconButton onClick={() => setDrawerOpen(false)}><Close /></IconButton>
           </Stack>
           <Divider sx={{ mb: 1 }} />
@@ -1088,17 +1073,8 @@ const LandingPage: React.FC = () => {
         <Container maxWidth="lg">
           <Grid container spacing={5}>
             <Grid item xs={12} md={4}>
-              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 36, height: 36, borderRadius: 2,
-                    background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <LocalHospital sx={{ color: 'white', fontSize: 20 }} />
-                </Box>
-                <Typography fontWeight={800} color="white" fontSize="1.1rem">AbhaAyushman</Typography>
+              <Stack direction="row" alignItems="center" sx={{ mb: 2 }}>
+                <BrandLogo height={56} onDark />
               </Stack>
               <Typography variant="body2" sx={{ lineHeight: 1.85, maxWidth: 320 }}>
                 Hospital Information Management built for India — multi-tenant ABDM, end-to-end
@@ -1147,7 +1123,7 @@ const LandingPage: React.FC = () => {
             spacing={1}
           >
             <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.5) }}>
-              © 2026 AbhaAyushman. All rights reserved.
+              © 2026 Abha Ayushman. All rights reserved.
             </Typography>
             <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.5) }}>
               Built for Indian healthcare · ABDM integration in progress

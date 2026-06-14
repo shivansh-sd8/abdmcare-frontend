@@ -28,6 +28,7 @@ import {
   CheckCircle,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import BrandLogo from '../../components/common/BrandLogo';
 
 const steps = ['Enter Email', 'Verify Code', 'New Password'];
 
@@ -137,13 +138,8 @@ const ForgotPassword: React.FC = () => {
           <Box sx={{ position: 'absolute', bottom: -60, right: -60, width: 400, height: 400, borderRadius: '50%', background: '#0EA5E9', filter: 'blur(90px)', opacity: 0.2 }} />
 
           <Box sx={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="center" sx={{ mb: 4 }}>
-              <Box sx={{ width: 44, height: 44, borderRadius: 2.5, background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LocalHospital sx={{ color: 'white', fontSize: 24 }} />
-              </Box>
-              <Typography fontWeight={800} fontSize="1.35rem" color="white" letterSpacing="-0.5px">
-                AbhaAyushman
-              </Typography>
+            <Stack direction="row" alignItems="center" justifyContent="center" sx={{ mb: 4 }}>
+              <BrandLogo height={64} onDark onClick={() => navigate('/')} />
             </Stack>
             <Typography variant="h4" fontWeight={800} color="white" sx={{ mb: 2 }}>
               Reset Your Password
@@ -159,11 +155,8 @@ const ForgotPassword: React.FC = () => {
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: { xs: 3, md: 6 }, bgcolor: '#0D0D14' }}>
         <Box sx={{ width: '100%', maxWidth: 440 }}>
           {isMobile && (
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 4, justifyContent: 'center' }}>
-              <Box sx={{ width: 40, height: 40, borderRadius: 2, background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LocalHospital sx={{ color: 'white', fontSize: 22 }} />
-              </Box>
-              <Typography fontWeight={800} fontSize="1.2rem" color="white">AbhaAyushman</Typography>
+            <Stack direction="row" alignItems="center" sx={{ mb: 4, justifyContent: 'center' }}>
+              <BrandLogo height={52} onDark onClick={() => navigate('/')} />
             </Stack>
           )}
 

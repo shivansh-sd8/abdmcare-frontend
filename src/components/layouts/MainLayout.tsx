@@ -27,6 +27,7 @@ import {
   MenuItem,
   Divider,
 } from '@mui/material';
+import BrandLogo from '../common/BrandLogo';
 import {
   Menu as MenuIcon,
   Dashboard,
@@ -236,26 +237,7 @@ const MainLayout: React.FC = () => {
     >
       {/* Brand */}
       <Box sx={{ px: 2.25, pt: 2.5, pb: 1.5 }}>
-        <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box
-            sx={{
-              width: 38, height: 38, borderRadius: 2,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: theme.customGradients.brand,
-              boxShadow: `0 6px 14px ${alpha(theme.palette.primary.main, 0.32)}`,
-            }}
-          >
-            <HealthAndSafety sx={{ color: '#fff', fontSize: 22 }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              AbhaAyushman
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem', letterSpacing: '0.02em' }}>
-              ABDM Integrated HIMS
-            </Typography>
-          </Box>
-        </Stack>
+        <BrandLogo height={52} onDark={isDark} onClick={() => navigate('/')} />
       </Box>
 
       {/* User card (subtler) */}
@@ -466,7 +448,7 @@ const MainLayout: React.FC = () => {
             color: 'text.disabled',
           }}
         >
-          AbhaAyushman v1.0 · ABDM Certified
+          Abha Ayushman v1.0 · ABDM Certified
         </Typography>
       </Box>
     </Box>
