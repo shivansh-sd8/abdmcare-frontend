@@ -237,7 +237,7 @@ const MainLayout: React.FC = () => {
     >
       {/* Brand */}
       <Box sx={{ px: 2.25, pt: 2.5, pb: 1.5 }}>
-        <BrandLogo height={52} onDark={isDark} onClick={() => navigate('/')} />
+        <BrandLogo height={60} onDark={isDark} onClick={() => navigate('/')} />
       </Box>
 
       {/* User card (subtler) */}

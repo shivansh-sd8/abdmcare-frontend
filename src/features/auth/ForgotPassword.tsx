@@ -1,41 +1,90 @@
+// Forgot-password flow for Abha Ayushman.
+//
+// Shares the visual language of Login.tsx / LandingPage.tsx — a soft cream
+// surface, deep teal/emerald gradient brand and slate text — so password
+// recovery feels like one product with the rest of the app.
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box,
-  TextField,
-  Button,
-  Typography,
-  InputAdornment,
-  IconButton,
   Alert,
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  InputAdornment,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
+  TextField,
+  Typography,
   alpha,
   useMediaQuery,
   useTheme,
-  Stepper,
-  Step,
-  StepLabel,
 } from '@mui/material';
 import {
-  Visibility,
-  VisibilityOff,
-  Email,
-  Lock,
-  LocalHospital,
   ArrowBack,
   ArrowForward,
-  VpnKey,
   CheckCircle,
+  Email,
+  HealthAndSafety,
+  Lock,
+  Shield,
+  Verified,
+  Visibility,
+  VisibilityOff,
+  VpnKey,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import BrandLogo from '../../components/common/BrandLogo';
+
+/* ── theme tokens (kept in sync with Login.tsx / LandingPage.tsx) ─────────── */
+const BRAND = {
+  primary:    '#0F766E',
+  primary600: '#0D9488',
+  accent:     '#14B8A6',
+  accent2:    '#22D3EE',
+  emerald:    '#10B981',
+  ink:        '#0F172A',
+  ink600:     '#334155',
+  ink500:     '#475569',
+  bg:         '#F6FBF9',
+  surface:    '#FFFFFF',
+  hairline:   '#E2E8F0',
+};
+
+/** Soft blurred blob — same primitive as on the login / landing pages. */
+const Blob: React.FC<{
+  color: string;
+  size: number;
+  top?: string | number;
+  left?: string | number;
+  right?: string | number;
+  bottom?: string | number;
+  opacity?: number;
+}> = ({ color, size, top, left, right, bottom, opacity = 0.35 }) => (
+  <Box
+    sx={{
+      position: 'absolute',
+      top, left, right, bottom,
+      width: size,
+      height: size,
+      borderRadius: '50%',
+      background: color,
+      filter: 'blur(110px)',
+      opacity,
+      pointerEvents: 'none',
+    }}
+  />
+);
 
 const steps = ['Enter Email', 'Verify Code', 'New Password'];
 
 const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'));
 
   const [activeStep, setActiveStep] = useState(0);
   const [email, setEmail] = useState('');
@@ -106,232 +155,355 @@ const ForgotPassword: React.FC = () => {
   };
 
   const inputSx = {
+    mt: 0.75,
     '& .MuiOutlinedInput-root': {
-      bgcolor: alpha('#fff', 0.04),
-      color: 'white',
+      bgcolor: BRAND.surface,
       borderRadius: 2,
-      '& fieldset': { borderColor: alpha('#fff', 0.1) },
-      '&:hover fieldset': { borderColor: alpha('#fff', 0.25) },
-      '&.Mui-focused fieldset': { borderColor: '#6366F1', borderWidth: 1 },
-      '& input::placeholder': { color: alpha('#fff', 0.25) },
+      '& fieldset': { borderColor: BRAND.hairline },
+      '&:hover fieldset': { borderColor: alpha(BRAND.primary, 0.5) },
+      '&.Mui-focused fieldset': { borderColor: BRAND.primary, borderWidth: 1.5 },
     },
   };
 
+  const labelSx = {
+    color: BRAND.ink500,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    fontSize: '0.7rem',
+  };
+
+  const primaryBtnSx = {
+    background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
+    color: '#fff',
+    py: 1.6,
+    fontSize: '0.95rem',
+    fontWeight: 700,
+    borderRadius: 2,
+    textTransform: 'none' as const,
+    boxShadow: `0 10px 30px ${alpha(BRAND.primary, 0.35)}`,
+    '&:hover': { transform: 'translateY(-1px)', boxShadow: `0 14px 40px ${alpha(BRAND.primary, 0.45)}` },
+    transition: 'all 0.2s',
+  };
+
+  const features = [
+    {
+      icon: <CheckCircle sx={{ fontSize: 22 }} />,
+      title: 'One system, end-to-end',
+      desc: 'OPD, IPD, lab, pharmacy and billing wired together.',
+    },
+    {
+      icon: <HealthAndSafety sx={{ fontSize: 22 }} />,
+      title: 'ABDM M1, M2 & M3',
+      desc: 'Fully integrated and ready for certification.',
+    },
+    {
+      icon: <Verified sx={{ fontSize: 22 }} />,
+      title: 'Role-based access',
+      desc: 'Tailored, secure workspaces for every staff type.',
+    },
+    {
+      icon: <Shield sx={{ fontSize: 22 }} />,
+      title: 'Secure & audited',
+      desc: 'Encryption in transit and a complete audit trail.',
+    },
+  ];
+
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#0A0A0F' }}>
-      {/* Left panel */}
-      {!isMobile && (
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: BRAND.bg }}>
+      {/* ── Left: platform details ─────────────────────────────────── */}
+      {!isMdDown && (
         <Box
           sx={{
-            flex: '0 0 46%',
             position: 'relative',
-            background: 'linear-gradient(150deg, #0F0C29 0%, #302B63 55%, #24243e 100%)',
+            flex: '0 0 50%',
+            maxWidth: '50%',
+            overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            p: 6,
-            overflow: 'hidden',
+            justifyContent: 'space-between',
+            p: { md: 6, lg: 8 },
+            color: '#fff',
+            background: `linear-gradient(150deg, ${BRAND.primary} 0%, ${BRAND.primary600} 45%, ${BRAND.accent} 100%)`,
           }}
         >
-          <Box sx={{ position: 'absolute', top: -80, left: -80, width: 500, height: 500, borderRadius: '50%', background: '#6366F1', filter: 'blur(90px)', opacity: 0.2 }} />
-          <Box sx={{ position: 'absolute', bottom: -60, right: -60, width: 400, height: 400, borderRadius: '50%', background: '#0EA5E9', filter: 'blur(90px)', opacity: 0.2 }} />
+          <Blob color="#FFFFFF"       size={420} top={-140} right={-120} opacity={0.10} />
+          <Blob color={BRAND.accent2} size={460} bottom={-180} left={-120} opacity={0.28} />
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `linear-gradient(${alpha('#FFFFFF', 0.07)} 1px, transparent 1px), linear-gradient(90deg, ${alpha('#FFFFFF', 0.07)} 1px, transparent 1px)`,
+              backgroundSize: '64px 64px',
+              maskImage: 'radial-gradient(ellipse at 30% 30%, black 20%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at 30% 30%, black 20%, transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
 
-          <Box sx={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-            <Stack direction="row" alignItems="center" justifyContent="center" sx={{ mb: 4 }}>
-              <BrandLogo height={64} onDark onClick={() => navigate('/')} />
-            </Stack>
-            <Typography variant="h4" fontWeight={800} color="white" sx={{ mb: 2 }}>
-              Reset Your Password
-            </Typography>
-            <Typography variant="body1" sx={{ color: alpha('#fff', 0.6), maxWidth: 380 }}>
-              Don't worry, we'll help you get back into your account securely.
-            </Typography>
+          {/* Brand */}
+          <Box sx={{ position: 'relative', zIndex: 1 }}>
+            <BrandLogo height={64} onDark onClick={() => navigate('/')} />
           </Box>
+
+          {/* Headline + features */}
+          <Box sx={{ position: 'relative', zIndex: 1, maxWidth: 480 }}>
+            <Chip
+              icon={<Verified sx={{ color: '#FFFFFF !important', fontSize: '14px !important' }} />}
+              label="Account security & recovery"
+              size="small"
+              sx={{
+                bgcolor: alpha('#FFFFFF', 0.16),
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.7rem',
+                border: `1px solid ${alpha('#FFFFFF', 0.25)}`,
+                mb: 3,
+              }}
+            />
+            <Typography
+              variant="h3"
+              fontWeight={800}
+              sx={{ letterSpacing: '-1px', lineHeight: 1.1, mb: 2, fontSize: { md: '2.2rem', lg: '2.7rem' } }}
+            >
+              Get back into your account, securely.
+            </Typography>
+            <Typography variant="body1" sx={{ color: alpha('#FFFFFF', 0.85), lineHeight: 1.7, maxWidth: 440 }}>
+              Reset your password with a one-time code — your hospital data stays protected
+              every step of the way.
+            </Typography>
+
+            <Stack spacing={2.25} sx={{ mt: 4.5 }}>
+              {features.map((f) => (
+                <Stack key={f.title} direction="row" spacing={1.75} alignItems="flex-start">
+                  <Box
+                    sx={{
+                      flexShrink: 0,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: alpha('#FFFFFF', 0.14),
+                      color: '#fff',
+                    }}
+                  >
+                    {f.icon}
+                  </Box>
+                  <Box>
+                    <Typography fontWeight={700} sx={{ lineHeight: 1.3 }}>{f.title}</Typography>
+                    <Typography variant="body2" sx={{ color: alpha('#FFFFFF', 0.75) }}>{f.desc}</Typography>
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Trust footer */}
+          <Stack direction="row" spacing={3} sx={{ position: 'relative', zIndex: 1, flexWrap: 'wrap', rowGap: 1 }}>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Shield sx={{ fontSize: 16, color: '#fff' }} />
+              <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.85), fontWeight: 600 }}>
+                Encrypted & audited
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <HealthAndSafety sx={{ fontSize: 16, color: '#fff' }} />
+              <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.85), fontWeight: 600 }}>
+                ABDM certification-ready
+              </Typography>
+            </Stack>
+          </Stack>
         </Box>
       )}
 
-      {/* Right panel */}
-      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: { xs: 3, md: 6 }, bgcolor: '#0D0D14' }}>
-        <Box sx={{ width: '100%', maxWidth: 440 }}>
-          {isMobile && (
-            <Stack direction="row" alignItems="center" sx={{ mb: 4, justifyContent: 'center' }}>
-              <BrandLogo height={52} onDark onClick={() => navigate('/')} />
+      {/* ── Right: reset form ──────────────────────────────────────── */}
+      <Box
+        sx={{
+          position: 'relative',
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          px: { xs: 2.5, sm: 4 },
+          py: { xs: 6, md: 8 },
+        }}
+      >
+        <Blob color={BRAND.accent2} size={360} top={-120} right={-120} opacity={0.12} />
+        <Blob color={BRAND.emerald} size={320} bottom={-120} left={-120} opacity={0.10} />
+
+        <Box sx={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 460 }}>
+          {/* Logo shown here only when the left panel is hidden (mobile/tablet) */}
+          {isMdDown && (
+            <Stack direction="row" alignItems="center" sx={{ mb: 3 }}>
+              <BrandLogo height={72} onClick={() => navigate('/')} />
             </Stack>
           )}
 
-          <Typography variant="h4" fontWeight={800} color="white" letterSpacing="-0.5px" gutterBottom>
-            {activeStep === 2 ? 'All Done!' : 'Forgot Password'}
-          </Typography>
-          <Typography variant="body2" sx={{ color: alpha('#fff', 0.45), mb: 3 }}>
-            {activeStep === 0 && 'Enter your email to receive a reset code'}
-            {activeStep === 1 && 'Enter the code and your new password'}
-            {activeStep === 2 && 'Your password has been reset successfully'}
-          </Typography>
+        <Chip
+          icon={<Verified sx={{ color: `${BRAND.primary600} !important`, fontSize: '14px !important' }} />}
+          label="Account recovery"
+          size="small"
+          sx={{
+            bgcolor: alpha(BRAND.primary, 0.08),
+            color: BRAND.primary600,
+            fontWeight: 700,
+            border: `1px solid ${alpha(BRAND.primary, 0.18)}`,
+            mb: 2,
+          }}
+        />
 
-          <Stepper activeStep={activeStep} sx={{ mb: 4, '& .MuiStepLabel-label': { color: alpha('#fff', 0.4) }, '& .Mui-active .MuiStepLabel-label': { color: '#818CF8' }, '& .Mui-completed .MuiStepLabel-label': { color: '#4ade80' }, '& .MuiStepIcon-root': { color: alpha('#fff', 0.1) }, '& .MuiStepIcon-root.Mui-active': { color: '#6366F1' }, '& .MuiStepIcon-root.Mui-completed': { color: '#4ade80' } }}>
-            {steps.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
-          </Stepper>
+        <Typography variant="h4" fontWeight={800} sx={{ color: BRAND.ink, letterSpacing: '-0.5px', mb: 1 }}>
+          {activeStep === 2 ? 'All done!' : 'Forgot password?'}
+        </Typography>
+        <Typography variant="body2" sx={{ color: BRAND.ink500, mb: 3 }}>
+          {activeStep === 0 && "Enter your account email and we'll send you a 6-digit reset code."}
+          {activeStep === 1 && 'Enter the code we sent along with your new password.'}
+          {activeStep === 2 && 'Your password has been reset successfully.'}
+        </Typography>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3, bgcolor: alpha('#EF4444', 0.1), color: '#FCA5A5', border: `1px solid ${alpha('#EF4444', 0.3)}`, '& .MuiAlert-icon': { color: '#FCA5A5' } }}>
-              {error}
-            </Alert>
-          )}
+        <Stepper
+          activeStep={activeStep}
+          sx={{
+            mb: 4,
+            '& .MuiStepLabel-label': { color: BRAND.ink500, fontSize: '0.78rem' },
+            '& .Mui-active .MuiStepLabel-label': { color: BRAND.primary600, fontWeight: 700 },
+            '& .Mui-completed .MuiStepLabel-label': { color: BRAND.emerald },
+            '& .MuiStepIcon-root': { color: BRAND.hairline },
+            '& .MuiStepIcon-root.Mui-active': { color: BRAND.primary },
+            '& .MuiStepIcon-root.Mui-completed': { color: BRAND.emerald },
+          }}
+        >
+          {steps.map(label => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
+        </Stepper>
 
-          {success && (
-            <Alert severity="success" sx={{ mb: 3, bgcolor: alpha('#22C55E', 0.1), color: '#86EFAC', border: `1px solid ${alpha('#22C55E', 0.3)}`, '& .MuiAlert-icon': { color: '#86EFAC' } }}>
-              {success}
-            </Alert>
-          )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+            {success}
+          </Alert>
+        )}
 
-          {/* Step 0: Email */}
-          {activeStep === 0 && (
-            <form onSubmit={handleSendCode}>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                  Email Address
-                </Typography>
-                <TextField
-                  fullWidth
-                  type="email"
-                  value={email}
-                  onChange={e => { setEmail(e.target.value); setError(''); }}
-                  required
-                  placeholder="your@email.com"
-                  sx={{ mt: 0.75, ...inputSx }}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} /></InputAdornment> }}
-                />
-              </Box>
-              <Button
-                type="submit"
+        {/* Step 0: Email */}
+        {activeStep === 0 && (
+          <form onSubmit={handleSendCode}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="caption" sx={labelSx}>Email address</Typography>
+              <TextField
                 fullWidth
-                variant="contained"
-                size="large"
-                disabled={loading}
-                endIcon={!loading && <ArrowForward />}
-                sx={{ background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', py: 1.6, fontSize: '0.95rem', fontWeight: 700, borderRadius: 2, textTransform: 'none', boxShadow: '0 8px 32px rgba(99,102,241,0.35)', '&:hover': { transform: 'translateY(-1px)' }, transition: 'all 0.2s' }}
-              >
-                {loading ? 'Sending...' : 'Send Reset Code'}
-              </Button>
-            </form>
-          )}
+                type="email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(''); }}
+                required
+                placeholder="your@email.com"
+                sx={inputSx}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ color: BRAND.ink500, fontSize: 18 }} /></InputAdornment> }}
+              />
+            </Box>
+            <Button type="submit" fullWidth variant="contained" size="large" disabled={loading} endIcon={!loading && <ArrowForward />} sx={primaryBtnSx}>
+              {loading ? 'Sending…' : 'Send reset code'}
+            </Button>
+          </form>
+        )}
 
-          {/* Step 1: OTP + New Password */}
-          {activeStep === 1 && (
-            <form onSubmit={handleResetPassword}>
-              <Box sx={{ mb: 2.5 }}>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                  Reset Code (6-digit OTP)
-                </Typography>
-                <TextField
-                  fullWidth
-                  value={otp}
-                  onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setError(''); }}
-                  required
-                  placeholder="123456"
-                  inputProps={{ maxLength: 6 }}
-                  sx={{ mt: 0.75, ...inputSx }}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><VpnKey sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} /></InputAdornment> }}
-                />
-              </Box>
-              <Box sx={{ mb: 2.5 }}>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                  New Password
-                </Typography>
-                <TextField
-                  fullWidth
-                  type={showPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={e => { setNewPassword(e.target.value); setError(''); }}
-                  required
-                  placeholder="••••••••"
-                  sx={{ mt: 0.75, ...inputSx }}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><Lock sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} /></InputAdornment>,
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: alpha('#fff', 0.3) }}>
-                          {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: '0.7rem' }}>
-                  Confirm Password
-                </Typography>
-                <TextField
-                  fullWidth
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
-                  required
-                  placeholder="••••••••"
-                  sx={{ mt: 0.75, ...inputSx }}
-                  InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ color: alpha('#fff', 0.3), fontSize: 18 }} /></InputAdornment> }}
-                  error={confirmPassword.length > 0 && newPassword !== confirmPassword}
-                  helperText={confirmPassword.length > 0 && newPassword !== confirmPassword ? 'Passwords do not match' : ''}
-                />
-              </Box>
-              <Stack direction="row" spacing={2}>
-                <Button
-                  variant="outlined"
-                  onClick={() => { setActiveStep(0); setError(''); }}
-                  sx={{ flex: 1, borderColor: alpha('#fff', 0.12), color: alpha('#fff', 0.6), py: 1.4, borderRadius: 2, textTransform: 'none', fontWeight: 600, '&:hover': { borderColor: alpha('#6366F1', 0.6) } }}
-                >
-                  Back
-                </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  size="large"
-                  disabled={loading || otp.length !== 6 || newPassword.length < 6}
-                  sx={{ flex: 2, background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', py: 1.4, fontWeight: 700, borderRadius: 2, textTransform: 'none', boxShadow: '0 8px 32px rgba(99,102,241,0.35)' }}
-                >
-                  {loading ? 'Resetting...' : 'Reset Password'}
-                </Button>
-              </Stack>
-            </form>
-          )}
-
-          {/* Step 2: Success */}
-          {activeStep === 2 && (
-            <Box sx={{ textAlign: 'center' }}>
-              <CheckCircle sx={{ fontSize: 64, color: '#4ade80', mb: 2 }} />
-              <Typography variant="h6" color="white" fontWeight={600} sx={{ mb: 1 }}>
-                Password Reset Complete
-              </Typography>
-              <Typography variant="body2" sx={{ color: alpha('#fff', 0.5), mb: 4 }}>
-                You can now sign in with your new password.
-              </Typography>
-              <Button
+        {/* Step 1: OTP + new password */}
+        {activeStep === 1 && (
+          <form onSubmit={handleResetPassword}>
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={labelSx}>Reset code (6-digit OTP)</Typography>
+              <TextField
                 fullWidth
-                variant="contained"
-                size="large"
-                onClick={() => navigate('/login')}
-                endIcon={<ArrowForward />}
-                sx={{ background: 'linear-gradient(135deg, #6366F1, #0EA5E9)', py: 1.6, fontWeight: 700, borderRadius: 2, textTransform: 'none' }}
-              >
-                Go to Login
-              </Button>
+                value={otp}
+                onChange={e => { setOtp(e.target.value.replace(/\D/g, '')); setError(''); }}
+                required
+                placeholder="123456"
+                inputProps={{ maxLength: 6 }}
+                sx={inputSx}
+                InputProps={{ startAdornment: <InputAdornment position="start"><VpnKey sx={{ color: BRAND.ink500, fontSize: 18 }} /></InputAdornment> }}
+              />
             </Box>
-          )}
-
-          {/* Back to login link */}
-          {activeStep !== 2 && (
-            <Box sx={{ mt: 4, textAlign: 'center' }}>
+            <Box sx={{ mb: 2.5 }}>
+              <Typography variant="caption" sx={labelSx}>New password</Typography>
+              <TextField
+                fullWidth
+                type={showPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => { setNewPassword(e.target.value); setError(''); }}
+                required
+                placeholder="••••••••"
+                sx={inputSx}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Lock sx={{ color: BRAND.ink500, fontSize: 18 }} /></InputAdornment>,
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: BRAND.ink500 }}>
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="caption" sx={labelSx}>Confirm password</Typography>
+              <TextField
+                fullWidth
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
+                required
+                placeholder="••••••••"
+                sx={inputSx}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ color: BRAND.ink500, fontSize: 18 }} /></InputAdornment> }}
+                error={confirmPassword.length > 0 && newPassword !== confirmPassword}
+                helperText={confirmPassword.length > 0 && newPassword !== confirmPassword ? 'Passwords do not match' : ''}
+              />
+            </Box>
+            <Stack direction="row" spacing={2}>
               <Button
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/login')}
-                sx={{ color: alpha('#fff', 0.4), textTransform: 'none', '&:hover': { color: '#818CF8' } }}
+                variant="outlined"
+                onClick={() => { setActiveStep(0); setError(''); }}
+                sx={{ flex: 1, borderColor: BRAND.hairline, color: BRAND.ink600, py: 1.4, borderRadius: 2, textTransform: 'none', fontWeight: 600, bgcolor: BRAND.surface, '&:hover': { borderColor: BRAND.primary600, color: BRAND.primary600 } }}
               >
-                Back to Login
+                Back
               </Button>
-            </Box>
-          )}
+              <Button type="submit" variant="contained" size="large" disabled={loading || otp.length !== 6 || newPassword.length < 6} sx={{ ...primaryBtnSx, flex: 2, py: 1.4 }}>
+                {loading ? 'Resetting…' : 'Reset password'}
+              </Button>
+            </Stack>
+          </form>
+        )}
+
+        {/* Step 2: Success */}
+        {activeStep === 2 && (
+          <Box sx={{ textAlign: 'center' }}>
+            <CheckCircle sx={{ fontSize: 64, color: BRAND.emerald, mb: 2 }} />
+            <Typography variant="h6" sx={{ color: BRAND.ink, fontWeight: 700, mb: 1 }}>
+              Password reset complete
+            </Typography>
+            <Typography variant="body2" sx={{ color: BRAND.ink500, mb: 4 }}>
+              You can now sign in with your new password.
+            </Typography>
+            <Button fullWidth variant="contained" size="large" onClick={() => navigate('/login')} endIcon={<ArrowForward />} sx={primaryBtnSx}>
+              Go to login
+            </Button>
+          </Box>
+        )}
+
+        {/* Back to login */}
+        {activeStep !== 2 && (
+          <Box sx={{ mt: 4, textAlign: 'center' }}>
+            <Button startIcon={<ArrowBack />} onClick={() => navigate('/login')} sx={{ color: BRAND.ink500, textTransform: 'none', fontWeight: 600, '&:hover': { color: BRAND.primary600 } }}>
+              Back to login
+            </Button>
+          </Box>
+        )}
         </Box>
       </Box>
     </Box>

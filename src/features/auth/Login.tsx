@@ -25,10 +25,10 @@ import {
 } from '@mui/material';
 import {
   ArrowForward,
+  CheckCircle,
   Email,
   HealthAndSafety,
   Lock,
-  LocalHospital,
   Verified,
   Visibility,
   VisibilityOff,
@@ -81,7 +81,7 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const theme = useTheme();
-  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'));
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -155,251 +155,344 @@ const Login: React.FC = () => {
     },
   } as const;
 
-  return (
-    <Box
-      sx={{
-        position: 'relative',
-        minHeight: '100vh',
-        bgcolor: BRAND.bg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        px: 2,
-        py: { xs: 6, md: 8 },
-      }}
-    >
-      {/* Ambient background — same vocabulary as LandingPage hero */}
-      <Blob color={BRAND.primary}  size={520} top={-160} left={-160} opacity={0.18} />
-      <Blob color={BRAND.accent2}  size={460} top={120}  right={-120} opacity={0.18} />
-      <Blob color={BRAND.emerald}  size={380} bottom={-120} left="35%" opacity={0.12} />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: `linear-gradient(${alpha(BRAND.primary, 0.06)} 1px, transparent 1px), linear-gradient(90deg, ${alpha(BRAND.primary, 0.06)} 1px, transparent 1px)`,
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse at center, black 35%, transparent 75%)',
-          WebkitMaskImage: 'radial-gradient(ellipse at center, black 35%, transparent 75%)',
-          pointerEvents: 'none',
-        }}
-      />
+  const features = [
+    {
+      icon: <CheckCircle sx={{ fontSize: 22 }} />,
+      title: 'One system, end-to-end',
+      desc: 'OPD, IPD, lab, pharmacy and billing wired together.',
+    },
+    {
+      icon: <HealthAndSafety sx={{ fontSize: 22 }} />,
+      title: 'ABDM M1, M2 & M3',
+      desc: 'Fully integrated and ready for certification.',
+    },
+    {
+      icon: <Verified sx={{ fontSize: 22 }} />,
+      title: 'Role-based access',
+      desc: 'Tailored, secure workspaces for every staff type.',
+    },
+    {
+      icon: <Shield sx={{ fontSize: 22 }} />,
+      title: 'Secure & audited',
+      desc: 'Encryption in transit and a complete audit trail.',
+    },
+  ];
 
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: BRAND.bg }}>
+      {/* ── Left: platform details ─────────────────────────────────── */}
+      {!isMdDown && (
+        <Box
+          sx={{
+            position: 'relative',
+            flex: '0 0 50%',
+            maxWidth: '50%',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            p: { md: 6, lg: 8 },
+            color: '#fff',
+            background: `linear-gradient(150deg, ${BRAND.primary} 0%, ${BRAND.primary600} 45%, ${BRAND.accent} 100%)`,
+          }}
+        >
+          <Blob color="#FFFFFF"      size={420} top={-140} right={-120} opacity={0.10} />
+          <Blob color={BRAND.accent2} size={460} bottom={-180} left={-120} opacity={0.28} />
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `linear-gradient(${alpha('#FFFFFF', 0.07)} 1px, transparent 1px), linear-gradient(90deg, ${alpha('#FFFFFF', 0.07)} 1px, transparent 1px)`,
+              backgroundSize: '64px 64px',
+              maskImage: 'radial-gradient(ellipse at 30% 30%, black 20%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at 30% 30%, black 20%, transparent 70%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          {/* Brand */}
+          <Box sx={{ position: 'relative', zIndex: 1 }}>
+            <BrandLogo height={64} onDark onClick={() => navigate('/')} />
+          </Box>
+
+          {/* Headline + features */}
+          <Box sx={{ position: 'relative', zIndex: 1, maxWidth: 480 }}>
+            <Chip
+              icon={<Verified sx={{ color: '#FFFFFF !important', fontSize: '14px !important' }} />}
+              label="Hospital Information Management System"
+              size="small"
+              sx={{
+                bgcolor: alpha('#FFFFFF', 0.16),
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.7rem',
+                border: `1px solid ${alpha('#FFFFFF', 0.25)}`,
+                mb: 3,
+              }}
+            />
+            <Typography
+              variant="h3"
+              fontWeight={800}
+              sx={{ letterSpacing: '-1px', lineHeight: 1.1, mb: 2, fontSize: { md: '2.2rem', lg: '2.7rem' } }}
+            >
+              Run your entire hospital on one platform.
+            </Typography>
+            <Typography variant="body1" sx={{ color: alpha('#FFFFFF', 0.85), lineHeight: 1.7, maxWidth: 440 }}>
+              OPD, IPD, lab, pharmacy, billing and ABDM — wired together end-to-end so your
+              team spends less time on paperwork and more on care.
+            </Typography>
+
+            <Stack spacing={2.25} sx={{ mt: 4.5 }}>
+              {features.map((f) => (
+                <Stack key={f.title} direction="row" spacing={1.75} alignItems="flex-start">
+                  <Box
+                    sx={{
+                      flexShrink: 0,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: alpha('#FFFFFF', 0.14),
+                      color: '#fff',
+                    }}
+                  >
+                    {f.icon}
+                  </Box>
+                  <Box>
+                    <Typography fontWeight={700} sx={{ lineHeight: 1.3 }}>{f.title}</Typography>
+                    <Typography variant="body2" sx={{ color: alpha('#FFFFFF', 0.75) }}>{f.desc}</Typography>
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Trust footer */}
+          <Stack direction="row" spacing={3} sx={{ position: 'relative', zIndex: 1, flexWrap: 'wrap', rowGap: 1 }}>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Shield sx={{ fontSize: 16, color: '#fff' }} />
+              <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.85), fontWeight: 600 }}>
+                Encrypted & audited
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <HealthAndSafety sx={{ fontSize: 16, color: '#fff' }} />
+              <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.85), fontWeight: 600 }}>
+                ABDM certification-ready
+              </Typography>
+            </Stack>
+          </Stack>
+        </Box>
+      )}
+
+      {/* ── Right: sign-in form ────────────────────────────────────── */}
       <Box
         sx={{
           position: 'relative',
-          width: '100%',
-          maxWidth: 460,
-          bgcolor: alpha(BRAND.surface, 0.85),
-          backdropFilter: 'blur(18px)',
-          border: `1px solid ${BRAND.hairline}`,
-          borderRadius: 4,
-          p: { xs: 3.5, sm: 5 },
-          boxShadow: `0 30px 60px -20px ${alpha(BRAND.primary, 0.25)}`,
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          px: { xs: 2.5, sm: 4 },
+          py: { xs: 6, md: 8 },
         }}
       >
-        {/* Brand row */}
-        <Stack direction="row" alignItems="center" sx={{ mb: 4 }}>
-          <BrandLogo height={64} onClick={() => navigate('/')} />
-        </Stack>
+        {/* Subtle ambience on the form side */}
+        <Blob color={BRAND.accent2} size={360} top={-120} right={-120} opacity={0.12} />
+        <Blob color={BRAND.emerald} size={320} bottom={-120} left={-120} opacity={0.10} />
 
-        <Chip
-          icon={<Verified sx={{ color: `${BRAND.primary600} !important`, fontSize: '14px !important' }} />}
-          label="Secure sign in"
-          size="small"
-          sx={{
-            bgcolor: alpha(BRAND.primary, 0.08),
-            color: BRAND.primary600,
-            fontWeight: 700,
-            fontSize: '0.7rem',
-            border: `1px solid ${alpha(BRAND.primary, 0.18)}`,
-            mb: 2,
-          }}
-        />
+        <Box sx={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420 }}>
+          {/* Logo shown here only when the left panel is hidden (mobile/tablet) */}
+          {isMdDown && (
+            <Stack direction="row" alignItems="center" sx={{ mb: 4 }}>
+              <BrandLogo height={72} onClick={() => navigate('/')} />
+            </Stack>
+          )}
 
-        <Typography
-          variant="h4"
-          fontWeight={800}
-          sx={{ color: BRAND.ink, letterSpacing: '-0.5px', mb: 1, fontSize: { xs: '1.7rem', sm: '2rem' } }}
-        >
-          Welcome back
-        </Typography>
-        <Typography variant="body2" sx={{ color: BRAND.ink500, mb: 3.5 }}>
-          Sign in to continue to your hospital workspace.
-        </Typography>
-
-        {error && (
-          <Alert
-            severity="error"
+          <Chip
+            icon={<Verified sx={{ color: `${BRAND.primary600} !important`, fontSize: '14px !important' }} />}
+            label="Secure sign in"
+            size="small"
             sx={{
-              mb: 2.5,
-              bgcolor: alpha('#EF4444', 0.06),
-              color: '#B91C1C',
-              border: `1px solid ${alpha('#EF4444', 0.25)}`,
-              '& .MuiAlert-icon': { color: '#EF4444' },
-              borderRadius: 2,
+              bgcolor: alpha(BRAND.primary, 0.08),
+              color: BRAND.primary600,
+              fontWeight: 700,
+              fontSize: '0.7rem',
+              border: `1px solid ${alpha(BRAND.primary, 0.18)}`,
+              mb: 2,
             }}
+          />
+
+          <Typography
+            variant="h4"
+            fontWeight={800}
+            sx={{ color: BRAND.ink, letterSpacing: '-0.5px', mb: 1, fontSize: { xs: '1.7rem', sm: '2rem' } }}
           >
-            {error}
-          </Alert>
-        )}
+            Welcome back
+          </Typography>
+          <Typography variant="body2" sx={{ color: BRAND.ink500, mb: 3.5 }}>
+            Sign in to continue to your hospital workspace.
+          </Typography>
 
-        <form onSubmit={handleSubmit} noValidate>
-          <Box sx={{ mb: 2.5 }}>
-            <Typography
-              variant="caption"
-              sx={{ color: BRAND.ink500, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.7rem' }}
-            >
-              Email address
-            </Typography>
-            <TextField
-              fullWidth
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(''); }}
-              required
-              placeholder="you@hospital.com"
-              sx={fieldStyles}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Email sx={{ color: BRAND.ink500, fontSize: 18 }} />
-                  </InputAdornment>
-                ),
+          {error && (
+            <Alert
+              severity="error"
+              sx={{
+                mb: 2.5,
+                bgcolor: alpha('#EF4444', 0.06),
+                color: '#B91C1C',
+                border: `1px solid ${alpha('#EF4444', 0.25)}`,
+                '& .MuiAlert-icon': { color: '#EF4444' },
+                borderRadius: 2,
               }}
-            />
-          </Box>
+            >
+              {error}
+            </Alert>
+          )}
 
-          <Box sx={{ mb: 1.5 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <form onSubmit={handleSubmit} noValidate>
+            <Box sx={{ mb: 2.5 }}>
               <Typography
                 variant="caption"
                 sx={{ color: BRAND.ink500, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.7rem' }}
               >
-                Password
+                Email address
               </Typography>
-              <Link
-                to="/forgot-password"
-                style={{
-                  color: BRAND.primary600,
-                  textDecoration: 'none',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
+              <TextField
+                fullWidth
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                required
+                placeholder="you@hospital.com"
+                sx={fieldStyles}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Email sx={{ color: BRAND.ink500, fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
                 }}
-              >
-                Forgot?
-              </Link>
-            </Stack>
-            <TextField
+              />
+            </Box>
+
+            <Box sx={{ mb: 1.5 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography
+                  variant="caption"
+                  sx={{ color: BRAND.ink500, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', fontSize: '0.7rem' }}
+                >
+                  Password
+                </Typography>
+                <Link
+                  to="/forgot-password"
+                  style={{
+                    color: BRAND.primary600,
+                    textDecoration: 'none',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  Forgot?
+                </Link>
+              </Stack>
+              <TextField
+                fullWidth
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                required
+                placeholder="Enter your password"
+                sx={fieldStyles}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock sx={{ color: BRAND.ink500, fontSize: 18 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword((v) => !v)}
+                        edge="end"
+                        size="small"
+                        sx={{ color: BRAND.ink500, '&:hover': { color: BRAND.ink } }}
+                      >
+                        {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+
+            <Button
+              type="submit"
               fullWidth
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(''); }}
-              required
-              placeholder="Enter your password"
-              sx={fieldStyles}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Lock sx={{ color: BRAND.ink500, fontSize: 18 }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                      size="small"
-                      sx={{ color: BRAND.ink500, '&:hover': { color: BRAND.ink } }}
-                    >
-                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
-
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            size="large"
-            disabled={loading}
-            endIcon={!loading && <ArrowForward />}
-            sx={{
-              mt: 2.5,
-              background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
-              color: 'white',
-              py: 1.55,
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              borderRadius: 2.5,
-              textTransform: 'none',
-              boxShadow: `0 10px 30px ${alpha(BRAND.primary, 0.35)}`,
-              '&:hover': {
-                transform: 'translateY(-1px)',
-                boxShadow: `0 14px 38px ${alpha(BRAND.primary, 0.45)}`,
-              },
-              '&:disabled': {
-                background: alpha(BRAND.primary, 0.4),
-                color: alpha('#FFFFFF', 0.7),
-              },
-              transition: 'all 0.2s',
-            }}
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </Button>
-        </form>
-
-        {/* Footer microcopy — replaces the old Super-Admin signup CTA */}
-        <Box
-          sx={{
-            mt: 4,
-            pt: 3,
-            borderTop: `1px solid ${BRAND.hairline}`,
-            textAlign: 'center',
-          }}
-        >
-          <Typography variant="caption" sx={{ color: BRAND.ink500, display: 'block', mb: 0.5 }}>
-            New to AbhaAyushman?
-          </Typography>
-          <Typography variant="body2" sx={{ color: BRAND.ink600, fontWeight: 500 }}>
-            Accounts are provisioned by your hospital administrator.{' '}
-            <Box
-              component="span"
-              onClick={() => navigate('/')}
+              variant="contained"
+              size="large"
+              disabled={loading}
+              endIcon={!loading && <ArrowForward />}
               sx={{
-                color: BRAND.primary600,
-                fontWeight: 600,
-                cursor: 'pointer',
-                '&:hover': { textDecoration: 'underline' },
+                mt: 2.5,
+                background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
+                color: 'white',
+                py: 1.55,
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                boxShadow: `0 10px 30px ${alpha(BRAND.primary, 0.35)}`,
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: `0 14px 38px ${alpha(BRAND.primary, 0.45)}`,
+                },
+                '&:disabled': {
+                  background: alpha(BRAND.primary, 0.4),
+                  color: alpha('#FFFFFF', 0.7),
+                },
+                transition: 'all 0.2s',
               }}
             >
-              Learn more
-            </Box>
-            .
-          </Typography>
-        </Box>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
 
-        {/* Trust badges */}
-        {!isSmall && (
-          <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 3 }}>
-            {[
-              { icon: <Shield sx={{ fontSize: 14, color: BRAND.primary600 }} />, label: 'Encrypted & audited' },
-              { icon: <HealthAndSafety sx={{ fontSize: 14, color: BRAND.emerald }} />, label: 'ABDM integration' },
-            ].map((b) => (
-              <Stack key={b.label} direction="row" spacing={0.6} alignItems="center">
-                {b.icon}
-                <Typography variant="caption" sx={{ color: BRAND.ink500, fontWeight: 500 }}>
-                  {b.label}
-                </Typography>
-              </Stack>
-            ))}
-          </Stack>
-        )}
+          {/* Footer microcopy */}
+          <Box
+            sx={{
+              mt: 4,
+              pt: 3,
+              borderTop: `1px solid ${BRAND.hairline}`,
+              textAlign: 'center',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: BRAND.ink500, display: 'block', mb: 0.5 }}>
+              New to Abha Ayushman?
+            </Typography>
+            <Typography variant="body2" sx={{ color: BRAND.ink600, fontWeight: 500 }}>
+              Accounts are provisioned by your hospital administrator.{' '}
+              <Box
+                component="span"
+                onClick={() => navigate('/')}
+                sx={{
+                  color: BRAND.primary600,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                Learn more
+              </Box>
+              .
+            </Typography>
+          </Box>
+        </Box>
       </Box>
     </Box>
   );

@@ -201,7 +201,7 @@ const LandingPage: React.FC = () => {
 
   // Replace placeholders so the file parses without ESLint complaints from the
   // template-literal scanner (this is content that is rendered statically).
-  const heroEyebrow = 'Hospital Information Management System';
+  const heroEyebrow = 'ABDM M1 · M2 · M3 — Integration Complete';
 
   const navLinks = [
     { label: 'Modules',      path: '#modules' },
@@ -213,7 +213,7 @@ const LandingPage: React.FC = () => {
   const heroStats = [
     { value: '8+',   label: 'Clinical modules' },
     { value: '7',    label: 'Staff roles supported' },
-    { value: 'ABDM', label: 'Compliant out of the box' },
+    { value: 'M1–M3', label: 'ABDM milestones integrated' },
     { value: '24/7', label: 'Operational reliability' },
   ];
 
@@ -278,7 +278,7 @@ const LandingPage: React.FC = () => {
 
   const capabilities = [
     'End-to-end OPD + IPD workflow',
-    'ABDM-ready for every hospital',
+    'ABDM M1, M2 & M3 integrated per hospital',
     'Granular role-based access',
     'Automated itemized billing',
     'Lab reports as ready-to-share PDFs',
@@ -314,7 +314,7 @@ const LandingPage: React.FC = () => {
       >
         <Toolbar sx={{ py: 0.75, maxWidth: 1240, mx: 'auto', width: '100%', px: { xs: 2, md: 4 } }}>
           <Stack direction="row" alignItems="center" sx={{ flexGrow: 1 }}>
-            <BrandLogo height={48} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+            <BrandLogo height={64} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
           </Stack>
 
           {!isMobile && (
@@ -493,7 +493,8 @@ const LandingPage: React.FC = () => {
                   sx={{ color: BRAND.ink500, lineHeight: 1.75, mb: 4, maxWidth: 580, fontWeight: 400 }}
                 >
                   One system to run OPD, IPD, lab, pharmacy, billing and ABDM — wired together
-                  end-to-end so your team spends less time on paperwork and more time on care.
+                  end-to-end. ABDM Milestones M1, M2 and M3 are fully integrated and ready for
+                  certification, so your team spends less time on paperwork and more on care.
                 </Typography>
 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
@@ -540,7 +541,7 @@ const LandingPage: React.FC = () => {
                 </Stack>
 
                 <Stack direction="row" spacing={2.5} flexWrap="wrap" rowGap={1}>
-                  {['Cloud-hosted', 'ABDM compliant', 'Bank-grade security', 'Onboarding in days'].map((t) => (
+                  {['Cloud-hosted', 'ABDM M1·M2·M3 integrated', 'Bank-grade security', 'Certification-ready'].map((t) => (
                     <Stack key={t} direction="row" spacing={0.75} alignItems="center">
                       <CheckCircle sx={{ color: BRAND.emerald, fontSize: 16 }} />
                       <Typography variant="caption" sx={{ color: BRAND.ink500, fontWeight: 500 }}>{t}</Typography>
@@ -890,9 +891,9 @@ const LandingPage: React.FC = () => {
           <Grid container spacing={3} sx={{ mb: 5 }}>
             {[
               {
-                title: 'ABDM compliant',
+                title: 'ABDM M1, M2 & M3',
                 desc:
-                  'Patient registration, ABHA, consent and record exchange — built and verified end-to-end.',
+                  'ABHA creation, care-context linking and consent-driven record exchange — all three milestones fully integrated and ready for ABDM certification.',
                 icon: <Shield fontSize="medium" />,
                 color: BRAND.primary600,
               },
@@ -1074,7 +1075,7 @@ const LandingPage: React.FC = () => {
           <Grid container spacing={5}>
             <Grid item xs={12} md={4}>
               <Stack direction="row" alignItems="center" sx={{ mb: 2 }}>
-                <BrandLogo height={56} onDark />
+                <BrandLogo height={64} onDark />
               </Stack>
               <Typography variant="body2" sx={{ lineHeight: 1.85, maxWidth: 320 }}>
                 Hospital Information Management built for India — multi-tenant ABDM, end-to-end
@@ -1126,7 +1127,7 @@ const LandingPage: React.FC = () => {
               © 2026 Abha Ayushman. All rights reserved.
             </Typography>
             <Typography variant="caption" sx={{ color: alpha('#FFFFFF', 0.5) }}>
-              Built for Indian healthcare · ABDM integration in progress
+              Built for Indian healthcare · ABDM M1, M2 & M3 integration complete
             </Typography>
           </Stack>
         </Container>
