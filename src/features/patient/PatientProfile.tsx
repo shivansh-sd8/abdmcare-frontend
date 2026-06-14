@@ -48,17 +48,33 @@ const CareContextsSection: React.FC<{ patientId: string; refreshKey: any }> = ({
   const [contexts, setContexts] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    setLoading(true);
+  const load = React.useCallback((background = false) => {
+    if (!background) setLoading(true);
     hipService.getCareContexts(patientId)
       .then((res: any) => {
-        // api.get() unwraps response.data, so res = { success, message, data: [...] }
         const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
         setContexts(list);
       })
-      .catch(() => setContexts([]))
-      .finally(() => setLoading(false));
-  }, [patientId, refreshKey]);
+      .catch(() => { if (!background) setContexts([]); })
+      .finally(() => { if (!background) setLoading(false); });
+  }, [patientId]);
+
+  React.useEffect(() => { load(false); }, [load, refreshKey]);
+
+  // Auto-poll while any context is still PENDING — linking completes
+  // asynchronously over ABDM callbacks, so the status flips without a reload.
+  const hasPending = contexts.some((c: any) => c.linkStatus === 'PENDING');
+  React.useEffect(() => {
+    if (!hasPending) return;
+    const t = setInterval(() => load(true), 8000);
+    return () => clearInterval(t);
+  }, [hasPending, load]);
+
+  const counts = React.useMemo(() => ({
+    linked: contexts.filter((c) => c.linkStatus === 'LINKED').length,
+    pending: contexts.filter((c) => c.linkStatus === 'PENDING').length,
+    failed: contexts.filter((c) => c.linkStatus === 'FAILED').length,
+  }), [contexts]);
 
   if (loading) return <Box sx={{ p: 2 }}><CircularProgress size={20} /></Box>;
 
@@ -67,26 +83,73 @@ const CareContextsSection: React.FC<{ patientId: string; refreshKey: any }> = ({
       {contexts.length === 0
         ? <EmptyState icon={<LinkIcon />} message="No care contexts yet — click 'Link Care Contexts' above" small />
         : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {contexts.map((cc: any) => (
-              <Box key={cc.careContextId} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                <Box>
-                  <Typography variant="body2" fontWeight={600}>{cc.display}</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{cc.careContextId}</Typography>
-                  <Typography variant="caption" color="text.secondary">HIP: {cc.hipId}</Typography>
+          <>
+            <Box sx={{ display: 'flex', gap: 0.75, mb: 1.25, flexWrap: 'wrap' }}>
+              <Chip size="small" color="success" variant={counts.linked ? 'filled' : 'outlined'} label={`${counts.linked} Linked`} />
+              <Chip size="small" color="warning" variant={counts.pending ? 'filled' : 'outlined'} label={`${counts.pending} Pending`} />
+              {counts.failed > 0 && <Chip size="small" color="error" label={`${counts.failed} Failed`} />}
+              {counts.pending > 0 && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
+                  <CircularProgress size={12} />
+                  <Typography variant="caption" color="text.secondary">Awaiting ABDM confirmation…</Typography>
                 </Box>
-                <Chip
-                  size="small"
-                  label={cc.linkStatus}
-                  color={cc.linkStatus === 'LINKED' ? 'success' : cc.linkStatus === 'FAILED' ? 'error' : 'warning'}
-                  variant={cc.linkStatus === 'LINKED' ? 'filled' : 'outlined'}
-                />
-              </Box>
-            ))}
-          </Box>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {contexts.map((cc: any) => <CareContextCard key={cc.careContextId} cc={cc} />)}
+            </Box>
+          </>
         )
       }
     </SectionCard>
+  );
+};
+
+// One detailed care-context row: what was linked, its HI type, when ABDM
+// confirmed it, and (if it failed) exactly why.
+const CareContextCard: React.FC<{ cc: any }> = ({ cc }) => {
+  const status: string = cc.linkStatus;
+  const color = status === 'LINKED' ? 'success' : status === 'FAILED' ? 'error' : 'warning';
+  const enc = cc.encounter;
+  return (
+    <Box sx={{ p: 1.5, bgcolor: '#f8f9fa', borderRadius: 1.5, border: '1px solid', borderColor: status === 'FAILED' ? 'error.light' : 'divider' }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+            <Typography variant="body2" fontWeight={600}>{cc.display}</Typography>
+            {enc?.type && <Chip size="small" variant="outlined" label={enc.type} sx={{ height: 18, fontSize: 10 }} />}
+            {cc.hiType && <Chip size="small" color="info" variant="outlined" label={cc.hiType} sx={{ height: 18, fontSize: 10 }} />}
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace', fontSize: 10.5, wordBreak: 'break-all' }}>{cc.careContextId}</Typography>
+        </Box>
+        <Chip
+          size="small"
+          label={status}
+          color={color as any}
+          variant={status === 'LINKED' ? 'filled' : 'outlined'}
+        />
+      </Box>
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 0.75 }}>
+        {enc?.visitDate && <Typography variant="caption" color="text.secondary">Visit: {fmt(enc.visitDate)}</Typography>}
+        <Typography variant="caption" color="text.secondary">Created: {fmtTime(cc.createdAt)}</Typography>
+        {status === 'LINKED' && cc.linkedAt && (
+          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }}>Linked: {fmtTime(cc.linkedAt)}</Typography>
+        )}
+        <Typography variant="caption" color="text.secondary">HIP: {cc.hipId}</Typography>
+      </Box>
+
+      {status === 'PENDING' && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
+          Submitted to ABDM — the patient's PHR confirms the link asynchronously. This flips to <b>Linked</b> automatically.
+        </Typography>
+      )}
+      {status === 'FAILED' && (
+        <Alert severity="error" sx={{ mt: 1, py: 0, '& .MuiAlert-message': { py: 0.5 } }}>
+          <Typography variant="caption">{cc.linkError || 'ABDM rejected this care-context link. Re-link from the button above.'}</Typography>
+        </Alert>
+      )}
+    </Box>
   );
 };
 

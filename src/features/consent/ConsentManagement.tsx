@@ -32,6 +32,8 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Add,
@@ -54,6 +56,8 @@ import {
   Article,
   Inbox,
   Refresh,
+  Hub,
+  Link as LinkIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -64,6 +68,7 @@ import ConsentStatusChip from '../../components/ConsentStatusChip';
 import { toast } from 'react-toastify';
 import { format, formatDistanceToNow } from 'date-fns';
 import { GradientHero, StatCard } from '../../components/ui';
+import LinkedContextsTab from './LinkedContextsTab';
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -113,6 +118,7 @@ const PURPOSE_LABELS: Record<string, string> = {
 
 const ConsentManagement: React.FC = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0);
   const [consents, setConsents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -609,6 +615,21 @@ const ConsentManagement: React.FC = () => {
       />
       <Box sx={{ height: 16 }} />
 
+      <Paper variant="outlined" sx={{ mb: 2 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_e, v) => setActiveTab(v)}
+          sx={{ px: 1, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minHeight: 52 } }}
+        >
+          <Tab icon={<VerifiedUser fontSize="small" />} iconPosition="start" label="Requested Consents & Records" />
+          <Tab icon={<Hub fontSize="small" />} iconPosition="start" label="Linked Contexts" />
+        </Tabs>
+      </Paper>
+
+      {activeTab === 1 && <LinkedContextsTab />}
+
+      {activeTab === 0 && (
+      <Box>
       <Grid container spacing={2.25} sx={{ mb: 3 }}>
         {statsCards.map((s, i) => (
           <Grid item xs={6} sm={4} md={2} key={s.label}>
@@ -692,6 +713,8 @@ const ConsentManagement: React.FC = () => {
           }}
         />
       </Paper>
+      </Box>
+      )}
 
       {/* ── New Consent Request Dialog ──────────────────────────────── */}
       <Dialog open={newConsentOpen} onClose={() => setNewConsentOpen(false)} maxWidth="sm" fullWidth>

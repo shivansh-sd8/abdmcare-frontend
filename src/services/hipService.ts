@@ -74,6 +74,12 @@ class HipService {
   async getCareContexts(patientId: string) {
     return api.get(`${HIP_BASE}/patients/${patientId}/care-contexts`);
   }
+
+  // Hospital-wide list of linked care contexts (for the Consent Manager
+  // "Linked Contexts" tab). Optional status filter: PENDING | LINKED | FAILED.
+  async listCareContexts(status?: 'PENDING' | 'LINKED' | 'FAILED') {
+    return api.get(`${HIP_BASE}/care-contexts`, { params: status ? { status } : undefined });
+  }
 }
 
 const hipService = new HipService();
