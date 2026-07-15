@@ -11,10 +11,11 @@ import {
 } from '@mui/icons-material';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
-import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
 import hipService from '../../services/hipService';
+import { getAbhaErrorMessage } from './abhaErrors';
+import { useInlineNotice } from '../../hooks/useInlineNotice';
 
 interface ScanResult {
   hidn?: string;
@@ -54,6 +55,10 @@ const ScanAndShare: React.FC = () => {
   const [convertLoading, setConvertLoading] = useState(false);
   const [convertSubmitting, setConvertSubmitting] = useState<null | 'NEW' | 'MERGE' | 'IGNORE'>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  // Page-level inline notice for status messages (shown as an Alert instead of
+  // a top-right toast).
+  const notice = useInlineNotice();
 
   const loadFacilityQr = useCallback(async () => {
     try {
@@ -75,6 +80,7 @@ const ScanAndShare: React.FC = () => {
     setConvertShare(share);
     setConvertCandidates([]);
     setSelectedMatchId(null);
+    setConvertError(null);
     setConvertOpen(true);
     setConvertLoading(true);
     try {
@@ -94,10 +100,11 @@ const ScanAndShare: React.FC = () => {
     async (mode: 'NEW' | 'MERGE' | 'IGNORE') => {
       if (!convertShare) return;
       if (mode === 'MERGE' && !selectedMatchId) {
-        toast.warning('Select a patient to merge into');
+        setConvertError('Please select a patient to merge this ABHA into.');
         return;
       }
       setConvertSubmitting(mode);
+      setConvertError(null);
       try {
         const res: any = await hipService.convertReceivedShare(convertShare.id, {
           mode,
@@ -105,18 +112,18 @@ const ScanAndShare: React.FC = () => {
         });
         const result = res?.data || res;
         if (mode === 'IGNORE') {
-          toast.success('Share dismissed');
+          notice.notify('success', 'Share dismissed');
           setConvertOpen(false);
           loadReceivedShares();
           return;
         }
         const patientId = result?.patient?.id;
-        toast.success(mode === 'NEW' ? 'Patient registered from share' : 'ABHA linked to existing patient');
+        notice.notify('success', mode === 'NEW' ? 'Patient registered from share' : 'ABHA linked to existing patient');
         setConvertOpen(false);
         loadReceivedShares();
         if (patientId) navigate(`/app/patients/${patientId}`);
       } catch (err: any) {
-        toast.error(err?.response?.data?.message || 'Failed to process share');
+        setConvertError(getAbhaErrorMessage(err, 'We couldn’t process this shared profile. Please try again.'));
       } finally {
         setConvertSubmitting(null);
       }
@@ -177,11 +184,8 @@ const ScanAndShare: React.FC = () => {
       const res: any = await abhaService.lookupPatient(identifier);
       const result = res?.data || res;
       setLookupResult(result);
-      if (result?.isReturning) {
-        toast.success(`Returning patient: ${result.patient?.firstName} ${result.patient?.lastName}`);
-      } else {
-        toast.info('New patient — not found in system');
-      }
+      // The lookup result card shows RETURNING/NEW status prominently, so no
+      // extra confirmation message is needed here.
     } catch { setLookupResult(null); }
     finally { setLookupLoading(false); }
   }, []);
@@ -279,7 +283,7 @@ const ScanAndShare: React.FC = () => {
     }
   };
 
-  const handleCopy = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!'); };
+  const handleCopy = (text: string) => { navigator.clipboard.writeText(text); notice.notify('success', 'Copied to clipboard'); };
 
   const handleRegisterNewPatient = () => {
     navigate('/app/patients/new', {
@@ -299,6 +303,12 @@ const ScanAndShare: React.FC = () => {
           </Typography>
         </Box>
       </Box>
+
+      {notice.notice && (
+        <Alert severity={notice.notice.severity} onClose={() => notice.clear()} sx={{ mb: 3 }}>
+          {notice.notice.message}
+        </Alert>
+      )}
 
       <Paper sx={{ mb: 3 }}>
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -340,7 +350,7 @@ const ScanAndShare: React.FC = () => {
                 disabled={!facilityQr?.shareProfileUrl && !facilityQr?.scanAndShareUrl}
                 onClick={() => {
                   const svg = document.querySelector<SVGSVGElement>('#facility-qr-svg');
-                  if (!svg) { toast.error('QR not ready yet'); return; }
+                  if (!svg) { notice.notify('error', 'QR not ready yet. Please wait a moment and try again.'); return; }
                   const xml = new XMLSerializer().serializeToString(svg);
                   const img = new Image();
                   img.onload = () => {
@@ -356,7 +366,7 @@ const ScanAndShare: React.FC = () => {
                     a.href = canvas.toDataURL('image/png');
                     a.click();
                   };
-                  img.onerror = () => toast.error('Could not export QR');
+                  img.onerror = () => notice.notify('error', 'Could not export the QR image. Please try again.');
                   img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(xml)))}`;
                 }}
                 sx={{ textTransform: 'none', borderRadius: 1.75 }}
@@ -369,10 +379,10 @@ const ScanAndShare: React.FC = () => {
                 disabled={!facilityQr?.shareProfileUrl && !facilityQr?.scanAndShareUrl}
                 onClick={() => {
                   const svg = document.querySelector<SVGSVGElement>('#facility-qr-svg');
-                  if (!svg || !facilityQr) { toast.error('QR not ready yet'); return; }
+                  if (!svg || !facilityQr) { notice.notify('error', 'QR not ready yet. Please wait a moment and try again.'); return; }
                   const xml = new XMLSerializer().serializeToString(svg);
                   const w = window.open('', '_blank', 'width=720,height=900');
-                  if (!w) { toast.warning('Pop-up blocked. Allow pop-ups to print.'); return; }
+                  if (!w) { notice.notify('warning', 'Pop-up blocked. Please allow pop-ups to print the QR.'); return; }
                   w.document.write(`<!doctype html><html><head><title>Facility QR · ${facilityQr.hipName || ''}</title>
                     <style>
                       body{margin:0;padding:48px;font-family:Inter,Arial,sans-serif;color:#0f172a;text-align:center}
@@ -471,7 +481,7 @@ const ScanAndShare: React.FC = () => {
                         size="small"
                         onClick={() => {
                           navigator.clipboard.writeText(facilityQr.shareProfileUrl || facilityQr.scanAndShareUrl);
-                          toast.success('Copied');
+                          notice.notify('success', 'Copied to clipboard');
                         }}
                       >
                         <ContentCopy fontSize="small" />
@@ -892,9 +902,9 @@ const ScanAndShare: React.FC = () => {
                           onClick={async () => {
                             try {
                               await hipService.smsNotify(lookupResult.patient.mobile);
-                              toast.success('ABDM deep-link SMS sent to patient');
-                            } catch {
-                              toast.error('Failed to send SMS notification');
+                              notice.notify('success', 'ABDM deep-link SMS sent to patient');
+                            } catch (err: any) {
+                              notice.notify('error', getAbhaErrorMessage(err, 'We couldn’t send the SMS notification. Please try again.'));
                             }
                           }}
                         >
@@ -982,6 +992,11 @@ const ScanAndShare: React.FC = () => {
         </DialogTitle>
 
         <DialogContent dividers>
+          {convertError && (
+            <Alert severity="error" onClose={() => setConvertError(null)} sx={{ mb: 2 }}>
+              {convertError}
+            </Alert>
+          )}
           {convertShare && (
             <>
               {/* Hero — what was shared */}

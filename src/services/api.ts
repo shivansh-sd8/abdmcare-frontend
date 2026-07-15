@@ -151,11 +151,23 @@ class ApiService {
           }
         }
 
-        const message = error.response?.data?.message || 'An error occurred';
-        const status = error.response?.status || 0;
-        const toastId = `api-error-${status}-${message.substring(0, 30)}`;
-        if (!toast.isActive(toastId)) {
-          toast.error(message, { toastId });
+        // Some screens surface API errors through their own inline notices
+        // (e.g. the ABHA management flows use useInlineNotice), so firing the
+        // global toast here would show a duplicate popup. Skip the toast when
+        // the caller opts out via `skipErrorToast`, or for endpoints that are
+        // always handled inline.
+        const requestUrl = (originalRequest?.url || '') as string;
+        const handledInline =
+          (originalRequest as { skipErrorToast?: boolean })?.skipErrorToast === true ||
+          requestUrl.includes('/api/v1/abha');
+
+        if (!handledInline) {
+          const message = error.response?.data?.message || 'An error occurred';
+          const status = error.response?.status || 0;
+          const toastId = `api-error-${status}-${message.substring(0, 30)}`;
+          if (!toast.isActive(toastId)) {
+            toast.error(message, { toastId });
+          }
         }
 
         return Promise.reject(error);
