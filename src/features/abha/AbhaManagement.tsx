@@ -3,23 +3,46 @@ import {
   Box, Card, CardContent, Typography, Button, TextField, Stepper, Step, StepLabel,
   Grid, Paper, Tabs, Tab, InputAdornment, Chip, Divider, Alert, IconButton,
   CircularProgress, ToggleButtonGroup, ToggleButton, Avatar, Dialog, DialogTitle,
-  DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText,
+  DialogContent, DialogActions, List, ListItem, ListItemButton, ListItemText, ListItemAvatar,
   MenuItem, Select, FormControl, FormControlLabel, Checkbox, InputLabel, alpha, useTheme,
-  Tooltip,
+  Tooltip, Switch,
 } from '@mui/material';
 import {
   Search, QrCode, Phone, CreditCard, HealthAndSafety, CheckCircle,
   ContentCopy, Download, Refresh, Person, Badge, PersonAdd, Edit,
   AlternateEmail, Close, Save, CloudDone, CloudOff,
 } from '@mui/icons-material';
-import { toast } from 'react-toastify';
 import { useNavigate, useLocation } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
 import hipService from '../../services/hipService';
 import api from '../../services/api';
 import ScanAndShare from './ScanAndShare';
 import PatientCheckIn from './PatientCheckIn';
+import AbhaAccountActions from './AbhaAccountActions';
 import { PageHeader } from '../../components/ui';
+import { useOtpTimer } from '../../hooks/useOtpTimer';
+import { useInlineNotice } from '../../hooks/useInlineNotice';
+import { getAbhaErrorMessage } from './abhaErrors';
+
+// ABDM ABHA Address policy (CRT_ABHA_112): 8-18 chars, at most one dot and one
+// underscore, neither at the start/end, otherwise alphanumeric.
+const ABHA_ADDRESS_RULES = [
+  'Between 8 and 18 characters',
+  'Letters and numbers allowed',
+  'At most one dot (.) and one underscore (_)',
+  'Dot/underscore cannot be at the start or end',
+];
+
+function validateAbhaAddress(addr: string): string | null {
+  if (!addr) return null;
+  if (addr.length < 8) return 'Minimum 8 characters required';
+  if (addr.length > 18) return 'Maximum 18 characters allowed';
+  if (!/^[a-zA-Z0-9._]+$/.test(addr)) return 'Only letters, numbers, one dot (.) and one underscore (_) are allowed';
+  if (/^[._]/.test(addr) || /[._]$/.test(addr)) return 'Dot/underscore cannot be at the beginning or end';
+  if ((addr.match(/\./g) || []).length > 1) return 'At most one dot (.) is allowed';
+  if ((addr.match(/_/g) || []).length > 1) return 'At most one underscore (_) is allowed';
+  return null;
+}
 
 const AADHAAR_STEPS = ['Enter Aadhaar', 'Verify OTP', 'ABHA Created', 'ABHA Address', 'Complete'];
 const DL_STEPS = ['Enter Mobile', 'Verify OTP', 'DL Details', 'ABHA Created', 'ABHA Address', 'Complete'];
@@ -80,9 +103,33 @@ const AbhaManagement: React.FC = () => {
   const hasHipId = !!hospital?.hipId;
   const hasHiuId = !!hospital?.hiuId;
 
+  // Auto-share: when ON, completed visits / discharges / generated PDFs for
+  // ABHA-linked patients are automatically registered as ABDM care contexts.
+  const autoShareEnabled = !!hospital?.abdmAutoShare;
+  const [autoShareSaving, setAutoShareSaving] = useState(false);
+
+  const handleToggleAutoShare = async (next: boolean) => {
+    if (!hospitalId) return;
+    setAutoShareSaving(true);
+    try {
+      await api.put(`/api/v1/hospitals/${hospitalId}`, { abdmAutoShare: next });
+      await loadHospital();
+      pageNotice.notify(
+        'success',
+        next
+          ? 'Auto-share ON — completed visits, discharges and generated PDFs will link to ABDM automatically.'
+          : 'Auto-share OFF — link care contexts manually from each patient’s profile.',
+      );
+    } catch (e: any) {
+      pageNotice.notify('error', getAbhaErrorMessage(e, 'Could not update the auto-share setting. Please try again.'));
+    } finally {
+      setAutoShareSaving(false);
+    }
+  };
+
   const handleHipRegister = async () => {
     if (!hasHipId) {
-      toast.error('No HIP ID configured for this hospital. An admin needs to set it up first.');
+      pageNotice.notify('error', 'No HIP ID configured for this hospital. An admin needs to set it up first.');
       return;
     }
     if (abdmRegistered &&
@@ -92,18 +139,18 @@ const AbhaManagement: React.FC = () => {
     setHipRegistering(true);
     try {
       const res = await hipService.registerHipService() as any;
-      toast.success(res?.data?.message || 'HIP service registered with ABDM');
+      pageNotice.notify('success', res?.data?.message || 'HIP service registered with ABDM');
       // Best-effort HIU registration if a HIU id is configured. If it fails
       // we surface a non-blocking warning rather than rolling back the HIP.
       if (hasHiuId) {
         try { await hipService.registerHiuService(); }
         catch (e: any) {
-          toast.warning(e?.response?.data?.message || 'HIP registered, but HIU registration failed');
+          pageNotice.notify('warning', getAbhaErrorMessage(e, 'HIP registered, but HIU registration failed.'));
         }
       }
       await loadHospital();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to register HIP service');
+      pageNotice.notify('error', getAbhaErrorMessage(err, 'We couldn’t register this facility with ABDM. Please verify the HIP configuration and try again.'));
     } finally {
       setHipRegistering(false);
     }
@@ -141,13 +188,62 @@ const AbhaManagement: React.FC = () => {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [verifyMethod, setVerifyMethod] = useState<VerifyMethod>('abha-number');
   const [verifiedProfile, setVerifiedProfile] = useState<any>(null);
+  // When a single mobile/Aadhaar is linked to multiple ABHAs, the OTP verify
+  // response returns an `accounts[]` list. We hold it here so the user can
+  // pick which ABHA to proceed with instead of silently taking the first.
+  const [accountChoices, setAccountChoices] = useState<any[] | null>(null);
+  const [accountTxnId, setAccountTxnId] = useState('');
+  // Short-lived transfer token from login/verify, required as T-token when
+  // selecting one of several ABHA accounts via login/verify/user.
+  const [accountTransferToken, setAccountTransferToken] = useState('');
+  // Mobile search returns the masked list of every ABHA linked to that number
+  // (ABDM find-abha "search-abha"). When more than one is linked, we let the
+  // operator pick which ABHA to receive the OTP for BEFORE sending it, instead
+  // of silently defaulting to the first account.
+  const [mobileAbhaChoices, setMobileAbhaChoices] = useState<any[] | null>(null);
+  const [mobileSearchTxnId, setMobileSearchTxnId] = useState('');
 
   // Profile update state
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileUpdates, setProfileUpdates] = useState<Record<string, string>>({});
 
-  // Aadhaar consent state
-  const [consentAccepted, setConsentAccepted] = useState(false);
+  // Aadhaar consent state — official NHA "Creating a nudge" consent language.
+  // Declaration 1 (Aadhaar auth) + the two attestations are required to proceed;
+  // the healthcare-consent declarations (3/4/5) are pre-checked per NHA guidance.
+  const [consents, setConsents] = useState({
+    aadhaarAuth: false,
+    otherDocument: false,
+    linkRecords: true,
+    shareRecords: true,
+    anonymized: true,
+    workerConfirmed: false,
+    beneficiaryConfirmed: false,
+  });
+  const consentAccepted =
+    consents.aadhaarAuth && consents.workerConfirmed && consents.beneficiaryConfirmed;
+
+  const workerName =
+    userData?.name ||
+    [userData?.firstName, userData?.lastName].filter(Boolean).join(' ') ||
+    userData?.username ||
+    'healthcare worker';
+
+  // OTP resend timers (ABDM: max 2 resends, 60s cooldown) — one per OTP flow.
+  const enrolTimer = useOtpTimer();
+  const verifyTimer = useOtpTimer();
+
+  // Inline, user-facing status messages (shown as Alerts on the relevant flow
+  // instead of top-right toasts) — covers success/info/warning/error.
+  const pageNotice = useInlineNotice();
+  const createNotice = useInlineNotice();
+  const verifyNotice = useInlineNotice();
+  const profileNotice = useInlineNotice();
+  // Profile-card actions (download/QR/link/copy) render inside whichever tab is
+  // active, so their status messages go to that tab's notice.
+  const activeNotice = tabValue === 1 ? verifyNotice : createNotice;
+
+  // Live validation error for a user-typed custom ABHA address.
+  const customAbhaError = validateAbhaAddress(customAbhaAddress.trim());
 
   // Patient linking state (from PatientList navigation)
   const linkedPatientId = routeState?.patientId;
@@ -158,10 +254,14 @@ const AbhaManagement: React.FC = () => {
   const resetFlow = () => {
     setActiveStep(0); setTxnId(''); setOtp(''); setMobile(''); setAadhaar('');
     setCreatedAbha(null); setXToken(''); setCardImageUrl(null);
+    setAccountChoices(null); setAccountTxnId(''); setAccountTransferToken('');
+    setMobileAbhaChoices(null); setMobileSearchTxnId('');
     setAbhaAddressSuggestions([]); setSelectedAbhaAddress(''); setCustomAbhaAddress('');
     setDlForm({ dlNumber: '', firstName: '', middleName: '', lastName: '', dob: '', gender: '', state: '', district: '', pinCode: '' });
     setRequiresMobileVerify(false); setMobileVerifyOtp(''); setMobileVerifySent(false);
-    setConsentAccepted(false);
+    setConsents({ aadhaarAuth: false, otherDocument: false, linkRecords: true, shareRecords: true, anonymized: true, workerConfirmed: false, beneficiaryConfirmed: false });
+    enrolTimer.reset(); verifyTimer.reset();
+    createNotice.clear();
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -170,29 +270,41 @@ const AbhaManagement: React.FC = () => {
 
   const handleGenerateAadhaarOtp = async () => {
     setLoading(true);
+    createNotice.clear();
     try {
       const res: any = await abhaService.generateAadhaarOtp(aadhaar);
       const txn = res?.data?.txnId || res?.txnId;
       if (!txn) throw new Error('No txnId received');
       setTxnId(txn);
       setActiveStep(1);
-      toast.success(res?.data?.message || 'OTP sent to Aadhaar-linked mobile');
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Failed to generate OTP'); }
+      enrolTimer.startInitial();
+      createNotice.notify('success', res?.data?.message || 'OTP sent to Aadhaar-linked mobile');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t send the OTP. Please check the Aadhaar number and try again.')); }
     finally { setLoading(false); }
   };
 
-  const handleResendOtp = async () => {
+  // Resend for the enrollment OTP step (Aadhaar or DL). Gated by the 60s
+  // cooldown + 2-resend limit per ABDM spec (CRT_ABHA_106).
+  const handleResendEnrolOtp = async () => {
+    if (!enrolTimer.canResend) return;
     setLoading(true);
     try {
-      const res: any = await abhaService.resendAadhaarOtp(txnId, aadhaar);
-      setTxnId(res?.data?.txnId || res?.txnId || txnId);
-      toast.success('OTP resent');
-    } catch { toast.error('Failed to resend OTP'); }
+      if (enrollMethod === 'aadhaar') {
+        const res: any = await abhaService.resendAadhaarOtp(txnId, aadhaar);
+        setTxnId(res?.data?.txnId || res?.txnId || txnId);
+      } else {
+        const res: any = await abhaService.dlSendMobileOtp(mobile);
+        setTxnId(res?.data?.txnId || res?.txnId || txnId);
+      }
+      enrolTimer.registerResend();
+      createNotice.notify('success', 'OTP resent');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t resend the OTP. Please try again.')); }
     finally { setLoading(false); }
   };
 
   const handleEnrolByAadhaar = async () => {
     setLoading(true);
+    createNotice.clear();
     try {
       const res: any = await abhaService.enrolByAadhaar(txnId, otp, mobile);
       const data = res?.data || res;
@@ -205,13 +317,13 @@ const AbhaManagement: React.FC = () => {
       }
       const hasExistingAddress = profile?.phrAddress?.length > 0 || profile?.preferredAbhaAddress;
       if (hasExistingAddress && !data?.isNew) {
-        toast.success('Existing ABHA account found — address already set');
+        createNotice.notify('success', 'Existing ABHA account found — address already set');
       } else {
-        toast.success('ABHA created successfully!');
+        createNotice.notify('success', 'ABHA created successfully!');
       }
       setActiveStep(2);
       fetchAbhaCard(token);
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to create ABHA'); }
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'The OTP could not be verified. Please re-enter it or use “Resend OTP”.')); }
     finally { setLoading(false); }
   };
 
@@ -225,8 +337,8 @@ const AbhaManagement: React.FC = () => {
       const res: any = await abhaService.sendMobileVerifyOtp(txnId, mobile);
       setTxnId(res?.data?.txnId || res?.txnId || txnId);
       setMobileVerifySent(true);
-      toast.success('OTP sent to mobile');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to send mobile OTP'); }
+      createNotice.notify('success', 'OTP sent to mobile');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t send the OTP to that mobile number. Please try again.')); }
     finally { setLoading(false); }
   };
 
@@ -235,8 +347,8 @@ const AbhaManagement: React.FC = () => {
     try {
       await abhaService.verifyMobileOtp(txnId, mobileVerifyOtp);
       setRequiresMobileVerify(false);
-      toast.success('Mobile verified successfully');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Invalid OTP'); }
+      createNotice.notify('success', 'Mobile verified successfully');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'The OTP you entered is incorrect. Please check it and try again.')); }
     finally { setLoading(false); }
   };
 
@@ -252,8 +364,9 @@ const AbhaManagement: React.FC = () => {
       if (!txn) throw new Error('No txnId received');
       setTxnId(txn);
       setActiveStep(1);
-      toast.success('OTP sent to mobile');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to send OTP'); }
+      enrolTimer.startInitial();
+      createNotice.notify('success', 'OTP sent to mobile');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t send the OTP. Please check the mobile number and try again.')); }
     finally { setLoading(false); }
   };
 
@@ -263,17 +376,18 @@ const AbhaManagement: React.FC = () => {
       const res: any = await abhaService.dlVerifyMobileOtp(txnId, otp);
       setTxnId(res?.data?.txnId || res?.txnId || txnId);
       setActiveStep(2);
-      toast.success('Mobile verified — enter DL details');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Invalid OTP'); }
+      createNotice.notify('success', 'Mobile verified — enter DL details');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'The OTP you entered is incorrect. Please re-enter it or use “Resend”.')); }
     finally { setLoading(false); }
   };
 
   const handleEnrolByDL = async () => {
     if (!dlForm.dlNumber || !dlForm.firstName || !dlForm.lastName || !dlForm.dob || !dlForm.gender) {
-      toast.error('Fill all required DL fields');
+      createNotice.notify('error', 'Please fill in all required Driving License fields (number, name, date of birth and gender).');
       return;
     }
     setLoading(true);
+    createNotice.clear();
     try {
       const res: any = await abhaService.enrolByDrivingLicense({ txnId, ...dlForm });
       const data = res?.data || res;
@@ -285,8 +399,8 @@ const AbhaManagement: React.FC = () => {
         fetchAbhaCard(token);
       }
       setActiveStep(3);
-      toast.success('ABHA created via Driving License!');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'DL enrollment failed'); }
+      createNotice.notify('success', 'ABHA created via Driving License!');
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t create the ABHA from these Driving License details. Please check them and try again.')); }
     finally { setLoading(false); }
   };
 
@@ -302,14 +416,21 @@ const AbhaManagement: React.FC = () => {
       const res: any = await abhaService.getAbhaAddressSuggestions(txnId);
       const suggestions = res?.data || res;
       setAbhaAddressSuggestions(Array.isArray(suggestions) ? suggestions : []);
-    } catch { toast.error('Failed to fetch ABHA address suggestions'); }
+    } catch (e: any) { createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t load address suggestions. You can still type a custom ABHA address below.')); }
     finally { setLoading(false); }
   };
 
   const handleCreateAbhaAddress = async () => {
-    const address = selectedAbhaAddress || customAbhaAddress;
-    if (!address.trim()) { toast.error('Enter or select an ABHA address'); return; }
+    const address = (selectedAbhaAddress || customAbhaAddress).trim();
+    if (!address) { createNotice.notify('error', 'Please enter or select an ABHA address.'); return; }
+    // Only validate a user-typed custom address against the policy; system
+    // suggestions are already policy-compliant.
+    if (!selectedAbhaAddress) {
+      const err = validateAbhaAddress(address);
+      if (err) { createNotice.notify('error', err); return; }
+    }
     setLoading(true);
+    createNotice.clear();
     try {
       const res: any = await abhaService.createAbhaAddress(txnId, address);
       const data = res?.data || res;
@@ -319,8 +440,17 @@ const AbhaManagement: React.FC = () => {
         abhaAddress: data?.preferredAbhaAddress || address,
       }));
       setActiveStep(abhaAddressStepIndex + 1);
-      toast.success(`ABHA address created: ${data?.preferredAbhaAddress || address}`);
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to create ABHA address'); }
+      createNotice.notify('success', `ABHA address created: ${data?.preferredAbhaAddress || address}`);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || '';
+      // ABDM returns a conflict when the chosen address is taken (CRT_ABHA_112).
+      if (e?.response?.status === 409 || /exist|already|taken|use/i.test(msg)) {
+        createNotice.notify('error', 'That ABHA address is already taken. Please choose one of the suggestions or try another.');
+        if (abhaAddressSuggestions.length === 0) handleFetchAbhaAddressSuggestions();
+      } else {
+        createNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t create that ABHA address. Please try another.'));
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -375,11 +505,54 @@ const AbhaManagement: React.FC = () => {
     return raw;
   };
 
+  // Send the login OTP for one specific ABHA (by its search index) linked to a
+  // mobile number. Does NOT manage `loading` — the caller owns that so this can
+  // be reused from both the initial request and the chooser click. Stamps the
+  // search txnId + index onto `searchResult` so the Resend handler keeps working.
+  const requestMobileOtp = async (index: any, searchTxn: string, chosen?: any) => {
+    const res: any = await abhaService.loginRequestOtp({
+      scope: ['abha-login', 'search-abha', 'mobile-verify'],
+      loginHint: 'index',
+      loginId: String(index),
+      otpSystem: 'abdm',
+      txnId: searchTxn,
+    });
+    const txn = res?.data?.txnId || res?.txnId;
+    if (txn) setTxnId(txn);
+    setSearchResult({
+      ABHANumber: chosen?.ABHANumber,
+      name: chosen?.name,
+      gender: chosen?.gender,
+      _searchTxnId: searchTxn,
+      _index: index,
+      _source: 'mobile-search',
+    });
+    setMobileAbhaChoices(null);
+    setMobileSearchTxnId(searchTxn);
+    verifyTimer.startInitial();
+    verifyNotice.notify('success', 'OTP sent to mobile');
+  };
+
+  // Operator picked one ABHA from the multi-account list linked to a mobile.
+  const handlePickMobileAbha = async (choice: any) => {
+    setLoading(true);
+    verifyNotice.clear();
+    try {
+      await requestMobileOtp(choice.index, mobileSearchTxnId, choice);
+    } catch (e: any) {
+      verifyNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t send the OTP for that ABHA. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVerifyRequestOtp = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
+    verifyNotice.clear();
     setSearchResult(null);
     setVerifiedProfile(null);
+    setMobileAbhaChoices(null);
     try {
       // Step 1: Background search for preview (non-blocking for ABHA number & mobile)
       if (verifyMethod === 'mobile') {
@@ -387,21 +560,23 @@ const AbhaManagement: React.FC = () => {
           const searchRes: any = await abhaService.findAbhaByMobile(searchQuery);
           const raw = searchRes?.data || searchRes;
           const normalized = normalizeSearchResult(raw, 'mobile');
-          if (normalized) setSearchResult(normalized);
+          const abhaList: any[] = normalized?._abhaList || [];
+          const searchTxn: string | undefined = normalized?._searchTxnId;
 
-          if (normalized?._searchTxnId && normalized?._index != null) {
-            const res: any = await abhaService.loginRequestOtp({
-              scope: ['abha-login', 'search-abha', 'mobile-verify'],
-              loginHint: 'index',
-              loginId: String(normalized._index),
-              otpSystem: 'abdm',
-              txnId: normalized._searchTxnId,
-            });
-            const txn = res?.data?.txnId || res?.txnId;
-            if (txn) setTxnId(txn);
-            toast.success('OTP sent to mobile');
+          if (searchTxn && abhaList.length > 1) {
+            // Multiple ABHAs linked to this mobile — let the operator choose
+            // which one to receive the OTP for BEFORE sending it.
+            setMobileAbhaChoices(abhaList);
+            setMobileSearchTxnId(searchTxn);
+            verifyNotice.notify('info', `This mobile is linked to ${abhaList.length} ABHA accounts. Select the one you want to verify — an OTP will then be sent.`);
             return;
           }
+          if (searchTxn && abhaList.length === 1) {
+            // Exactly one ABHA — send its OTP directly.
+            await requestMobileOtp(abhaList[0].index, searchTxn, abhaList[0]);
+            return;
+          }
+          // No searchable ABHA list — fall through to direct mobile OTP below.
         } catch { /* fall through to direct mobile OTP */ }
       } else if (verifyMethod === 'abha-number') {
         try {
@@ -424,7 +599,8 @@ const AbhaManagement: React.FC = () => {
         const res: any = await abhaService.phrRequestOtp(searchQuery, ['abha-address-login', 'mobile-verify'], 'abdm');
         const txn = res?.data?.txnId || res?.txnId;
         if (txn) setTxnId(txn);
-        toast.success('OTP sent for ABHA address verification');
+        verifyTimer.startInitial();
+        verifyNotice.notify('success', 'OTP sent for ABHA address verification');
       } else {
         const loginHint = verifyMethod === 'mobile' ? 'mobile' : verifyMethod === 'aadhaar' ? 'aadhaar' : 'abha-number';
         const otpSystem = verifyMethod === 'aadhaar' ? 'aadhaar' : 'abdm';
@@ -432,14 +608,80 @@ const AbhaManagement: React.FC = () => {
         const res: any = await abhaService.loginRequestOtp({ scope, loginHint, loginId: searchQuery, otpSystem });
         const txn = res?.data?.txnId || res?.txnId;
         if (txn) setTxnId(txn);
-        toast.success('Verification OTP sent');
+        verifyTimer.startInitial();
+        verifyNotice.notify('success', 'Verification OTP sent');
       }
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Failed to send verification OTP'); }
+    } catch (e: any) { verifyNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t send the verification OTP. Please check the details and try again.')); }
     finally { setLoading(false); }
+  };
+
+  // Resend for the Verify/Search OTP step. Gated by the 60s cooldown + 2-resend
+  // limit per ABDM spec (VRFY_ABHA_305 / _405).
+  const handleVerifyResendOtp = async () => {
+    if (!verifyTimer.canResend) return;
+    setLoading(true);
+    try {
+      if (verifyMethod === 'abha-address') {
+        const res: any = await abhaService.phrRequestOtp(searchQuery, ['abha-address-login', 'mobile-verify'], 'abdm');
+        const txn = res?.data?.txnId || res?.txnId; if (txn) setTxnId(txn);
+      } else if (verifyMethod === 'mobile' && searchResult?._searchTxnId && searchResult?._index != null) {
+        const res: any = await abhaService.loginRequestOtp({
+          scope: ['abha-login', 'search-abha', 'mobile-verify'],
+          loginHint: 'index', loginId: String(searchResult._index), otpSystem: 'abdm', txnId: searchResult._searchTxnId,
+        });
+        const txn = res?.data?.txnId || res?.txnId; if (txn) setTxnId(txn);
+      } else {
+        const loginHint = verifyMethod === 'mobile' ? 'mobile' : verifyMethod === 'aadhaar' ? 'aadhaar' : 'abha-number';
+        const otpSystem = verifyMethod === 'aadhaar' ? 'aadhaar' : 'abdm';
+        const scope: string[] = ['abha-login', verifyMethod === 'aadhaar' ? 'aadhaar-verify' : 'mobile-verify'];
+        const res: any = await abhaService.loginRequestOtp({ scope, loginHint, loginId: searchQuery, otpSystem });
+        const txn = res?.data?.txnId || res?.txnId; if (txn) setTxnId(txn);
+      }
+      verifyTimer.registerResend();
+      verifyNotice.notify('success', 'OTP resent');
+    } catch (e: any) { verifyNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t resend the OTP. Please try again.')); }
+    finally { setLoading(false); }
+  };
+
+  // Complete verification for a specific ABHA number selected from a
+  // multi-account result. Shared by the auto-single-account path and the
+  // user-driven selector.
+  const proceedWithAccount = async (abhaNumber?: string, verifyTxnId?: string, transferToken?: string) => {
+    if (!abhaNumber) {
+      verifyNotice.notify('error', 'That account is missing an ABHA number. Please pick another.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const userRes: any = await abhaService.loginVerifyUser(
+        abhaNumber,
+        verifyTxnId || accountTxnId || txnId,
+        transferToken || accountTransferToken,
+      );
+      const userData = userRes?.data || userRes;
+      const userToken = userData?.token;
+      if (userToken) {
+        setXToken(userToken);
+        setAccountChoices(null);
+        setAccountTxnId('');
+        setAccountTransferToken('');
+        verifyNotice.notify('success', 'ABHA verified successfully!');
+        fetchProfile(userToken);
+      } else {
+        verifyNotice.notify('error', 'We verified the OTP but couldn’t retrieve the ABHA profile. Please try again.');
+      }
+    } catch (e: any) {
+      verifyNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t open that ABHA account. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyOtp = async () => {
     setLoading(true);
+    verifyNotice.clear();
+    setAccountChoices(null); setAccountTransferToken('');
+    setMobileAbhaChoices(null);
     try {
       if (verifyMethod === 'abha-address') {
         const scope = ['abha-address-login', 'mobile-verify'];
@@ -448,7 +690,7 @@ const AbhaManagement: React.FC = () => {
         const token = data?.tokens?.token;
         if (token) setXToken(token);
         setSearchResult(data);
-        toast.success('ABHA address verified!');
+        verifyNotice.notify('success', 'ABHA address verified!');
         if (token) fetchPhrProfile(token);
       } else {
         // ABDM v3 spec — `find-abha-number` flow:
@@ -462,32 +704,37 @@ const AbhaManagement: React.FC = () => {
         const res: any = await abhaService.loginVerifyOtp(scope, txnId, otp);
         const data = res?.data || res;
 
-        if (data?.token) {
+        // IMPORTANT: mobile/Aadhaar login returns BOTH a short-lived transfer
+        // `token` AND an `accounts[]` list. The transfer token is NOT a usable
+        // session — it must be passed as T-token to login/verify/user for the
+        // chosen ABHA. So we must inspect `accounts` BEFORE `token`, otherwise
+        // we'd wrongly treat the transfer token as a session and skip account
+        // selection entirely.
+        if (data?.accounts?.length) {
+          const verifyTxnId = data.txnId || txnId;
+          const transferToken = data.token || '';
+          setAccountTransferToken(transferToken);
+          if (data.accounts.length === 1) {
+            // Exactly one ABHA on this mobile/Aadhaar — proceed directly.
+            await proceedWithAccount(data.accounts[0]?.ABHANumber, verifyTxnId, transferToken);
+          } else {
+            // Multiple ABHAs linked to this identifier — let the user choose.
+            setAccountChoices(data.accounts);
+            setAccountTxnId(verifyTxnId);
+            verifyNotice.notify('info', `This number has ${data.accounts.length} ABHA accounts. Choose which one to proceed with.`);
+          }
+        } else if (data?.token) {
+          // Direct login (e.g. ABHA-number + Aadhaar OTP) returns a usable session token.
           setXToken(data.token);
           setSearchResult(data);
-          toast.success('ABHA verified successfully!');
+          verifyNotice.notify('success', 'ABHA verified successfully!');
           fetchProfile(data.token);
-        } else if (data?.accounts?.length) {
-          const selectedAbha = data.accounts[0]?.ABHANumber;
-          if (selectedAbha) {
-            toast.info('Account found, completing verification...');
-            const userRes: any = await abhaService.loginVerifyUser(selectedAbha, data.txnId || txnId);
-            const userData = userRes?.data || userRes;
-            const userToken = userData?.token;
-            if (userToken) {
-              setXToken(userToken);
-              toast.success('ABHA verified successfully!');
-              fetchProfile(userToken);
-            } else {
-              toast.error('Unable to retrieve session token');
-            }
-          }
         } else {
-          toast.success('ABHA verified!');
+          verifyNotice.notify('success', 'ABHA verified!');
           setSearchResult(data);
         }
       }
-    } catch (e: any) { toast.error(e?.response?.data?.message || e?.message || 'Invalid OTP'); }
+    } catch (e: any) { verifyNotice.notify('error', getAbhaErrorMessage(e, 'The OTP you entered is incorrect. Please re-enter it or use “Resend OTP”.')); }
     finally { setLoading(false); }
   };
 
@@ -512,13 +759,14 @@ const AbhaManagement: React.FC = () => {
   const handleUpdateProfile = async () => {
     if (!xToken || Object.keys(profileUpdates).length === 0) return;
     setLoading(true);
+    profileNotice.clear();
     try {
       const res: any = await abhaService.updateProfile(xToken, profileUpdates);
       setVerifiedProfile((prev: any) => ({ ...prev, ...(res?.data || res) }));
       setShowProfileDialog(false);
       setProfileUpdates({});
-      toast.success('Profile updated');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to update profile'); }
+      activeNotice.notify('success', 'Profile updated');
+    } catch (e: any) { profileNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t update the profile. Please try again.')); }
     finally { setLoading(false); }
   };
 
@@ -538,7 +786,7 @@ const AbhaManagement: React.FC = () => {
   };
 
   const handleDownloadCard = async () => {
-    if (!xToken) { toast.error('Please verify ABHA first to download card'); return; }
+    if (!xToken) { activeNotice.notify('error', 'Please verify ABHA first to download the card.'); return; }
     try {
       const isPhr = tabValue === 1 && verifyMethod === 'abha-address';
       const res: any = isPhr ? await abhaService.phrGetCard(xToken) : await abhaService.getAbhaCard(xToken);
@@ -549,11 +797,11 @@ const AbhaManagement: React.FC = () => {
       link.href = url;
       link.download = 'abha-card.png';
       link.click();
-    } catch { toast.error('Failed to download ABHA card'); }
+    } catch (e: any) { activeNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t download the ABHA card. Please try again.')); }
   };
 
   const handleViewQrCode = async () => {
-    if (!xToken) { toast.error('Please verify ABHA first'); return; }
+    if (!xToken) { activeNotice.notify('error', 'Please verify ABHA first.'); return; }
     try {
       const res: any = await abhaService.getQrCode(xToken);
       const qrData = res?.data || res;
@@ -570,9 +818,9 @@ const AbhaManagement: React.FC = () => {
           win.document.title = 'ABHA QR Code';
         }
       } else {
-        toast.info('QR code format not supported for display');
+        activeNotice.notify('info', 'QR code format not supported for display.');
       }
-    } catch { toast.error('Failed to load QR code'); }
+    } catch (e: any) { activeNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t load the QR code. Please try again.')); }
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -592,12 +840,12 @@ const AbhaManagement: React.FC = () => {
         abhaAddress,
         verified ? { verified: true, profile: verifiedProfile } : undefined,
       );
-      toast.success(verified ? 'ABHA verified and linked to patient' : 'ABHA linked to patient successfully');
-    } catch (e: any) { toast.error(e?.response?.data?.message || 'Failed to link ABHA'); }
+      activeNotice.notify('success', verified ? 'ABHA verified and linked to patient' : 'ABHA linked to patient successfully');
+    } catch (e: any) { activeNotice.notify('error', getAbhaErrorMessage(e, 'We couldn’t link this ABHA to the patient. Please try again.')); }
     finally { setLoading(false); }
   };
 
-  const handleCopy = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!'); };
+  const handleCopy = (text: string) => { navigator.clipboard.writeText(text); activeNotice.notify('success', 'Copied to clipboard'); };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER HELPERS
@@ -606,7 +854,12 @@ const AbhaManagement: React.FC = () => {
   const renderProfileCard = (profile: any, showActions = true) => {
     if (!profile) return null;
     const abhaNum = profile.ABHANumber || profile.abhaNumber;
-    const abhaAddr = profile.preferredAbhaAddress || profile.phrAddress?.[0] || profile.abhaAddress;
+    // A single ABHA account can have multiple ABHA addresses. The ABDM profile
+    // returns them in `phrAddress[]`; the preferred one is `preferredAbhaAddress`.
+    const preferredAddr = profile.preferredAbhaAddress || profile.abhaAddress;
+    const phrList: string[] = Array.isArray(profile.phrAddress) ? profile.phrAddress : [];
+    const allAddresses: string[] = Array.from(new Set([preferredAddr, ...phrList].filter(Boolean)));
+    const abhaAddr = allAddresses[0]; // preferred/first — used for linking & actions
     const name = profile.name || `${profile.firstName || ''} ${profile.middleName || ''} ${profile.lastName || ''}`.trim();
     const dob = profile.dayOfBirth && profile.monthOfBirth && profile.yearOfBirth
       ? `${profile.dayOfBirth}/${profile.monthOfBirth}/${profile.yearOfBirth}` : profile.dob || '—';
@@ -633,7 +886,28 @@ const AbhaManagement: React.FC = () => {
         <Box sx={{ p: 3 }}>
           <Grid container spacing={2.5}>
             <Grid item xs={12} sm={6}><InfoField label="ABHA Number" value={abhaNum} copyable /></Grid>
-            <Grid item xs={12} sm={6}><InfoField label="ABHA Address" value={abhaAddr} copyable /></Grid>
+            {allAddresses.length <= 1 ? (
+              <Grid item xs={12} sm={6}><InfoField label="ABHA Address" value={abhaAddr} copyable /></Grid>
+            ) : (
+              <Grid item xs={12}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  ABHA Addresses ({allAddresses.length})
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 0.5 }}>
+                  {allAddresses.map((addr) => (
+                    <Box key={addr} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Typography variant="body1" fontWeight={600}>{addr}</Typography>
+                      {addr === preferredAddr && (
+                        <Chip label="Primary" size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: '0.6rem' }} />
+                      )}
+                      <IconButton size="small" onClick={() => handleCopy(addr)} sx={{ opacity: 0.5, '&:hover': { opacity: 1 } }}>
+                        <ContentCopy sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              </Grid>
+            )}
             <Grid item xs={12} sm={6}><InfoField label="Name" value={name} /></Grid>
             <Grid item xs={12} sm={6}><InfoField label="Mobile" value={profile.mobile} /></Grid>
             <Grid item xs={12} sm={6}><InfoField label="Gender" value={profile.gender === 'M' ? 'Male' : profile.gender === 'F' ? 'Female' : profile.gender === 'O' ? 'Other' : profile.gender} /></Grid>
@@ -681,6 +955,7 @@ const AbhaManagement: React.FC = () => {
               {xToken && (
                 <Button variant="outlined" size="small" startIcon={<Edit />} onClick={() => {
                   setProfileUpdates({});
+                  profileNotice.clear();
                   setShowProfileDialog(true);
                 }} sx={{ borderRadius: 2 }}>Update Profile</Button>
               )}
@@ -732,15 +1007,29 @@ const AbhaManagement: React.FC = () => {
       <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Or enter a custom address</Typography>
       <TextField fullWidth placeholder="yourname" value={customAbhaAddress}
         onChange={(e) => { setCustomAbhaAddress(e.target.value); setSelectedAbhaAddress(''); }}
+        error={!!customAbhaError}
+        helperText={customAbhaError || 'Follow the ABHA address rules below.'}
         InputProps={{
           startAdornment: <InputAdornment position="start"><AlternateEmail /></InputAdornment>,
           endAdornment: <InputAdornment position="end">@abdm</InputAdornment>,
         }}
-        sx={{ mb: 3 }}
+        sx={{ mb: 2 }}
       />
 
+      <Box sx={{ mb: 3, pl: 0.5 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+          ABHA Address rules
+        </Typography>
+        {ABHA_ADDRESS_RULES.map((rule) => (
+          <Typography key={rule} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            • {rule}
+          </Typography>
+        ))}
+      </Box>
+
       <Box sx={{ display: 'flex', gap: 2 }}>
-        <Button variant="contained" onClick={handleCreateAbhaAddress} disabled={loading || (!selectedAbhaAddress && !customAbhaAddress.trim())}
+        <Button variant="contained" onClick={handleCreateAbhaAddress}
+          disabled={loading || (!selectedAbhaAddress && (!customAbhaAddress.trim() || !!customAbhaError))}
           startIcon={loading ? <CircularProgress size={18} /> : <CheckCircle />}>
           {loading ? 'Creating...' : 'Create ABHA Address'}
         </Button>
@@ -824,11 +1113,44 @@ const AbhaManagement: React.FC = () => {
                     ? 'Registering…'
                     : abdmRegistered ? 'Re-register' : 'Register with ABDM'}
                 </Button>
+
+                {/* Auto-share toggle — only meaningful once the facility is
+                    registered with ABDM. Turns automatic care-context linking
+                    on/off for the whole hospital. */}
+                {abdmRegistered && (
+                  <Tooltip
+                    title="When ON, completed visits, discharges and generated PDFs for ABHA-linked patients are automatically linked to ABDM as care contexts (all HI types). When OFF, staff link them manually from each patient’s profile."
+                    arrow
+                  >
+                    <FormControlLabel
+                      sx={{ ml: 0.5, mr: 0 }}
+                      control={
+                        <Switch
+                          size="small"
+                          checked={autoShareEnabled}
+                          disabled={autoShareSaving}
+                          onChange={(e) => handleToggleAutoShare(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {autoShareSaving ? 'Saving…' : 'Auto-share to ABDM'}
+                        </Typography>
+                      }
+                    />
+                  </Tooltip>
+                )}
               </>
             )}
           </>
         }
       />
+
+      {pageNotice.notice && (
+        <Alert severity={pageNotice.notice.severity} onClose={() => pageNotice.clear()} sx={{ mb: 2 }}>
+          {pageNotice.notice.message}
+        </Alert>
+      )}
 
       <Paper elevation={0} sx={{ borderRadius: 2.5, border: `1px solid ${theme.palette.divider}`, overflow: 'hidden', mb: 3 }}>
         <Tabs
@@ -868,6 +1190,12 @@ const AbhaManagement: React.FC = () => {
               {steps.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
             </Stepper>
 
+            {createNotice.notice && (
+              <Alert severity={createNotice.notice.severity} onClose={() => createNotice.clear()} sx={{ mb: 3 }}>
+                {createNotice.notice.message}
+              </Alert>
+            )}
+
             {activeStep > 0 && (
               <Box sx={{ mb: 3 }}>
                 <Button variant="outlined" color="warning" size="small" startIcon={<Refresh />} onClick={resetFlow}>Start Over</Button>
@@ -893,25 +1221,78 @@ const AbhaManagement: React.FC = () => {
 
                 {enrollMethod === 'aadhaar' && (
                   <Grid item xs={12}>
-                    <Paper variant="outlined" sx={{ p: 2, maxHeight: 200, overflowY: 'auto', bgcolor: alpha(theme.palette.info.main, 0.04), borderColor: alpha(theme.palette.info.main, 0.3) }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Terms & Conditions</Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6, display: 'block' }}>
-                        I, hereby declare that I am voluntarily sharing my Aadhaar number and demographic information issued by UIDAI, with National Health Authority (NHA) for the sole purpose of creation of ABHA number. I understand that my ABHA number can be used and shared for purposes as may be notified by ABDM from time to time including provision of healthcare services. Further, I am aware that my personal identifiable information (Name, Address, Age, Date of Birth, Gender and Photograph) may be made available to the entities working in the National Digital Health Ecosystem (NDHE) which inter alia includes stakeholders and entities such as healthcare professionals (e.g. doctors), facilities (e.g. hospitals, laboratories) and data fiduciaries (e.g. health programmes), which are registered with or linked to the Ayushman Bharat Digital Mission (ABDM), and various processes there under.
-                        {' '}I authorize NHA to use my Aadhaar number for performing Aadhaar based authentication with UIDAI as per the provisions of the Aadhaar (Targeted Delivery of Financial and other Subsidies, Benefits and Services) Act, 2016 for the aforesaid purpose. I understand that UIDAI will share my e-KYC details, or response of "Yes" with NHA upon successful authentication.
-                        {' '}I have been duly informed about the option of using other IDs apart from Aadhaar; however, I consciously choose to use Aadhaar number for the purpose of availing benefits across the NDHE. I am aware that my personal identifiable information excluding Aadhaar number / VID number can be used and shared for purposes as mentioned above. I reserve the right to revoke the given consent at any point of time as per provisions of Aadhaar Act and Regulations.
+                    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.04), borderColor: alpha(theme.palette.info.main, 0.3) }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700 }}>
+                        Consent Language — I hereby declare that:
                       </Typography>
+
+                      {/* Declaration 1 — Aadhaar authentication (required) */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', mb: 1, ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.aadhaarAuth} onChange={(e) => setConsents(c => ({ ...c, aadhaarAuth: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I am voluntarily sharing my Aadhaar Number / Virtual ID issued by the Unique Identification Authority of India (<b>&ldquo;UIDAI&rdquo;</b>), and my demographic information for the purpose of creating an Ayushman Bharat Health Account number (<b>&ldquo;ABHA number&rdquo;</b>) and Ayushman Bharat Health Account address (<b>&ldquo;ABHA Address&rdquo;</b>). I authorize NHA to use my Aadhaar number / Virtual ID for performing Aadhaar based authentication with UIDAI as per the provisions of the Aadhaar (Targeted Delivery of Financial and other Subsidies, Benefits and Services) Act, 2016 for the aforesaid purpose. I understand that UIDAI will share my e-KYC details, or response of &ldquo;Yes&rdquo; with NHA upon successful authentication.
+                        </Typography>}
+                      />
+
+                      {/* Declaration 2 — alternative (non-Aadhaar) ID path (informational, no checkbox) */}
+                      <Box sx={{ mb: 1, pl: '30px' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I intend to create an ABHA number and ABHA Address using a document other than Aadhaar.{' '}
+                          <Box component="span" onClick={(ev) => { ev.preventDefault(); setEnrollMethod('dl'); resetFlow(); }} sx={{ color: 'primary.main', fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Click here to proceed further</Box>.
+                        </Typography>
+                      </Box>
+
+                      {/* Declaration 3 — legacy record linking */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', mb: 1, ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.linkRecords} onChange={(e) => setConsents(c => ({ ...c, linkRecords: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I consent to usage of my ABHA address and ABHA number for linking of my legacy (past) government health records and those which will be generated during this encounter.
+                        </Typography>}
+                      />
+
+                      {/* Declaration 4 — sharing with provider */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', mb: 1, ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.shareRecords} onChange={(e) => setConsents(c => ({ ...c, shareRecords: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I authorize the sharing of all my health records with healthcare provider(s) for the purpose of providing healthcare services to me during this encounter.
+                        </Typography>}
+                      />
+
+                      {/* Declaration 5 — anonymized public-health use */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', mb: 0.5, ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.anonymized} onChange={(e) => setConsents(c => ({ ...c, anonymized: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I consent to the anonymization and subsequent use of my government health records for public health purposes.
+                        </Typography>}
+                      />
+
+                      <Divider sx={{ my: 1.5 }} />
+
+                      {/* Healthcare-worker attestation (required) */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', mb: 1, ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.workerConfirmed} onChange={(e) => setConsents(c => ({ ...c, workerConfirmed: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I, <b>{workerName}</b>, confirm that I have duly informed and explained the beneficiary of the contents of consent for the aforementioned purposes.
+                        </Typography>}
+                      />
+
+                      {/* Beneficiary attestation (required) */}
+                      <FormControlLabel
+                        sx={{ alignItems: 'flex-start', ml: 0, mr: 0 }}
+                        control={<Checkbox size="small" sx={{ pt: 0.25 }} checked={consents.beneficiaryConfirmed} onChange={(e) => setConsents(c => ({ ...c, beneficiaryConfirmed: e.target.checked }))} color="primary" />}
+                        label={<Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                          I, <b>{linkedPatientName || 'the beneficiary'}</b>, have been explained about the consent as stated above and hereby provide my consent for the aforementioned purposes.
+                        </Typography>}
+                      />
                     </Paper>
-                    <FormControlLabel
-                      sx={{ mt: 1 }}
-                      control={
-                        <Checkbox
-                          checked={consentAccepted}
-                          onChange={(e) => setConsentAccepted(e.target.checked)}
-                          color="primary"
-                        />
-                      }
-                      label={<Typography variant="body2">I have read and I agree to the above terms and conditions</Typography>}
-                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontStyle: 'italic' }}>
+                      Please read the consent aloud to the beneficiary in their local language before proceeding.
+                    </Typography>
                   </Grid>
                 )}
 
@@ -951,8 +1332,21 @@ const AbhaManagement: React.FC = () => {
                       startIcon={loading ? <CircularProgress size={18} /> : <CheckCircle />}>
                       {loading ? 'Processing...' : enrollMethod === 'aadhaar' ? 'Verify & Create ABHA' : 'Verify OTP'}
                     </Button>
-                    <Button variant="outlined" onClick={enrollMethod === 'aadhaar' ? handleResendOtp : handleDlSendMobileOtp} disabled={loading} startIcon={<Refresh />}>Resend</Button>
+                    <Button variant="outlined" onClick={handleResendEnrolOtp}
+                      disabled={loading || !enrolTimer.canResend}
+                      startIcon={<Refresh />}>
+                      {enrolTimer.resendsExhausted
+                        ? 'Resend limit reached'
+                        : enrolTimer.secondsLeft > 0
+                          ? `Resend in ${enrolTimer.secondsLeft}s`
+                          : 'Resend OTP'}
+                    </Button>
                   </Box>
+                  {!enrolTimer.resendsExhausted && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      Didn't get the OTP? You can resend up to {enrolTimer.maxResends} times, 60s apart.
+                    </Typography>
+                  )}
                 </Grid>
               </Grid>
             )}
@@ -1091,7 +1485,7 @@ const AbhaManagement: React.FC = () => {
           <Box>
             <Box sx={{ mb: 2 }}>
               <ToggleButtonGroup size="small" exclusive value={verifyMethod}
-                onChange={(_, v) => { if (v) { setVerifyMethod(v); setSearchQuery(''); setSearchResult(null); setVerifiedProfile(null); setTxnId(''); setOtp(''); } }}>
+                onChange={(_, v) => { if (v) { setVerifyMethod(v); setSearchQuery(''); setSearchResult(null); setVerifiedProfile(null); setTxnId(''); setOtp(''); setAccountChoices(null); setAccountTxnId(''); setAccountTransferToken(''); setMobileAbhaChoices(null); setMobileSearchTxnId(''); verifyTimer.reset(); verifyNotice.clear(); } }}>
                 <ToggleButton value="abha-number">ABHA Number</ToggleButton>
                 <ToggleButton value="mobile">Mobile</ToggleButton>
                 <ToggleButton value="aadhaar">Aadhaar</ToggleButton>
@@ -1120,12 +1514,57 @@ const AbhaManagement: React.FC = () => {
                   {loading ? 'Sending...' : 'Send OTP'}
                 </Button>
               ) : (
-                <Button variant="outlined" size="small" onClick={() => { setTxnId(''); setOtp(''); setSearchResult(null); setVerifiedProfile(null); }}
+                <Button variant="outlined" size="small" onClick={() => { setTxnId(''); setOtp(''); setSearchResult(null); setVerifiedProfile(null); setAccountChoices(null); setAccountTxnId(''); setAccountTransferToken(''); setMobileAbhaChoices(null); setMobileSearchTxnId(''); verifyTimer.reset(); verifyNotice.clear(); }}
                   startIcon={<Refresh />}>
                   Reset
                 </Button>
               )}
             </Box>
+
+            {verifyNotice.notice && (
+              <Alert severity={verifyNotice.notice.severity} onClose={() => verifyNotice.clear()} sx={{ mb: 3 }}>
+                {verifyNotice.notice.message}
+              </Alert>
+            )}
+
+            {mobileAbhaChoices && mobileAbhaChoices.length > 1 && !txnId && !verifiedProfile && (
+              <Card sx={{ mb: 3, borderColor: 'primary.main' }} variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    {mobileAbhaChoices.length} ABHA accounts linked to this mobile
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Select the account you want to verify. An OTP will be sent to the registered mobile for the chosen ABHA.
+                  </Typography>
+                  <List dense disablePadding>
+                    {mobileAbhaChoices.map((a: any, i: number) => {
+                      const abhaNum = a.ABHANumber || a.abhaNumber;
+                      const label = a.name || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'ABHA Account';
+                      const gender = a.gender === 'M' ? 'Male' : a.gender === 'F' ? 'Female' : a.gender;
+                      return (
+                        <ListItemButton
+                          key={abhaNum || i} divider disabled={loading}
+                          onClick={() => handlePickMobileAbha(a)}
+                          sx={{ borderRadius: 1, mb: 1, border: '1px solid', borderColor: 'divider' }}
+                        >
+                          <ListItemAvatar><Avatar><Person /></Avatar></ListItemAvatar>
+                          <ListItemText
+                            primary={label}
+                            secondary={
+                              <>
+                                {abhaNum || '—'}
+                                {gender ? ` · ${gender}` : ''}
+                              </>
+                            }
+                          />
+                          {loading ? <CircularProgress size={18} /> : <Phone color="action" />}
+                        </ListItemButton>
+                      );
+                    })}
+                  </List>
+                </CardContent>
+              </Card>
+            )}
 
             {txnId && !verifiedProfile && (
               <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
@@ -1139,10 +1578,62 @@ const AbhaManagement: React.FC = () => {
                   startIcon={loading ? <CircularProgress size={18} /> : <CheckCircle />}>
                   {loading ? 'Verifying...' : 'Verify'}
                 </Button>
+                <Button variant="outlined" onClick={handleVerifyResendOtp}
+                  disabled={loading || !verifyTimer.canResend} sx={{ minWidth: 140 }}
+                  startIcon={<Refresh />}>
+                  {verifyTimer.resendsExhausted
+                    ? 'Limit reached'
+                    : verifyTimer.secondsLeft > 0
+                      ? `Resend in ${verifyTimer.secondsLeft}s`
+                      : 'Resend OTP'}
+                </Button>
               </Box>
             )}
 
-            {searchResult && !verifiedProfile && (
+            {accountChoices && accountChoices.length > 1 && !verifiedProfile && (
+              <Card sx={{ mb: 3, borderColor: 'primary.main' }} variant="outlined">
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Multiple ABHA accounts found ({accountChoices.length})
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    This number is linked to more than one ABHA. Select the account you want to proceed with.
+                  </Typography>
+                  <List dense disablePadding>
+                    {accountChoices.map((a: any, i: number) => {
+                      const abhaNum = a.ABHANumber || a.abhaNumber;
+                      const label = a.name || a.fullName || `${a.firstName || ''} ${a.lastName || ''}`.trim() || 'ABHA Account';
+                      return (
+                        <ListItemButton
+                          key={abhaNum || i} divider disabled={loading}
+                          onClick={() => proceedWithAccount(abhaNum, accountTxnId)}
+                          sx={{ borderRadius: 1, mb: 1, border: '1px solid', borderColor: 'divider' }}
+                        >
+                          <ListItemAvatar>
+                            {a.profilePhoto
+                              ? <Avatar src={`data:image/jpeg;base64,${a.profilePhoto}`} />
+                              : <Avatar><Person /></Avatar>}
+                          </ListItemAvatar>
+                          <ListItemText
+                            primary={label}
+                            secondary={
+                              <>
+                                {abhaNum || '—'}
+                                {a.preferredAbhaAddress || a.abhaAddress ? ` · ${a.preferredAbhaAddress || a.abhaAddress}` : ''}
+                                {a.status ? ` · ${a.status}` : ''}
+                              </>
+                            }
+                          />
+                          {loading ? <CircularProgress size={18} /> : <CheckCircle color="action" />}
+                        </ListItemButton>
+                      );
+                    })}
+                  </List>
+                </CardContent>
+              </Card>
+            )}
+
+            {searchResult && !verifiedProfile && !accountChoices && (
               <Card sx={{ mb: 3 }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
@@ -1254,6 +1745,11 @@ const AbhaManagement: React.FC = () => {
           <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
             Only profile photo can be updated via ABDM. Name, date of birth, and gender are linked to your Aadhaar and cannot be modified here.
           </Alert>
+          {profileNotice.notice && (
+            <Alert severity={profileNotice.notice.severity} onClose={() => profileNotice.clear()} sx={{ mb: 2 }}>
+              {profileNotice.notice.message}
+            </Alert>
+          )}
           <Grid container spacing={2}>
             <Grid item xs={12}>
               <TextField fullWidth label="Name" value={verifiedProfile?.name || createdAbha?.name || ''} disabled
@@ -1274,7 +1770,7 @@ const AbhaManagement: React.FC = () => {
                 <input type="file" hidden accept="image/*" onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  if (file.size > 100 * 1024) { toast.error('Photo must be under 100KB'); return; }
+                  if (file.size > 100 * 1024) { profileNotice.notify('error', 'Photo must be under 100KB.'); return; }
                   const reader = new FileReader();
                   reader.onload = () => {
                     const base64 = (reader.result as string).split(',')[1];
@@ -1290,6 +1786,14 @@ const AbhaManagement: React.FC = () => {
               )}
             </Grid>
           </Grid>
+
+          {xToken && (
+            <AbhaAccountActions
+              xToken={xToken}
+              abhaNumber={verifiedProfile?.ABHANumber || verifiedProfile?.abhaNumber || createdAbha?.ABHANumber}
+              onDeleted={() => { setShowProfileDialog(false); resetFlow(); }}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowProfileDialog(false)}>Cancel</Button>

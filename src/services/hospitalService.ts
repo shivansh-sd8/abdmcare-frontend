@@ -80,6 +80,7 @@ interface UpdateHospitalDTO {
   hiuId?: string;
   hiuName?: string;
   hfrFacilityId?: string;
+  abdmAutoShare?: boolean;
 }
 
 class HospitalService {
