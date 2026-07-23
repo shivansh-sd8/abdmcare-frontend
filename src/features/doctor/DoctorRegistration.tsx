@@ -26,6 +26,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import doctorService from '../../services/doctorService';
+import { PageHeader } from '../../components/ui';
 
 const DoctorRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -145,29 +146,12 @@ const DoctorRegistration: React.FC = () => {
     : [];
 
   return (
-    <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          mb: 3,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          borderRadius: 3,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PersonAdd sx={{ fontSize: 40 }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">
-              New Doctor Registration
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-              Register a new healthcare professional
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
+    <Box>
+      <PageHeader
+        title="New Doctor Registration"
+        subtitle="Register a new healthcare professional"
+        icon={<PersonAdd />}
+      />
 
       <Card elevation={3} sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: 4 }}>
@@ -293,11 +277,12 @@ const DoctorRegistration: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="HPR ID (Optional)"
-                  placeholder="Health Professional Registry ID"
+                  label="HPR ID (Health Professional Registry)"
+                  placeholder="e.g. doctorname@hpr or 12-3456-7890-1234"
                   value={formData.hprId}
                   onChange={(e) => handleChange('hprId', e.target.value)}
                   variant="outlined"
+                  helperText="Required for ABDM-compliant FHIR bundles (Practitioner.identifier). Without HPR, federated records exported by this doctor may fail NRCeS validation at the receiving HIU."
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">

@@ -21,6 +21,13 @@ import {
   Autocomplete,
   Alert,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Stack,
+  alpha,
 } from '@mui/material';
 import {
   PersonAdd,
@@ -36,10 +43,13 @@ import {
   AccessTime,
   Description,
   EventAvailable,
+  HealthAndSafety,
+  Link as LinkIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import patientService from '../../services/patientService';
+import { PageHeader } from '../../components/ui';
 import abhaService from '../../services/abhaService';
 import appointmentService from '../../services/appointmentService';
 import doctorService from '../../services/doctorService';
@@ -84,11 +94,15 @@ const PatientRegistration: React.FC = () => {
 
   // ── Patient form ─────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    firstName: '', lastName: '',
+    firstName: '', middleName: '', lastName: '',
     gender: '', dob: '', mobile: '', email: '', bloodGroup: '',
+    maritalStatus: '', occupation: '',
     address:          { line1: '', line2: '', city: '', state: '', pincode: '' },
     emergencyContact: { name: '', relationship: '', mobile: '' },
+    allergies: '' as string, // comma-separated in UI; converted to string[] on submit
+    medicalHistory: '' as string, // free-text; stored as { notes }
     abhaNumber: '',
+    abhaAddress: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [abhaLinked, setAbhaLinked] = useState(false);
@@ -157,6 +171,15 @@ const PatientRegistration: React.FC = () => {
       },
       emergencyContact: prev.emergencyContact,
       abhaNumber: data.ABHANumber || data.abhaNumber || data.healthIdNumber || '',
+      // ABHA address (name@sbx) is REQUIRED for ABDM M2 care-context linking and
+      // M3 consent. Without it, linked care contexts never reach the CM and the
+      // patient sees "no facility available to share health records" at consent.
+      abhaAddress:
+        data.preferredAbhaAddress ||
+        data.phrAddress?.[0] ||
+        data.abhaAddress ||
+        prev.abhaAddress ||
+        '',
     }));
     setAbhaLinked(true);
   };
@@ -170,14 +193,25 @@ const PatientRegistration: React.FC = () => {
       const ec = typeof editPatient.emergencyContact === 'object' && editPatient.emergencyContact
         ? editPatient.emergencyContact
         : {};
+      const allergiesRaw = editPatient.allergies;
+      const allergiesString = Array.isArray(allergiesRaw)
+        ? allergiesRaw.join(', ')
+        : (typeof allergiesRaw === 'string' ? allergiesRaw : '');
+      const pmh = editPatient.medicalHistory;
+      const pmhString = typeof pmh === 'string'
+        ? pmh
+        : (pmh && typeof pmh === 'object' && 'notes' in pmh ? String((pmh as any).notes || '') : '');
       setFormData({
         firstName: editPatient.firstName || '',
+        middleName: editPatient.middleName || '',
         lastName: editPatient.lastName || '',
         gender: editPatient.gender || '',
         dob: editPatient.dob ? new Date(editPatient.dob).toISOString().split('T')[0] : '',
         mobile: editPatient.mobile || '',
         email: editPatient.email || '',
         bloodGroup: editPatient.bloodGroup || '',
+        maritalStatus: editPatient.maritalStatus || '',
+        occupation: editPatient.occupation || '',
         address: {
           line1: addr.line1 || addr.line || addr.addressLine || '',
           line2: addr.line2 || '',
@@ -190,13 +224,30 @@ const PatientRegistration: React.FC = () => {
           relationship: ec.relationship || '',
           mobile: ec.mobile || '',
         },
+        allergies: allergiesString,
+        medicalHistory: pmhString,
         abhaNumber: editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber || '',
+        abhaAddress: editPatient.abhaAddress || editPatient.abhaRecord?.abhaAddress || '',
       });
       if (editPatient.abhaNumber || editPatient.abhaRecord?.abhaNumber) {
         setAbhaLinked(true);
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Post-registration "Link ABHA?" prompt ─────────────────────────────────
+  // Shown only when the receptionist created a NEW patient WITHOUT entering an
+  // ABHA up-front. Without this, an unlinked patient quietly lands in the list
+  // and the only path to attach an ABHA is via the row kebab menu — receptionists
+  // miss it. The dialog gives a one-click path into the existing /app/abha
+  // verify-and-link flow, with a "Skip for now" escape so it never blocks
+  // people who genuinely don't have an ABHA on hand.
+  const [linkAbhaPrompt, setLinkAbhaPrompt] = useState<null | {
+    patientId: string;
+    patientName: string;
+    mobile: string;
+    nextRoute: string;
+  }>(null);
 
   // ── Appointment form ──────────────────────────────────────────────────────
   const [scheduleAppt, setScheduleAppt] = useState(true); // checkbox default ON
@@ -395,17 +446,45 @@ const PatientRegistration: React.FC = () => {
         address: formData.address,
         emergencyContact: formData.emergencyContact,
       };
+      if (formData.middleName?.trim())   patientPayload.middleName = formData.middleName.trim();
+      if (formData.maritalStatus)        patientPayload.maritalStatus = formData.maritalStatus;
+      if (formData.occupation?.trim())   patientPayload.occupation = formData.occupation.trim();
+      if (formData.allergies?.trim()) {
+        patientPayload.allergies = formData.allergies
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+      }
+      if (formData.medicalHistory?.trim()) {
+        patientPayload.medicalHistory = { notes: formData.medicalHistory.trim() };
+      }
       if (formData.email?.trim())      patientPayload.email = formData.email.trim();
       if (formData.bloodGroup)         patientPayload.bloodGroup = formData.bloodGroup;
-      if (abhaLinked && formData.abhaNumber) patientPayload.abhaId = formData.abhaNumber;
+      // Persist BOTH the 14-digit ABHA number and the ABHA address. The backend
+      // stores abhaNumber/abhaAddress separately; sending only abhaId left
+      // patient.abhaNumber empty and the patient un-linkable to ABDM.
+      if (formData.abhaNumber?.trim()) {
+        const digits = formData.abhaNumber.replace(/-/g, '');
+        patientPayload.abhaId = digits;
+        patientPayload.abhaNumber = formData.abhaNumber.trim();
+      }
+      if (formData.abhaAddress?.trim()) patientPayload.abhaAddress = formData.abhaAddress.trim();
 
       if (isEditMode) {
-        await patientService.updatePatient(editPatient.id, patientPayload);
+        // Submitting the edit form is the receptionist's explicit "yes, this
+        // intake is complete" — flip the banner-driver flag so the
+        // "Incomplete profile" alert disappears on the patient profile.
+        await patientService.updatePatient(editPatient.id, { ...patientPayload, profileCompleted: true });
         toast.success('Patient updated successfully!');
         navigate(`/app/patients/${editPatient.id}`);
       } else {
         const patientRes: any = await patientService.createPatient(patientPayload);
         const newPatientId: string = patientRes.data?.data?.id ?? patientRes.data?.id ?? patientRes.data?.data?.data?.id;
+        // Detect whether the receptionist filled an ABHA on the form. If
+        // they did, the patient is already linked and we don't bother them
+        // with the prompt — fall through to the original flow.
+        const abhaProvided = !!(patientPayload.abhaNumber || patientPayload.abhaId);
+        const patientFullName = `${patientPayload.firstName || ''} ${patientPayload.lastName || ''}`.trim();
 
         if (scheduleAppt && newPatientId) {
           try {
@@ -419,15 +498,42 @@ const PatientRegistration: React.FC = () => {
               notes:     apptData.notes,
             });
             toast.success('Patient registered & appointment scheduled!');
-            navigate('/app/appointments');
+            if (!abhaProvided && newPatientId) {
+              setLinkAbhaPrompt({
+                patientId: newPatientId,
+                patientName: patientFullName,
+                mobile: patientPayload.mobile || '',
+                nextRoute: '/app/appointments',
+              });
+            } else {
+              navigate('/app/appointments');
+            }
           } catch (apptErr: any) {
             const msg = apptErr.response?.data?.message || 'Failed to schedule appointment';
             toast.warning(`Patient registered successfully, but appointment failed: ${msg}. You can schedule from the Appointments page.`);
-            navigate('/app/patients');
+            if (!abhaProvided && newPatientId) {
+              setLinkAbhaPrompt({
+                patientId: newPatientId,
+                patientName: patientFullName,
+                mobile: patientPayload.mobile || '',
+                nextRoute: '/app/patients',
+              });
+            } else {
+              navigate('/app/patients');
+            }
           }
         } else {
           toast.success('Patient registered successfully!');
-          navigate('/app/patients');
+          if (!abhaProvided && newPatientId) {
+            setLinkAbhaPrompt({
+              patientId: newPatientId,
+              patientName: patientFullName,
+              mobile: patientPayload.mobile || '',
+              nextRoute: '/app/patients',
+            });
+          } else {
+            navigate('/app/patients');
+          }
         }
       }
     } catch (error: any) {
@@ -496,18 +602,12 @@ const PatientRegistration: React.FC = () => {
   }, [dynamicSlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-      <Paper elevation={0} sx={{ p: 3, mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PersonAdd sx={{ fontSize: 40 }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">{isEditMode ? 'Edit Patient' : 'New Patient Registration'}</Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-              {isEditMode ? 'Update patient information' : 'Register a new patient and optionally schedule an appointment'}
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
+    <Box>
+      <PageHeader
+        title={isEditMode ? 'Edit Patient' : 'New Patient Registration'}
+        subtitle={isEditMode ? 'Update patient information' : 'Register a new patient and optionally schedule an appointment'}
+        icon={<PersonAdd />}
+      />
 
       <Stepper activeStep={activeStep} sx={{
         mb: 4,
@@ -535,12 +635,16 @@ const PatientRegistration: React.FC = () => {
                 </Typography>
                 <Divider sx={{ mb: 3 }} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
                 <TextField fullWidth label="First Name" required value={formData.firstName}
                   onChange={e => handleChange('firstName', e.target.value)}
                   onBlur={() => validateField('firstName')} error={!!errors.firstName} helperText={errors.firstName} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
+                <TextField fullWidth label="Middle Name" value={formData.middleName}
+                  onChange={e => handleChange('middleName', e.target.value)} />
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField fullWidth label="Last Name" required value={formData.lastName}
                   onChange={e => handleChange('lastName', e.target.value)}
                   onBlur={() => validateField('lastName')} error={!!errors.lastName} helperText={errors.lastName} />
@@ -565,6 +669,21 @@ const PatientRegistration: React.FC = () => {
                   onChange={e => handleChange('bloodGroup', e.target.value)}>
                   {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => <MenuItem key={bg} value={bg}>{bg}</MenuItem>)}
                 </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth select label="Marital Status" value={formData.maritalStatus}
+                  onChange={e => handleChange('maritalStatus', e.target.value)}>
+                  <MenuItem value="">— Not specified —</MenuItem>
+                  <MenuItem value="SINGLE">Single</MenuItem>
+                  <MenuItem value="MARRIED">Married</MenuItem>
+                  <MenuItem value="WIDOWED">Widowed</MenuItem>
+                  <MenuItem value="DIVORCED">Divorced</MenuItem>
+                  <MenuItem value="SEPARATED">Separated</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField fullWidth label="Occupation" value={formData.occupation}
+                  onChange={e => handleChange('occupation', e.target.value)} />
               </Grid>
             </Grid>
           )}
@@ -637,6 +756,25 @@ const PatientRegistration: React.FC = () => {
                   helperText={errors['emergencyContact.mobile']}
                   inputProps={{ maxLength: 10 }} />
               </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom sx={{ mt: 2, fontWeight: 600 }}>Clinical Background (optional)</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Known Allergies"
+                  value={formData.allergies}
+                  onChange={e => handleChange('allergies', e.target.value)}
+                  helperText="Comma-separated, e.g. Penicillin, Peanuts, Latex"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={2} maxRows={6}
+                  label="Past Medical History"
+                  value={formData.medicalHistory}
+                  onChange={e => handleChange('medicalHistory', e.target.value)}
+                  helperText="Diabetes, hypertension, prior surgeries, family history etc."
+                />
+              </Grid>
             </Grid>
           )}
 
@@ -676,6 +814,13 @@ const PatientRegistration: React.FC = () => {
                   </Button>
                 </Grid>
               )}
+              <Grid item xs={12}>
+                <TextField fullWidth label="ABHA Address" value={formData.abhaAddress}
+                  onChange={e => handleChange('abhaAddress', e.target.value)}
+                  placeholder="name@sbx"
+                  error={!!errors.abhaAddress}
+                  helperText={errors.abhaAddress || 'Required for ABDM linking & consent (e.g. name@sbx). Auto-filled from ABHA when available.'} />
+              </Grid>
               {abhaLinked && (
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2, bgcolor: '#e8f5e9', border: '1px solid #4caf50' }}>
@@ -869,6 +1014,88 @@ const PatientRegistration: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+
+      {/* ── Post-registration: offer to link an ABHA ──────────────────────────
+          Fires only when the receptionist created a new patient WITHOUT
+          entering an ABHA. "Link ABHA now" routes to /app/abha pre-populated
+          with the patient context (same payload the patient-list kebab menu
+          uses), opening directly on the Verify / Search tab. "Skip for now"
+          continues to the route the user would have landed on otherwise. */}
+      <Dialog
+        open={!!linkAbhaPrompt}
+        onClose={() => {
+          if (!linkAbhaPrompt) return;
+          const next = linkAbhaPrompt.nextRoute;
+          setLinkAbhaPrompt(null);
+          navigate(next);
+        }}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                color: 'primary.main',
+              }}
+            >
+              <HealthAndSafety />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ lineHeight: 1.2 }}>
+                Link an ABHA?
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {linkAbhaPrompt?.patientName || 'Patient'} doesn&rsquo;t have an ABHA yet
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 14 }}>
+            Linking an ABHA now lets this patient use ABDM features &mdash; consent
+            requests, federated health records, and care-context linking.
+            You can also create a fresh ABHA from the same screen.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button
+            onClick={() => {
+              if (!linkAbhaPrompt) return;
+              const next = linkAbhaPrompt.nextRoute;
+              setLinkAbhaPrompt(null);
+              navigate(next);
+            }}
+            sx={{ textTransform: 'none' }}
+            color="inherit"
+          >
+            Skip for now
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<LinkIcon />}
+            onClick={() => {
+              if (!linkAbhaPrompt) return;
+              const { patientId, patientName, mobile } = linkAbhaPrompt;
+              setLinkAbhaPrompt(null);
+              navigate('/app/abha', {
+                state: { patientId, patientName, mobile, mode: 'link' },
+              });
+            }}
+            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+          >
+            Link ABHA
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

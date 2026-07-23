@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, IconButton, Tooltip, CircularProgress, Alert,
-  Grid, Card, CardContent, alpha, TextField, InputAdornment, Avatar,
-  Dialog, DialogTitle, DialogContent, Button,
+  Grid, alpha, TextField, InputAdornment, Avatar,
+  Dialog, DialogTitle, DialogContent, Button, Stack, useTheme, useMediaQuery,
 } from '@mui/material';
+import { PageHeader, StatCard, EmptyState } from '../../components/ui';
 import {
   Search, Person, Visibility, Assignment, HealthAndSafety,
   CalendarToday, MedicalInformation, Medication, CheckCircle,
@@ -17,6 +18,7 @@ import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import ehrService from '../../services/ehrService';
 import { generatePatientReport } from '../../utils/patientReportGenerator';
+import documentService from '../../services/documentService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -522,7 +524,7 @@ const PatientEHRDialog: React.FC<{
       const ehrData    = ehrRes.data?.data || ehrRes.data || {};
       const hospitalInfo = ehrData.hospital ?? {};
 
-      generatePatientReport({
+      const ehrB64 = generatePatientReport({
         hospital:    hospitalInfo,
         patient:     patient as any,
         timeline:    ehrData.timeline ?? timeline,
@@ -533,6 +535,7 @@ const PatientEHRDialog: React.FC<{
         },
         generatedBy: authUserInDialog?.name,
       });
+      documentService.persistDocument({ patientId: patient.id, type: 'EHR_REPORT', content: ehrB64 }).catch(() => {});
       toast.success('Report downloaded');
     } catch {
       toast.error('Failed to generate report');
@@ -662,6 +665,8 @@ const PatientEHRDialog: React.FC<{
 // ─── Main EHR List page ───────────────────────────────────────────────────────
 
 const EHRList: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const authUser = useSelector((state: any) => state.auth?.user);
   const [patients,         setPatients]         = useState<PatientSummary[]>([]);
   const [loading,          setLoading]          = useState(true);
@@ -676,7 +681,7 @@ const EHRList: React.FC = () => {
     try {
       const ehrRes   = await ehrService.getPatientEHR(patient.id) as any;
       const ehrData  = ehrRes.data?.data || ehrRes.data || {};
-      generatePatientReport({
+      const quickB64 = generatePatientReport({
         hospital:    ehrData.hospital ?? {},
         patient:     patient as any,
         timeline:    ehrData.timeline ?? [],
@@ -687,6 +692,7 @@ const EHRList: React.FC = () => {
         },
         generatedBy: authUser?.name,
       });
+      documentService.persistDocument({ patientId: patient.id, type: 'EHR_REPORT', content: quickB64 }).catch(() => {});
       toast.success('Health record downloaded');
     } catch {
       toast.error('Failed to generate report');
@@ -723,70 +729,124 @@ const EHRList: React.FC = () => {
 
   return (
     <Box>
-      {/* ── Page header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-            <HealthAndSafety sx={{ color: '#1a3c6e', fontSize: 32 }} />
-            <Typography variant="h4" fontWeight={800} color="#1a3c6e">
-              Electronic Health Records
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Complete patient health history — appointments, consultations, vitals, lab orders, investigations, prescriptions &amp; payments
-          </Typography>
-          {authUser?.hospitalId && (
-            <Chip label="ABHA Sync Ready" size="small" color="success" variant="outlined"
-              sx={{ mt: 0.75, fontSize: 11 }} />
-          )}
-        </Box>
-      </Box>
+      <PageHeader
+        title="Electronic Health Records"
+        subtitle="Complete patient history — visits, vitals, labs, prescriptions, payments"
+        icon={<HealthAndSafety />}
+        actions={authUser?.hospitalId ? (
+          <Chip label="ABHA sync ready" size="small" color="success" variant="outlined" />
+        ) : undefined}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* ── Summary cards ── */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { label: 'Total Patients',     value: totalPatients,     color: '#1a3c6e', icon: <Person /> },
-          { label: 'With Consultations', value: withEncounters,    color: '#8e44ad', icon: <MedicalInformation /> },
-          { label: 'With Prescriptions', value: withPrescriptions, color: '#27ae60', icon: <Medication /> },
-          { label: 'Vitals Recorded',    value: withVitals,        color: '#2980b9', icon: <MonitorHeart /> },
-        ].map((s) => (
-          <Grid item xs={12} sm={6} md={3} key={s.label}>
-            <Card sx={{
-              background: `linear-gradient(135deg, ${alpha(s.color, 0.08)}, ${alpha(s.color, 0.02)})`,
-              border: `1px solid ${alpha(s.color, 0.2)}`, borderRadius: 3,
-            }}>
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '12px !important' }}>
-                <Box sx={{ bgcolor: s.color, borderRadius: 2, p: 1, color: 'white' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-                  <Typography variant="h5" fontWeight={800}>{s.value}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="Total patients" value={totalPatients.toLocaleString()}
+            icon={<Person />} tone="primary" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="With consults" value={withEncounters.toLocaleString()}
+            icon={<MedicalInformation />} tone="secondary" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="With Rx" value={withPrescriptions.toLocaleString()}
+            icon={<Medication />} tone="success" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={6} md={3}>
+          <StatCard label="With vitals" value={withVitals.toLocaleString()}
+            icon={<MonitorHeart />} tone="info" loading={loading} />
+        </Grid>
       </Grid>
 
-      {/* ── Search ── */}
-      <Paper sx={{ p: 1.5, mb: 2, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2 }}>
         <TextField fullWidth size="small"
-          placeholder="Search by name, UHID, or mobile..."
+          placeholder="Search by name, UHID, or mobile…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <Search sx={{ color: 'text.secondary' }} />
+                <Search fontSize="small" sx={{ color: 'text.secondary' }} />
               </InputAdornment>
             ),
           }}
         />
       </Paper>
 
-      {/* ── Patient table ── */}
-      <TableContainer component={Paper} sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+      {/* Mobile: card list. Desktop: table. */}
+      {isMobile ? (
+        <Stack spacing={1.25}>
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Paper key={i} variant="outlined" sx={{ p: 2, height: 110, borderRadius: 2 }} />
+            ))
+          ) : patients.length === 0 ? (
+            <EmptyState icon={<HealthAndSafety />} title="No patient records" message="No patients found." />
+          ) : (
+            patients.map((p) => {
+              const age = p.dob ? differenceInYears(new Date(), new Date(p.dob)) : '—';
+              const lastAppt = p.appointments?.[0];
+              return (
+                <Paper key={p.id} variant="outlined" sx={{
+                  p: 1.5, borderRadius: 2,
+                  cursor: 'pointer',
+                  '&:hover': { borderColor: alpha(theme.palette.primary.main, 0.4) },
+                }} onClick={() => setSelectedPatient(p)}>
+                  <Stack direction="row" alignItems="center" spacing={1.5}>
+                    <Avatar sx={{
+                      width: 40, height: 40, fontSize: '0.8rem', fontWeight: 700,
+                      bgcolor: alpha(theme.palette.primary.main, 0.16),
+                      color: 'primary.main',
+                    }}>
+                      {p.firstName?.[0]}{p.lastName?.[0]}
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={700} noWrap>
+                        {p.firstName} {p.lastName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" component="div" noWrap>
+                        {p.uhid} · {age} yrs · {p.gender}
+                      </Typography>
+                      <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap">
+                        <Chip size="small" label={`${p._count?.encounters ?? 0} consults`}
+                          sx={{ height: 18, fontSize: '0.6rem' }} />
+                        <Chip size="small" label={`${p._count?.prescriptions ?? 0} Rx`}
+                          sx={{ height: 18, fontSize: '0.6rem' }} />
+                        <Chip size="small" label={`${p._count?.investigations ?? 0} labs`}
+                          sx={{ height: 18, fontSize: '0.6rem' }} />
+                      </Stack>
+                      {lastAppt && (
+                        <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+                          Last visit: {format(new Date(lastAppt.scheduledAt), 'dd MMM yy')}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Stack spacing={0.25}>
+                      <Tooltip title="Download report">
+                        <span>
+                          <IconButton size="small" color="success"
+                            disabled={downloadingId === p.id}
+                            onClick={(e) => { e.stopPropagation(); handleQuickDownload(p); }}>
+                            {downloadingId === p.id ? <CircularProgress size={14} /> : <DownloadIcon fontSize="small" />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="View timeline">
+                        <IconButton size="small" color="primary"
+                          onClick={(e) => { e.stopPropagation(); setSelectedPatient(p); }}>
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              );
+            })
+          )}
+        </Stack>
+      ) : (
+      <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}><CircularProgress /></Box>
         ) : (
@@ -909,6 +969,7 @@ const EHRList: React.FC = () => {
           </Table>
         )}
       </TableContainer>
+      )}
 
       {/* ── Timeline dialog ── */}
       {selectedPatient && (

@@ -5,9 +5,7 @@ export type UserRole =
   | 'NURSE'
   | 'RECEPTIONIST'
   | 'LAB_TECHNICIAN'
-  | 'PHARMACIST'
-  | 'BILLING_STAFF'
-  | 'RADIOLOGIST';
+  | 'PHARMACIST';
 
 export interface MenuItem {
   text: string;
@@ -34,7 +32,7 @@ export const menuGroups: MenuGroup[] = [
         text: 'Dashboard',
         path: '/app/dashboard',
         icon: 'Dashboard',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST', 'BILLING_STAFF', 'RADIOLOGIST'],
+        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST'],
       },
     ],
   },
@@ -45,14 +43,12 @@ export const menuGroups: MenuGroup[] = [
         text: 'ABHA Management',
         path: '/app/abha',
         icon: 'HealthAndSafety',
-        badge: 'ABDM',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
       },
       {
         text: 'Consent Manager',
         path: '/app/consent',
         icon: 'Assignment',
-        badge: 'M2',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR'],
       },
     ],
@@ -99,17 +95,13 @@ export const menuGroups: MenuGroup[] = [
         text: 'Lab & Radiology',
         path: '/app/investigations',
         icon: 'Science',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST'],
-      },
-      {
-        text: 'Pharmacy',
-        path: '/app/pharmacy',
-        icon: 'LocalPharmacy',
-        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
+        roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'],
       },
     ],
   },
   {
+    // Inpatient: receptionist/nurse/doctor work the floor. Bed/ward setup is
+    // a configuration task and lives under Administration.
     label: 'Inpatient',
     items: [
       {
@@ -118,15 +110,58 @@ export const menuGroups: MenuGroup[] = [
         icon: 'LocalHospital',
         roles: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'],
       },
+    ],
+  },
+  {
+    // Pharmacy: pharmacist-centric workspace. Dispense Queue is the daily
+    // queue; Inventory is the master catalogue & stock manager. Admins keep
+    // visibility for oversight.
+    label: 'Pharmacy',
+    items: [
       {
-        text: 'Ward Manager',
-        path: '/app/ward-manager',
-        icon: 'MeetingRoom',
-        roles: ['SUPER_ADMIN', 'ADMIN', 'NURSE'],
+        text: 'Dispense Queue',
+        path: '/app/pharmacy',
+        icon: 'LocalPharmacy',
+        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'Inventory',
+        path: '/app/pharmacy/medicines',
+        icon: 'Inventory',
+        roles: ['PHARMACIST', 'SUPER_ADMIN', 'ADMIN'],
       },
     ],
   },
   {
+    // Billing belongs in its own group: Receptionist also accesses it for
+    // collections, so it does not fit the admin-only "Administration" group.
+    label: 'Finance',
+    items: [
+      {
+        text: 'Billing & Payments',
+        path: '/app/billing',
+        icon: 'Receipt',
+        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN'],
+      },
+    ],
+  },
+  {
+    // Insights: admin-only analytics & exports. Lives between Finance and
+    // Administration so an admin's "see-the-business / change-the-business"
+    // mental flow is preserved (read first, then act).
+    label: 'Insights',
+    items: [
+      {
+        text: 'Hospital Reports',
+        path: '/app/reports',
+        icon: 'Insights',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
+    ],
+  },
+  {
+    // "Administration" is strictly SUPER_ADMIN / ADMIN. Setup-style tools
+    // (hospitals, users, ward & bed master, ABDM ops, compliance) live here.
     label: 'Administration',
     items: [
       {
@@ -142,15 +177,27 @@ export const menuGroups: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN'],
       },
       {
-        text: 'Billing & Payments',
-        path: '/app/billing',
-        icon: 'Receipt',
-        roles: ['RECEPTIONIST', 'ADMIN', 'SUPER_ADMIN', 'BILLING_STAFF'],
+        text: 'Ward & Bed Manager',
+        path: '/app/ward-manager',
+        icon: 'Hotel',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'ABDM Activity',
+        path: '/app/abdm-activity',
+        icon: 'Hub',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
       },
       {
         text: 'Audit Logs',
         path: '/app/audit-logs',
         icon: 'History',
+        roles: ['SUPER_ADMIN', 'ADMIN'],
+      },
+      {
+        text: 'Compliance & Tech Pack',
+        path: '/app/compliance',
+        icon: 'Shield',
         roles: ['SUPER_ADMIN', 'ADMIN'],
       },
     ],

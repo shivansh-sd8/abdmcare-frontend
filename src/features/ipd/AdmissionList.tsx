@@ -9,13 +9,15 @@ import {
 import {
   Add, Refresh, Print, LocalHospital, Bed as BedIcon,
   CheckCircle, ExitToApp, CurrencyRupee, AccountBalance,
-  PhoneAndroid, Money, Visibility, VerifiedUser,
+  PhoneAndroid, Money, Visibility, VerifiedUser, Hotel,
 } from '@mui/icons-material';
+import { PageHeader } from '../../components/ui';
 import { toast } from 'react-toastify';
 import { format, differenceInDays } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import ipdService from '../../services/ipdService';
 import { generateIPDBill } from '../../utils/ipdBillGenerator';
+import documentService from '../../services/documentService';
 import { useSelector } from 'react-redux';
 import IPDAdmissionDetail from './IPDAdmissionDetail';
 
@@ -101,8 +103,36 @@ const AdmissionList: React.FC = () => {
   });
 
   const [patientSuggestions, setPatientSuggestions] = useState<any[]>([]);
+  const [activeAdmission, setActiveAdmission] = useState<{ admissionNumber: string; status: string } | null>(null);
+  const [checkingAdmission, setCheckingAdmission] = useState(false);
 
-  // ── Auto-open admit dialog from URL params (doctor/receptionist deep-link) ──
+  // ── Check if patient already has an active admission ──
+  const checkActiveAdmission = useCallback(async (patientId: string) => {
+    if (!patientId) { setActiveAdmission(null); return; }
+    setCheckingAdmission(true);
+    try {
+      const [admittedRes, drRes] = await Promise.all([
+        ipdService.listAdmissions({ status: 'ADMITTED' }) as any,
+        ipdService.listAdmissions({ status: 'DISCHARGE_READY' }) as any,
+      ]);
+      const all = [
+        ...(admittedRes.data?.data?.admissions || admittedRes.data?.admissions || []),
+        ...(drRes.data?.data?.admissions || drRes.data?.admissions || []),
+      ];
+      const match = all.find((a: any) => a.patient?.id === patientId);
+      setActiveAdmission(match ? { admissionNumber: match.admissionNumber, status: match.status } : null);
+    } catch {
+      setActiveAdmission(null);
+    } finally { setCheckingAdmission(false); }
+  }, []);
+
+  // ── Auto-open admit dialog OR detail modal from URL params ──────────────
+  // Two deep-link shapes are supported:
+  //   ?admit=1&patientId=…&encounterId=…   → opens the Admit dialog pre-filled
+  //   ?openId=<admissionId>                → opens the existing IPDAdmissionDetail
+  // The latter is what "Open admission" / "Admit now" CTAs from the patient
+  // profile / encounter / appointment screens use, so the user lands in the
+  // right place without us adding a new route.
   useEffect(() => {
     const params     = new URLSearchParams(location.search);
     const autoAdmit  = params.get('admit') === '1';
@@ -111,6 +141,7 @@ const AdmissionList: React.FC = () => {
     const patientName= params.get('patientName') || '';
     const diagnosis  = params.get('diagnosis')   || '';
     const reason     = params.get('reason')      || '';
+    const openId     = params.get('openId')      || '';
 
     if (autoAdmit && patientId) {
       setAdmitForm((f) => ({
@@ -121,9 +152,12 @@ const AdmissionList: React.FC = () => {
         diagnosis,
         admissionReason: reason,
       }));
+      checkActiveAdmission(patientId);
       setTimeout(() => setShowAdmitDialog(true), 400);
+    } else if (openId) {
+      setDetailAdmissionId(openId);
     }
-  }, [location.search]);
+  }, [location.search, checkActiveAdmission]);
 
   const loadAdmissions = useCallback(async () => {
     try {
@@ -187,6 +221,7 @@ const AdmissionList: React.FC = () => {
       });
       toast.success('Patient admitted successfully');
       setShowAdmitDialog(false);
+      setActiveAdmission(null);
       setAdmitForm({
         patientId: '', patientSearch: '', wardId: '', bedId: '',
         admissionReason: '', diagnosis: '', dailyCharges: 0, advancePaid: 0,
@@ -235,12 +270,30 @@ const AdmissionList: React.FC = () => {
     } finally { setSaving(false); }
   };
 
-  const handlePrintBill = (adm: Admission) => {
+  const handlePrintBill = async (adm: Admission) => {
     const admittedAt    = new Date(adm.admittedAt);
     const dischargedAt  = adm.dischargedAt ? new Date(adm.dischargedAt) : new Date();
     const days          = Math.max(1, differenceInDays(dischargedAt, admittedAt));
-    generateIPDBill({
-      hospital: { name: authUser?.hospitalName || 'MediSync Hospital' },
+
+    let bill: any = null;
+    try {
+      const res = await ipdService.getAdmissionBill(adm.id) as any;
+      bill = res?.data;
+    } catch {}
+
+    const labTests = (bill?.labItems || []).map((i: any) => ({ name: i.testName || 'Lab Test', amount: Number(i.amount || 0) }));
+    const medicines = (bill?.rxItems || []).filter((r: any) => r.status === 'DISPENSED').flatMap((r: any) => {
+      const meds = Array.isArray(r.medications) ? r.medications : [];
+      return meds.map((m: any) => ({ name: m.name || m.medicineName || 'Medicine', qty: m.quantity || 1, rate: Number(m.price || 0), amount: Number(m.price || 0) * (m.quantity || 1) }));
+    });
+    const hasItemizedMeds = medicines.some((m: any) => m.amount > 0);
+    if (!hasItemizedMeds && (bill?.medicineCharges || 0) > 0) {
+      medicines.length = 0;
+      medicines.push({ name: 'Pharmacy Charges', amount: bill.medicineCharges });
+    }
+
+    const base64 = generateIPDBill({
+      hospital: { name: authUser?.hospitalName || 'AbhaAyushman Hospital' },
       patient: {
         name:   `${adm.patient.firstName} ${adm.patient.lastName}`,
         uhid:    adm.patient.uhid,
@@ -259,12 +312,17 @@ const AdmissionList: React.FC = () => {
         diagnosis:       adm.diagnosis,
         admissionReason: adm.admissionReason,
         dailyCharges:    adm.dailyCharges,
-        days,
+        days:            bill?.days || days,
         advancePaid:     adm.advancePaid,
-        totalAmount:     adm.totalAmount || days * adm.dailyCharges,
+        totalAmount:     bill?.total || adm.totalAmount || days * adm.dailyCharges,
         notes:           adm.notes,
+        labTests:        labTests.length > 0 ? labTests : undefined,
+        medicines:       medicines.length > 0 ? medicines : undefined,
       },
     });
+    if (adm.patient?.id) {
+      documentService.persistDocument({ patientId: adm.patient.id, admissionId: adm.id, type: 'IPD_BILL', content: base64 }).catch(() => {});
+    }
   };
 
   const userRole = (authUser?.role || JSON.parse(localStorage.getItem('user') || '{}').role || '').toUpperCase();
@@ -298,21 +356,19 @@ const AdmissionList: React.FC = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold">IPD / Admissions</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage inpatient admissions, discharges and billing
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={loadAdmissions}><Refresh /></IconButton>
-          <Button variant="contained" startIcon={<Add />} onClick={() => setShowAdmitDialog(true)}>
-            Admit Patient
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        title="IPD / Admissions"
+        subtitle="Inpatient admissions, discharges, and billing"
+        icon={<Hotel />}
+        actions={
+          <>
+            <IconButton onClick={loadAdmissions}><Refresh /></IconButton>
+            <Button variant="contained" startIcon={<Add />} onClick={() => setShowAdmitDialog(true)}>
+              Admit
+            </Button>
+          </>
+        }
+      />
 
       {/* Status filter tabs */}
       <Paper sx={{ mb: 2 }}>
@@ -429,7 +485,7 @@ const AdmissionList: React.FC = () => {
       )}
 
       {/* ── Admit Dialog ──────────────────────────────────────────────────── */}
-      <Dialog open={showAdmitDialog} onClose={() => setShowAdmitDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={showAdmitDialog} onClose={() => { setShowAdmitDialog(false); setActiveAdmission(null); }} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <LocalHospital color="primary" />
@@ -448,6 +504,7 @@ const AdmissionList: React.FC = () => {
               <TextField fullWidth label="Search Patient (Name / UHID / Mobile)" value={admitForm.patientSearch}
                 onChange={(e) => {
                   setAdmitForm({ ...admitForm, patientSearch: e.target.value, patientId: '' });
+                  setActiveAdmission(null);
                   searchPatients(e.target.value);
                 }} />
               {patientSuggestions.length > 0 && (
@@ -457,6 +514,7 @@ const AdmissionList: React.FC = () => {
                       onClick={() => {
                         setAdmitForm({ ...admitForm, patientId: p.id, patientSearch: `${p.firstName} ${p.lastName} (${p.uhid})` });
                         setPatientSuggestions([]);
+                        checkActiveAdmission(p.id);
                       }}>
                       <Typography variant="body2" fontWeight={600}>{p.firstName} {p.lastName}</Typography>
                       <Typography variant="caption" color="text.secondary">{p.uhid} · {p.mobile}</Typography>
@@ -464,8 +522,22 @@ const AdmissionList: React.FC = () => {
                   ))}
                 </Paper>
               )}
-              {admitForm.patientId && (
+              {admitForm.patientId && !activeAdmission && (
                 <Chip label="Patient selected ✓" color="success" size="small" sx={{ mt: 0.5 }} />
+              )}
+              {checkingAdmission && (
+                <Chip label="Checking admission status…" size="small" sx={{ mt: 0.5 }} />
+              )}
+              {activeAdmission && (
+                <Alert severity="error" sx={{ mt: 1, borderRadius: 2 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    This patient already has an active admission
+                  </Typography>
+                  <Typography variant="caption">
+                    Admission <strong>{activeAdmission.admissionNumber}</strong> — Status: <strong>{STATUS_LABEL[activeAdmission.status] || activeAdmission.status}</strong>.
+                    Discharge the patient first before readmitting.
+                  </Typography>
+                </Alert>
               )}
             </Grid>
 
@@ -558,7 +630,7 @@ const AdmissionList: React.FC = () => {
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setShowAdmitDialog(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleAdmit}
-            disabled={saving || !admitForm.patientId || !admitForm.wardId}
+            disabled={saving || !admitForm.patientId || !admitForm.wardId || !!activeAdmission || checkingAdmission}
             startIcon={<BedIcon />}>
             {saving ? 'Admitting…' : 'Confirm Admission'}
           </Button>

@@ -2,19 +2,23 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, IconButton, Tooltip, CircularProgress,
-  Alert, Grid, Card, CardContent, alpha, Tabs, Tab,
+  Alert, Grid, alpha, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, ToggleButton, ToggleButtonGroup,
+  InputAdornment,
 } from '@mui/material';
+import { PageHeader, StatCard } from '../../components/ui';
 import {
   MedicalInformation, LocalHospital, Assignment, Schedule,
   CheckCircle, Edit as EditIcon, Visibility, HourglassEmpty, Hotel as AdmitIcon,
   CurrencyRupee, Money, PhoneAndroid, AccountBalance,
+  Search as SearchIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import encounterService from '../../services/encounterService';
+import ipdService from '../../services/ipdService';
 import ConsultationDialog from './CompleteConsultationDialog';
 import api from '../../services/api';
 
@@ -58,6 +62,7 @@ const STATUS_CHIP_COLOR: Record<string, 'warning' | 'info' | 'success' | 'error'
   IN_PROGRESS:      'warning',
   ACTIVE:           'info',
   CHECKED_IN:       'info',
+  CONSULTING:       'info',
   COMPLETED:        'success',
   LAB_PENDING:      'info',
   PHARMACY_PENDING: 'warning',
@@ -65,7 +70,11 @@ const STATUS_CHIP_COLOR: Record<string, 'warning' | 'info' | 'success' | 'error'
   CANCELLED:        'error',
 };
 
-const ACTIVE_STATUSES  = new Set(['IN_PROGRESS', 'ACTIVE', 'CHECKED_IN']);
+// Patients waiting for / mid-consult. CONSULTING is what `checkInAppointment`
+// sets, so the doctor's "Waiting" tab MUST include it — otherwise checked-in
+// patients silently disappear from the queue and the receptionist gets called
+// to ask "where did my patient go".
+const ACTIVE_STATUSES  = new Set(['IN_PROGRESS', 'ACTIVE', 'CHECKED_IN', 'CONSULTING']);
 const PENDING_STATUSES = new Set(['LAB_PENDING', 'PHARMACY_PENDING', 'BILLING_PENDING']);
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -78,7 +87,13 @@ const EncounterList: React.FC = () => {
   const [encounters,        setEncounters]        = useState<Encounter[]>([]);
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
-  const [statusTab,         setStatusTab]         = useState(0);    // 0=All 1=Waiting 2=In Progress 3=Completed
+  const [statusTab,         setStatusTab]         = useState(0);
+  const [searchQuery,       setSearchQuery]       = useState('');
+
+  // Active admissions keyed by patientId, so each encounter row can show
+  // "Admitted" / "Ready for discharge" without a per-row roundtrip. Mirrors
+  // the same pattern used in AppointmentList.
+  const [admissionByPatientId, setAdmissionByPatientId] = useState<Record<string, any>>({});
 
   const [consultOpen,       setConsultOpen]       = useState(false);
   const [selectedEncounter, setSelectedEncounter] = useState<any>(null);
@@ -129,6 +144,32 @@ const EncounterList: React.FC = () => {
 
   useEffect(() => { fetchEncounters(); }, [fetchEncounters]);
 
+  // Pull active admissions so every encounter row knows whether the patient
+  // is currently in-house (ADMITTED or DISCHARGE_READY). Without this, the
+  // row would still show "Admit recommended" even after the admission was
+  // executed — exactly the bug the user reported.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAdmitted = async () => {
+      try {
+        const [admRes, drRes] = await Promise.all([
+          ipdService.listAdmissions({ status: 'ADMITTED' }) as any,
+          ipdService.listAdmissions({ status: 'DISCHARGE_READY' }) as any,
+        ]);
+        if (cancelled) return;
+        const all = [
+          ...(admRes.data?.data?.admissions || admRes.data?.admissions || []),
+          ...(drRes.data?.data?.admissions || drRes.data?.admissions || []),
+        ];
+        const map: Record<string, any> = {};
+        for (const a of all) { if (a.patient?.id) map[a.patient.id] = a; }
+        setAdmissionByPatientId(map);
+      } catch { /* silent */ }
+    };
+    fetchAdmitted();
+    return () => { cancelled = true; };
+  }, [encounters]);
+
   // ── Open consultation ─────────────────────────────────────────────────────
 
   const openConsultation = (enc: Encounter) => {
@@ -138,20 +179,43 @@ const EncounterList: React.FC = () => {
 
   // ── Filtering ─────────────────────────────────────────────────────────────
 
-  const waiting    = encounters.filter((e) => ACTIVE_STATUSES.has(e.status));
-  const completed  = encounters.filter((e) => e.status === 'COMPLETED');
-  const pending    = encounters.filter((e) => PENDING_STATUSES.has(e.status));
-  const cancelled  = encounters.filter((e) => e.status === 'CANCELLED');
+  // Search filter applied first so tab counts also reflect the search
+  const searched = searchQuery.trim()
+    ? encounters.filter((e) => {
+        const q = searchQuery.toLowerCase();
+        const name = `${e.patient?.firstName || ''} ${e.patient?.lastName || ''}`.toLowerCase();
+        const uhid = (e.patient?.uhid || '').toLowerCase();
+        const cc = (e.chiefComplaint || '').toLowerCase();
+        const dx = ((e.finalDiagnosis || e.diagnosis) || '').toLowerCase();
+        const docName = `${e.doctor?.firstName || ''} ${e.doctor?.lastName || ''}`.toLowerCase();
+        return name.includes(q) || uhid.includes(q) || cc.includes(q) || dx.includes(q) || docName.includes(q);
+      })
+    : encounters;
+
+  const waiting    = searched.filter((e) => ACTIVE_STATUSES.has(e.status));
+  const completed  = searched.filter((e) => e.status === 'COMPLETED');
+  const pending    = searched.filter((e) => PENDING_STATUSES.has(e.status));
+  const cancelled  = searched.filter((e) => e.status === 'CANCELLED');
+  // "Admitted" cuts across status — but only encounters that actually
+  // *triggered* the active admission count. A patient can have many historic
+  // encounters; we don't want every old visit to suddenly look admitted just
+  // because the patient is in a bed today. We match by the originating
+  // encounterId on the active admission.
+  const admittedEncs = searched.filter((e) => {
+    const adm = e.patient?.id ? admissionByPatientId[e.patient.id] : null;
+    return !!(adm?.encounterId && adm.encounterId === e.id);
+  });
 
   const TAB_FILTERS: { label: string; count: number; data: Encounter[] }[] = [
-    { label: 'All',       count: encounters.length, data: encounters },
-    { label: 'Waiting',   count: waiting.length,    data: waiting    },
-    { label: 'Completed', count: completed.length,  data: completed  },
-    { label: 'Pending',   count: pending.length,    data: pending    },
-    { label: 'Cancelled', count: cancelled.length,  data: cancelled  },
+    { label: 'All',       count: searched.length,    data: searched     },
+    { label: 'Waiting',   count: waiting.length,     data: waiting      },
+    { label: 'Admitted',  count: admittedEncs.length, data: admittedEncs },
+    { label: 'Completed', count: completed.length,   data: completed    },
+    { label: 'Pending',   count: pending.length,     data: pending      },
+    { label: 'Cancelled', count: cancelled.length,   data: cancelled    },
   ];
 
-  const visibleEncounters = TAB_FILTERS[statusTab]?.data ?? encounters;
+  const visibleEncounters = TAB_FILTERS[statusTab]?.data ?? searched;
 
   // ── Stat cards ────────────────────────────────────────────────────────────
 
@@ -163,57 +227,67 @@ const EncounterList: React.FC = () => {
     { label: 'Pending',   value: pending.length,      color: '#8e44ad', icon: <Schedule /> },
   ];
 
+  const TONE_BY_LABEL: Record<string, 'info' | 'warning' | 'success' | 'secondary'> = {
+    'Total': 'info',
+    'Waiting': 'warning',
+    'Completed': 'success',
+    'Pending': 'secondary',
+  };
+
   return (
     <Box>
-      {/* ── Page header ── */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={800} color="#1a3c6e">
-            {permissions.isDoctor ? 'My Patients' : 'Encounters'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {permissions.isDoctor
-              ? 'Patients checked in and waiting for consultation'
-              : 'All clinical encounters'}
-          </Typography>
-        </Box>
-      </Box>
+      <PageHeader
+        title={permissions.isDoctor ? 'My Patients' : 'Encounters'}
+        subtitle={permissions.isDoctor
+          ? 'Patients checked in and waiting for consultation'
+          : 'All clinical encounters'}
+        icon={<MedicalInformation />}
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* ── Stat cards ── */}
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
         {stats.map((s) => (
           <Grid item xs={6} sm={3} key={s.label}>
-            <Card sx={{
-              background: `linear-gradient(135deg, ${alpha(s.color, 0.09)}, ${alpha(s.color, 0.02)})`,
-              border: `1px solid ${alpha(s.color, 0.22)}`, borderRadius: 3,
-              position: 'relative', overflow: 'visible',
-            }}>
-              {(s as any).pulse && s.value > 0 && (
-                <Box sx={{
-                  position: 'absolute', top: -4, right: -4,
-                  width: 10, height: 10, borderRadius: '50%',
-                  bgcolor: '#F39C12',
-                  boxShadow: '0 0 0 4px rgba(243,156,18,0.3)',
-                  animation: 'pulse 1.5s ease infinite',
-                  '@keyframes pulse': {
-                    '0%,100%': { boxShadow: '0 0 0 4px rgba(243,156,18,0.3)' },
-                    '50%': { boxShadow: '0 0 0 8px rgba(243,156,18,0)' },
-                  },
-                }} />
-              )}
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: '10px !important' }}>
-                <Box sx={{ bgcolor: s.color, borderRadius: 2, p: 0.75, color: 'white' }}>{s.icon}</Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                  <Typography variant="h5" fontWeight={800}>{s.value}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
+            <StatCard
+              label={s.label}
+              value={String(s.value)}
+              icon={s.icon as React.ReactElement}
+              tone={TONE_BY_LABEL[s.label] || 'info'}
+              loading={loading}
+            />
           </Grid>
         ))}
       </Grid>
+
+      {/* ── Search ── */}
+      <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5, borderRadius: 2 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search by patient, UHID, chief complaint, diagnosis, or doctor…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery ? (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
+            sx: {
+              borderRadius: 2,
+              '& fieldset': { border: 'none' },
+            },
+          }}
+        />
+      </Paper>
 
       {/* ── Status filter tabs ── */}
       <Paper sx={{ borderRadius: '12px 12px 0 0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
@@ -344,12 +418,52 @@ const EncounterList: React.FC = () => {
 
                         {/* Status */}
                         <TableCell>
-                          <Chip
-                            label={enc.status.replace(/_/g, ' ')}
-                            size="small"
-                            color={STATUS_CHIP_COLOR[enc.status] ?? 'default'}
-                            sx={{ fontSize: 11, height: 22, fontWeight: isActive ? 700 : 400 }}
-                          />
+                          {(() => {
+                            const patientAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                            // Scope the chip to the encounter that *led* to
+                            // the admission. Other encounters for the same
+                            // patient (older OPD visits, follow-ups with
+                            // other doctors, never-checked-in visits) must
+                            // stay clean.
+                            const activeAdm = patientAdm?.encounterId === enc.id ? patientAdm : null;
+                            const isAdmittedNow = !!activeAdm;
+                            const recommended = !!(enc as any).admissionRequired && !isAdmittedNow;
+                            return (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start' }}>
+                                <Chip
+                                  label={enc.status.replace(/_/g, ' ')}
+                                  size="small"
+                                  color={STATUS_CHIP_COLOR[enc.status] ?? 'default'}
+                                  sx={{ fontSize: 11, height: 22, fontWeight: isActive ? 700 : 400 }}
+                                />
+                                {/* Admission state takes precedence over the
+                                    "recommend" badge — once the patient is in
+                                    a bed, the recommendation is moot and we
+                                    show "Admitted" / "Ready for discharge". */}
+                                {isAdmittedNow && (
+                                  <Tooltip title={`${activeAdm.admissionNumber}${activeAdm.ward?.name ? ` · ${activeAdm.ward.name}` : ''}${activeAdm.bed?.bedNumber ? ` · Bed ${activeAdm.bed.bedNumber}` : ''}`}>
+                                    <Chip
+                                      label={activeAdm.status === 'DISCHARGE_READY' ? 'Ready for discharge' : 'Admitted'}
+                                      size="small"
+                                      color="warning"
+                                      sx={{ fontSize: 10, height: 18, fontWeight: 700 }}
+                                    />
+                                  </Tooltip>
+                                )}
+                                {recommended && (
+                                  <Tooltip title={(enc as any).admissionReason || 'Doctor recommends admission'}>
+                                    <Chip
+                                      label="Admit recommended"
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                      sx={{ fontSize: 10, height: 18, fontWeight: 700 }}
+                                    />
+                                  </Tooltip>
+                                )}
+                              </Box>
+                            );
+                          })()}
                         </TableCell>
 
                         {/* Date */}
@@ -378,25 +492,74 @@ const EncounterList: React.FC = () => {
                                 <Visibility sx={{ fontSize: 16 }} />
                               </IconButton>
                             </Tooltip>
-                            {/* Admit to IPD — doctor recommends, receptionist finalises */}
-                            {permissions.isDoctor && (
-                              <Tooltip title="Recommend Admit to IPD">
-                                <IconButton size="small" color="warning"
-                                  onClick={() => {
-                                    const qs = new URLSearchParams({
-                                      admit:       '1',
-                                      patientId:   enc.patient?.id || '',
-                                      encounterId: enc.id          || '',
-                                      patientName: `${enc.patient?.firstName || ''} ${enc.patient?.lastName || ''} (${enc.patient?.uhid || ''})`.trim(),
-                                      diagnosis:   enc.finalDiagnosis || enc.diagnosis || '',
-                                      reason:      enc.chiefComplaint || '',
-                                    }).toString();
-                                    navigate(`/app/ipd?${qs}`);
-                                  }}>
-                                  <AdmitIcon sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                            {/* Admission action — three modes:
+                                  1) Patient already admitted → "Open admission"
+                                     link straight to the IPD detail modal.
+                                  2) Doctor flagged admission, not yet admitted →
+                                     labeled "Admit" button (admin / receptionist
+                                     action) that opens the IPD admit dialog
+                                     pre-filled with the doctor's reason.
+                                  3) No recommendation, not admitted → plain
+                                     "Admit to IPD" icon (immediate-admit path
+                                     for emergencies or admin-driven admits).
+                                The previous build labeled this as "Recommend
+                                Admit to IPD" but actually opened the admit
+                                dialog — confusing. The doctor's *real* recommend
+                                action is the toggle inside the consultation
+                                dialog; this row icon is now consistently an
+                                "admit" action. */}
+                            {(permissions.isDoctor || permissions.isAdmin || permissions.isSuperAdmin || permissions.isReceptionist) && (() => {
+                              // Same scoping rule as the status column: only
+                              // light up "Open admission" on the encounter
+                              // that actually triggered the bed.
+                              const patientAdm = enc.patient?.id ? admissionByPatientId[enc.patient.id] : null;
+                              const activeAdm = patientAdm?.encounterId === enc.id ? patientAdm : null;
+                              if (activeAdm) {
+                                return (
+                                  <Tooltip title={`Open admission · ${activeAdm.admissionNumber}`}>
+                                    <IconButton
+                                      size="small"
+                                      color="warning"
+                                      onClick={() => navigate(`/app/ipd?openId=${activeAdm.id}`)}
+                                    >
+                                      <AdmitIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                );
+                              }
+
+                              const recommended = !!(enc as any).admissionRequired;
+                              const goToAdmit = () => {
+                                const qs = new URLSearchParams({
+                                  admit:       '1',
+                                  patientId:   enc.patient?.id || '',
+                                  encounterId: enc.id          || '',
+                                  patientName: `${enc.patient?.firstName || ''} ${enc.patient?.lastName || ''} (${enc.patient?.uhid || ''})`.trim(),
+                                  diagnosis:   enc.finalDiagnosis || enc.diagnosis || '',
+                                  reason:      (enc as any).admissionReason || enc.chiefComplaint || '',
+                                }).toString();
+                                navigate(`/app/ipd?${qs}`);
+                              };
+
+                              return recommended ? (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="warning"
+                                  startIcon={<AdmitIcon sx={{ fontSize: 14 }} />}
+                                  onClick={goToAdmit}
+                                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.7rem', px: 1, py: 0.3, ml: 0.25 }}
+                                >
+                                  Admit
+                                </Button>
+                              ) : (
+                                <Tooltip title="Admit to IPD">
+                                  <IconButton size="small" color="warning" onClick={goToAdmit}>
+                                    <AdmitIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              );
+                            })()}
                             {/* Bill / Collect Payment — receptionist sees this for any unpaid encounter */}
                             {(permissions.isReceptionist || permissions.isAdmin || permissions.isSuperAdmin) &&
                               ['BILLING_PENDING', 'COMPLETED', 'LAB_PENDING', 'PHARMACY_PENDING'].includes(enc.status) &&

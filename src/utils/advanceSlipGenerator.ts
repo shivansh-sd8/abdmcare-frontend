@@ -4,6 +4,7 @@
  */
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
+import { C, rgb, pdfToBase64, formatDateTime } from './pdfCommon';
 
 export interface AdvanceSlipData {
   hospital: {
@@ -35,33 +36,30 @@ export interface AdvanceSlipData {
   generatedBy?: string;
 }
 
-export function generateAdvanceSlip(data: AdvanceSlipData): void {
+export function generateAdvanceSlip(data: AdvanceSlipData): string {
   const { hospital, patient, payment, generatedBy } = data;
   const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
 
   const PW = 148; // A5 width
   const M  = 12;
   const CW = PW - M * 2;
-  const genDate = format(new Date(), 'dd MMM yyyy, hh:mm a');
-  const paidDate = payment.paidAt
-    ? format(new Date(payment.paidAt), 'dd MMM yyyy, hh:mm a')
-    : genDate;
+  const paidDate = payment.paidAt ? formatDateTime(payment.paidAt) : formatDateTime(new Date().toISOString());
 
   let y = 0;
 
-  // ── Hospital header band ────────────────────────────────────────────────
-  doc.setFillColor(26, 60, 110);
+  // ── Hospital header band (A5-scaled EHR header) ────────────────────────
+  rgb(doc, C.navy, 'fill');
   doc.rect(0, 0, PW, 28, 'F');
 
   const initials = hospital.name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-  doc.setFillColor(255, 255, 255);
+  rgb(doc, C.white, 'fill');
   doc.circle(M + 7, 14, 6, 'F');
-  doc.setTextColor(26, 60, 110);
+  rgb(doc, C.navy, 'text');
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text(initials, M + 7, 16, { align: 'center' });
 
-  doc.setTextColor(255, 255, 255);
+  rgb(doc, C.white, 'text');
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text(hospital.name, M + 18, 11);
@@ -69,12 +67,12 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   doc.setFont('helvetica', 'normal');
   const addr = [hospital.addressLine1, hospital.city, hospital.state].filter(Boolean).join(', ');
   doc.text(addr, M + 18, 16.5);
-  if (hospital.phone) doc.text(hospital.phone, M + 18, 21);
+  if (hospital.phone) doc.text(hospital.phone, PW - M, 16.5, { align: 'right' });
 
   // Title strip
-  doc.setFillColor(14, 44, 85);
+  rgb(doc, C.navyDark, 'fill');
   doc.rect(0, 28, PW, 8, 'F');
-  doc.setTextColor(255, 255, 255);
+  rgb(doc, C.white, 'text');
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.text('ADVANCE PAYMENT RECEIPT', PW / 2, 33.5, { align: 'center' });
@@ -82,12 +80,12 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   y = 42;
 
   // ── Receipt meta ────────────────────────────────────────────────────────
-  doc.setFillColor(240, 244, 248);
+  rgb(doc, C.stripBg, 'fill');
   doc.rect(M, y, CW, 18, 'F');
 
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 110, 125);
+  rgb(doc, C.txtSec, 'text');
 
   const halfW = CW / 2;
 
@@ -95,60 +93,60 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   doc.text('DATE & TIME', M + halfW + 2, y + 5);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
+  rgb(doc, C.black, 'text');
   doc.text(payment.receiptNumber || 'AUTO', M + 2, y + 11.5);
   doc.text(paidDate, M + halfW + 2, y + 11.5);
 
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 110, 125);
+  rgb(doc, C.txtSec, 'text');
   doc.text('PAYMENT MODE', M + 2, y + 16);
   if (payment.transactionId) doc.text('TRANSACTION ID', M + halfW + 2, y + 16);
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(30, 30, 30);
+  rgb(doc, C.black, 'text');
   doc.text(payment.paymentMethod || 'CASH', M + 2, y + 21.5);
   if (payment.transactionId) doc.text(payment.transactionId, M + halfW + 2, y + 21.5);
 
   y += 22;
 
-  // ── Patient details ─────────────────────────────────────────────────────
+  // ── Patient details (section band) ─────────────────────────────────────
   y += 4;
-  doc.setFillColor(26, 60, 110);
+  rgb(doc, C.navy, 'fill');
   doc.rect(M, y, CW, 6, 'F');
-  doc.setTextColor(255, 255, 255);
+  rgb(doc, C.white, 'text');
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
   doc.text('PATIENT DETAILS', M + 2, y + 4.3);
   y += 7;
 
-  doc.setFillColor(248, 250, 252);
+  rgb(doc, C.lightBg, 'fill');
   doc.rect(M, y, CW, 16, 'F');
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 110, 125);
+  rgb(doc, C.txtSec, 'text');
   doc.text('NAME', M + 2, y + 5);
   doc.text('UHID', M + halfW + 2, y + 5);
   doc.setFontSize(9.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
+  rgb(doc, C.navy, 'text');
   doc.text(patient.name, M + 2, y + 11);
   doc.text(patient.uhid, M + halfW + 2, y + 11);
 
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 110, 125);
+  rgb(doc, C.txtSec, 'text');
   if (patient.mobile) doc.text(`Mobile: ${patient.mobile}`, M + 2, y + 15.5);
   if (patient.gender || patient.age) {
     doc.text(`${patient.gender ?? ''} ${patient.age ? `· Age: ${patient.age}` : ''}`.trim(), M + halfW + 2, y + 15.5);
   }
   y += 19;
 
-  // ── Payment details ─────────────────────────────────────────────────────
+  // ── Payment details (section band) ─────────────────────────────────────
   y += 3;
-  doc.setFillColor(22, 160, 133);
+  rgb(doc, C.teal, 'fill');
   doc.rect(M, y, CW, 6, 'F');
-  doc.setTextColor(255, 255, 255);
+  rgb(doc, C.white, 'text');
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
   doc.text('PAYMENT DETAILS', M + 2, y + 4.3);
@@ -158,22 +156,22 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   doc.rect(M, y, CW, 8, 'F');
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(100, 110, 125);
+  rgb(doc, C.txtSec, 'text');
   doc.text('PURPOSE / DESCRIPTION', M + 2, y + 5);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(30, 30, 30);
+  rgb(doc, C.black, 'text');
   doc.text(payment.purpose || payment.description || 'Advance Payment', M + 2, y + 11);
   y += 13;
 
   // Amount box
-  doc.setFillColor(26, 60, 110);
+  rgb(doc, C.navy, 'fill');
   doc.rect(M, y, CW, 16, 'F');
   doc.setTextColor(200, 215, 240);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.text('AMOUNT RECEIVED', PW / 2, y + 5, { align: 'center' });
-  doc.setTextColor(255, 255, 255);
+  rgb(doc, C.white, 'text');
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(`₹ ${payment.amount.toLocaleString('en-IN')}`, PW / 2, y + 13.5, { align: 'center' });
@@ -182,28 +180,30 @@ export function generateAdvanceSlip(data: AdvanceSlipData): void {
   if (payment.balanceDue !== undefined) {
     doc.setFillColor(255, 240, 220);
     doc.rect(M, y, CW, 7, 'F');
-    doc.setTextColor(160, 80, 0);
+    rgb(doc, C.amber, 'text');
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.text(`Balance Due: ₹ ${payment.balanceDue.toLocaleString('en-IN')}`, PW / 2, y + 5, { align: 'center' });
     y += 9;
   }
 
-  // ── Footer ───────────────────────────────────────────────────────────────
+  // ── Footer ─────────────────────────────────────────────────────────────
   y += 6;
-  doc.setDrawColor(200, 210, 225);
+  rgb(doc, C.ruleLine, 'draw');
   doc.setLineWidth(0.25);
   doc.line(M, y, M + CW, y);
   y += 4;
   doc.setFontSize(6.5);
   doc.setFont('helvetica', 'italic');
-  doc.setTextColor(140, 150, 165);
-  doc.text(`Generated on ${genDate}${generatedBy ? ` · By: ${generatedBy}` : ''}`, M, y);
+  rgb(doc, C.fgray, 'text');
+  doc.text(`Generated on ${format(new Date(), 'dd MMM yyyy, hh:mm a')}${generatedBy ? ` · By: ${generatedBy}` : ''}`, M, y);
   doc.text('This is a computer-generated receipt and is valid without signature.', M, y + 4);
   if (hospital.registrationNumber) {
     doc.text(`Reg No: ${hospital.registrationNumber}`, PW - M, y, { align: 'right' });
   }
 
   const filename = `AdvanceSlip_${patient.uhid}_${format(new Date(), 'ddMMMyyyy')}.pdf`;
+  const base64 = pdfToBase64(doc);
   doc.save(filename);
+  return base64;
 }

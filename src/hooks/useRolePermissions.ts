@@ -78,7 +78,7 @@ export const useRolePermissions = (): UserPermissions => {
     return userData ? JSON.parse(userData) : {};
   }, []);
 
-  const validRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST', 'BILLING_STAFF', 'RADIOLOGIST'];
+  const validRoles: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN', 'PHARMACIST'];
   const role: UserRole | null = validRoles.includes(user.role as UserRole) ? (user.role as UserRole) : null;
   const userId = user.id || '';
   const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
@@ -115,10 +115,15 @@ export const useRolePermissions = (): UserPermissions => {
     canDispensePrescription: role ? canDispensePrescription(role) : false,
     canViewPrescriptions: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'PHARMACIST'].includes(role) : false,
     canRecordVitals: role ? canRecordVitals(role) : false,
-    canViewVitals: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE'].includes(role) : false,
+    // Pharmacist gets read-only on latest vitals (allergies/age/weight)
+    // because dispensing decisions sometimes need that context. Aligns
+    // with the backend's `GET /vitals/patient/:patientId/latest` policy.
+    canViewVitals: role
+      ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'PHARMACIST'].includes(role)
+      : false,
     canOrderInvestigation: role ? canOrderInvestigation(role) : false,
     canViewInvestigations: role ? ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN'].includes(role) : false,
-    canUpdateInvestigationStatus: role ? ['DOCTOR', 'LAB_TECHNICIAN', 'RADIOLOGIST', 'ADMIN', 'SUPER_ADMIN'].includes(role) : false,
+    canUpdateInvestigationStatus: role ? ['DOCTOR', 'LAB_TECHNICIAN', 'ADMIN', 'SUPER_ADMIN'].includes(role) : false,
     
     // System permissions
     canManageUsers: role ? canManageUsers(role) : false,

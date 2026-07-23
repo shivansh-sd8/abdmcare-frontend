@@ -4,6 +4,7 @@ import {
   Button, TextField, Box, Typography, IconButton, Grid,
   Divider, Chip, Autocomplete, CircularProgress, Tooltip,
   Paper, Alert, Tabs, Tab, Badge, useTheme,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Close as CloseIcon, Add as AddIcon, Delete as DeleteIcon,
@@ -15,6 +16,13 @@ import {
 import { toast } from 'react-toastify';
 import encounterService from '../../services/encounterService';
 import vitalsService from '../../services/vitalsService';
+import ipdService from '../../services/ipdService';
+import {
+  COMMON_MEDICINES, FREQUENCIES, DURATIONS, INSTRUCTIONS, DOSAGES,
+  COMMON_TESTS, COMMON_COMPLAINTS, COMMON_DIAGNOSES,
+  COMMON_PATIENT_INSTRUCTIONS, FOLLOW_UP_DAYS,
+  splitChips, joinChips,
+} from '../../utils/clinicalDictionaries';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,52 +47,7 @@ interface Props {
   onSaved: () => void;
 }
 
-// ─── Quick-pick data ──────────────────────────────────────────────────────────
-
-const COMMON_MEDICINES = [
-  'Paracetamol 500mg', 'Paracetamol 650mg', 'Ibuprofen 400mg', 'Ibuprofen 600mg',
-  'Amoxicillin 500mg', 'Amoxicillin 250mg', 'Azithromycin 500mg', 'Azithromycin 250mg',
-  'Cetirizine 10mg', 'Levocetirizine 5mg', 'Montelukast 10mg',
-  'Omeprazole 20mg', 'Pantoprazole 40mg', 'Rabeprazole 20mg',
-  'Metformin 500mg', 'Metformin 1000mg', 'Glimepiride 1mg', 'Glimepiride 2mg',
-  'Aspirin 75mg', 'Clopidogrel 75mg',
-  'Atorvastatin 10mg', 'Atorvastatin 20mg', 'Rosuvastatin 10mg',
-  'Amlodipine 5mg', 'Amlodipine 10mg', 'Telmisartan 40mg', 'Telmisartan 80mg',
-  'Metoprolol 25mg', 'Metoprolol 50mg', 'Atenolol 50mg',
-  'Doxycycline 100mg', 'Ciprofloxacin 500mg', 'Norfloxacin 400mg',
-  'Prednisolone 10mg', 'Prednisolone 20mg', 'Methylprednisolone 4mg',
-  'Vitamin D3 60000IU', 'Vitamin B12 500mcg', 'Calcium + Vitamin D',
-  'Iron + Folic Acid', 'Multivitamin', 'Zinc 50mg',
-];
-
-const FREQUENCIES = ['OD', 'BD', 'TDS', 'QID', 'SOS', 'PRN', 'HS', 'Stat', 'OD AM', 'OD PM'];
-const DURATIONS   = ['3 days', '5 days', '7 days', '10 days', '14 days', '1 month', '2 months', '3 months', 'Ongoing'];
-const INSTRUCTIONS = ['After food', 'Before food', 'With food', 'Empty stomach', 'At bedtime', 'With warm water', 'Sublingual', 'As needed'];
-const DOSAGES     = ['100mg', '250mg', '500mg', '1g', '5mg', '10mg', '20mg', '40mg', '80mg',
-                     '1 tablet', '2 tablets', '½ tablet', '5ml', '10ml', '15ml'];
-
-const COMMON_TESTS = [
-  { name: 'Complete Blood Count (CBC)',   type: 'HAEMATOLOGY' },
-  { name: 'Blood Sugar Fasting',          type: 'BIOCHEMISTRY' },
-  { name: 'Blood Sugar Random',           type: 'BIOCHEMISTRY' },
-  { name: 'HbA1c',                        type: 'BIOCHEMISTRY' },
-  { name: 'Lipid Profile',                type: 'BIOCHEMISTRY' },
-  { name: 'Liver Function Test (LFT)',    type: 'BIOCHEMISTRY' },
-  { name: 'Kidney Function Test (KFT)',   type: 'BIOCHEMISTRY' },
-  { name: 'Serum Creatinine',             type: 'BIOCHEMISTRY' },
-  { name: 'Uric Acid',                    type: 'BIOCHEMISTRY' },
-  { name: 'Thyroid Profile (T3/T4/TSH)', type: 'BIOCHEMISTRY' },
-  { name: 'Vitamin D',                    type: 'BIOCHEMISTRY' },
-  { name: 'Vitamin B12',                  type: 'BIOCHEMISTRY' },
-  { name: 'Urine Routine & Microscopy',   type: 'MICROBIOLOGY' },
-  { name: 'Stool Routine',                type: 'MICROBIOLOGY' },
-  { name: 'Electrolytes (Na/K/Cl)',       type: 'BIOCHEMISTRY' },
-  { name: 'ECG',                          type: 'CARDIOLOGY'  },
-  { name: 'Chest X-Ray PA View',          type: 'RADIOLOGY'   },
-  { name: 'Ultrasound Abdomen',           type: 'RADIOLOGY'   },
-  { name: 'Blood Culture & Sensitivity',  type: 'MICROBIOLOGY' },
-  { name: 'Urine Culture & Sensitivity',  type: 'MICROBIOLOGY' },
-];
+// ─── Empty templates ──────────────────────────────────────────────────────────
 
 const EMPTY_MED: Medicine = { medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' };
 
@@ -263,6 +226,23 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
   const [finalDiagnosis,          setFinalDiagnosis]          = useState('');
   const [notes,                   setNotes]                   = useState('');
   const [followUpDays,            setFollowUpDays]            = useState('');
+  // Doctor's "Recommend admission" toggle. When true, the encounter carries
+  // an admissionRequired flag + reason, which surfaces a clear "ADMISSION
+  // RECOMMENDED" badge on the appointment row, patient profile and IPD admit
+  // dialog so the receptionist / admin doesn't need to chase the doctor.
+  const [admissionRequired,  setAdmissionRequired]  = useState(false);
+  const [admissionReason,    setAdmissionReason]    = useState('');
+
+  // Whether this patient is _already_ admitted (active IPD admission
+  // somewhere). When true, we hide the "Recommend admission" disposition
+  // toggle entirely — it would be both confusing UI and a no-op for the
+  // receptionist who already has the patient on a bed.
+  // We detect this from three signals, in order of cheapness:
+  //   1. The encounter object itself: type === 'IPD', or it has an
+  //      admissionId (this encounter is an IPD daily round), or it
+  //      already has an originating admission attached.
+  //   2. A best-effort lookup against active admissions by patient id.
+  const [alreadyAdmitted, setAlreadyAdmitted] = useState(false);
 
   // Rx + investigations
   const [medicines, setMedicines] = useState<Medicine[]>([]);
@@ -291,6 +271,8 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
         setFinalDiagnosis(e.finalDiagnosis || e.diagnosis || '');
         setNotes(e.notes || '');
         setFollowUpDays('');
+        setAdmissionRequired(!!e.admissionRequired);
+        setAdmissionReason(e.admissionReason || '');
         setMedicines(
           (e.prescriptions || []).map((rx: any) => ({
             medicineName: rx.medicineName || '',
@@ -328,10 +310,19 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
     followUpDate: followUpDays
       ? new Date(Date.now() + parseInt(followUpDays) * 86400000).toISOString()
       : undefined,
+    // If the patient is already admitted, never send a stale
+    // `admissionRequired` flag — even if the encounter previously had
+    // one set, the situation no longer applies.
+    admissionRequired: alreadyAdmitted ? false : admissionRequired,
+    admissionReason: alreadyAdmitted
+      ? undefined
+      : (admissionRequired ? admissionReason : undefined),
     prescriptions: medicines.filter((m) => m.medicineName.trim()),
     labOrders:     labOrders.filter((l) => l.testName.trim()),
   }), [chiefComplaint, historyOfPresentIllness, physicalExamination,
-       provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders]);
+       provisionalDiagnosis, finalDiagnosis, notes, followUpDays,
+       admissionRequired, admissionReason, medicines, labOrders,
+       alreadyAdmitted]);
 
   // ── Auto-save ───────────────────────────────────────────────────────────────
 
@@ -351,13 +342,41 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
 
   useEffect(() => { triggerAutoSave(); }, [
     chiefComplaint, historyOfPresentIllness, physicalExamination,
-    provisionalDiagnosis, finalDiagnosis, notes, followUpDays, medicines, labOrders,
+    provisionalDiagnosis, finalDiagnosis, notes, followUpDays,
+    admissionRequired, admissionReason, medicines, labOrders,
     triggerAutoSave,
   ]);
 
   useEffect(() => () => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
   }, []);
+
+  // ── Detect whether the patient is already admitted ──────────────────────────
+  useEffect(() => {
+    if (!open || !encounter?.patient?.id) { setAlreadyAdmitted(false); return; }
+    // Cheap signals straight from the encounter payload first.
+    const cheap = Boolean(
+      encounter?.type === 'IPD' ||
+      (encounter as any)?.admissionId ||
+      (encounter as any)?.ipdAdmission?.id ||
+      (Array.isArray((encounter as any)?.admissions) && (encounter as any).admissions.length > 0)
+    );
+    if (cheap) { setAlreadyAdmitted(true); return; }
+
+    let cancelled = false;
+    const patientId = encounter.patient.id;
+    Promise.all([
+      ipdService.listAdmissions({ status: 'ADMITTED' }).catch(() => null),
+      ipdService.listAdmissions({ status: 'DISCHARGE_READY' }).catch(() => null),
+    ]).then((results) => {
+      if (cancelled) return;
+      const all = results.flatMap((r: any) =>
+        r?.data?.data?.admissions || r?.data?.admissions || []
+      );
+      setAlreadyAdmitted(all.some((a: any) => a?.patient?.id === patientId));
+    });
+    return () => { cancelled = true; };
+  }, [open, encounter?.id, encounter?.patient?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Medicine helpers ────────────────────────────────────────────────────────
 
@@ -546,10 +565,54 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
                 <Chip label={encounter.type} size="small"
                   sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', height: 18, fontSize: 10 }} />
               )}
+              {/* Quick visual cue when this consult already carries an
+                  admission recommendation. Saves the doctor from looking down
+                  at the disposition panel just to know what they decided.
+                  Suppressed once the patient is already admitted — at that
+                  point the recommendation is meaningless. */}
+              {admissionRequired && !alreadyAdmitted && (
+                <Chip
+                  label="ADMIT RECOMMENDED"
+                  size="small"
+                  sx={{
+                    bgcolor: '#F39C12',
+                    color: 'white',
+                    fontWeight: 700,
+                    height: 18,
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                  }}
+                />
+              )}
+              {alreadyAdmitted && (
+                <Chip
+                  label="ADMITTED"
+                  size="small"
+                  sx={{
+                    bgcolor: '#27AE60',
+                    color: 'white',
+                    fontWeight: 700,
+                    height: 18,
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                  }}
+                />
+              )}
               {autoSaved && (
-                <Typography variant="caption" sx={{ opacity: 0.7, fontStyle: 'italic' }}>
-                  Auto-saved {autoSaved.toLocaleTimeString()}
-                </Typography>
+                <Chip
+                  size="small"
+                  icon={<SaveIcon sx={{ fontSize: 12, color: 'inherit !important' }} />}
+                  label={`Auto-saved ${autoSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                  sx={{
+                    bgcolor: 'rgba(80,200,120,0.22)',
+                    color: 'white',
+                    height: 20,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: 0.3,
+                    '& .MuiChip-icon': { color: 'white', ml: 0.5, mr: -0.5 },
+                  }}
+                />
               )}
             </Box>
           </Box>
@@ -596,76 +659,236 @@ const ConsultationDialog: React.FC<Props> = ({ open, onClose, encounter, onSaved
           <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <Box sx={{ p: 2.5, overflowY: 'auto', flex: 1 }}>
           <Grid container spacing={2}>
-              {/* Chief Complaint */}
+              {/* Chief Complaint — multi-select chips. Doctors typically
+                  list two or three concurrent complaints (e.g. "Fever",
+                  "Cough", "Body ache"); chip UI captures that natively
+                  while still allowing free typing. Persisted as a single
+                  string joined with `; ` so the backend column stays the
+                  same. */}
             <Grid item xs={12}>
                 <SLabel text="Chief Complaint" />
-                <TextField fullWidth multiline rows={2} size="small"
-                  placeholder="Primary reason for visit — what is the patient complaining of?"
-                  value={chiefComplaint}
-                  onChange={(e) => setChiefComplaint(e.target.value)} />
+                <Autocomplete
+                  multiple freeSolo
+                  options={COMMON_COMPLAINTS}
+                  value={splitChips(chiefComplaint)}
+                  onChange={(_, v) => setChiefComplaint(joinChips(v as string[]))}
+                  filterSelectedOptions
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        size="small" variant="filled" color="primary"
+                        label={option}
+                        {...getTagProps({ index })}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth size="small"
+                      placeholder={
+                        splitChips(chiefComplaint).length === 0
+                          ? 'Add complaints — pick or type and press Enter…'
+                          : 'Add another complaint…'
+                      }
+                    />
+                  )}
+                />
               </Grid>
 
-              {/* HPI + Examination side by side */}
-              <Grid item xs={12} md={6}>
+              {/* HPI gets the most narrative space — 8/12 cols and 5 rows
+                  — because it is where the doctor actually thinks. The
+                  examination column is documented more briefly in
+                  primary care (4/12). Both stay free-text multi-line
+                  (no chips) since they are paragraphs, not enumerable. */}
+              <Grid item xs={12} md={8}>
                 <SLabel text="History of Present Illness" />
-                <TextField fullWidth multiline rows={4} size="small"
-                  placeholder="Duration, onset, progression, associated symptoms, aggravating/relieving factors..."
+                <TextField fullWidth multiline rows={5} size="small"
+                  placeholder="Duration, onset, progression, associated symptoms, aggravating/relieving factors…"
                   value={historyOfPresentIllness}
                   onChange={(e) => setHistoryOfPresentIllness(e.target.value)} />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={4}>
                 <SLabel text="Physical Examination" />
-                <TextField fullWidth multiline rows={4} size="small"
-                  placeholder="General examination, systemic examination findings..."
+                <TextField fullWidth multiline rows={5} size="small"
+                  placeholder="General + systemic examination findings…"
                   value={physicalExamination}
                   onChange={(e) => setPhysicalExamination(e.target.value)} />
               </Grid>
 
               <Grid item xs={12}><Divider /></Grid>
 
-              {/* Diagnosis */}
+              {/* Diagnosis — multi-select chips. A patient may have a
+                  primary + comorbidity diagnosis (e.g. "Type 2 DM —
+                  uncontrolled" + "Hypertension — controlled"). Free text
+                  remains supported. */}
               <Grid item xs={12} md={6}>
                 <SLabel text="Provisional Diagnosis" />
-                <TextField fullWidth size="small"
-                  placeholder="Initial working diagnosis..."
-                  value={provisionalDiagnosis}
-                  onChange={(e) => setProvisionalDiagnosis(e.target.value)} />
+                <Autocomplete
+                  multiple freeSolo
+                  options={COMMON_DIAGNOSES}
+                  value={splitChips(provisionalDiagnosis)}
+                  onChange={(_, v) => setProvisionalDiagnosis(joinChips(v as string[]))}
+                  filterSelectedOptions
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip size="small" variant="outlined"
+                        label={option} {...getTagProps({ index })} />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField {...params} fullWidth size="small"
+                      placeholder="Working diagnosis — pick or type, press Enter to add another" />
+                  )}
+                />
               </Grid>
               <Grid item xs={12} md={6}>
                 <SLabel text="Final Diagnosis ✱" />
-                <TextField fullWidth size="small"
-                  placeholder="Confirmed diagnosis (required to complete)"
-                  value={finalDiagnosis}
-                  onChange={(e) => setFinalDiagnosis(e.target.value)}
-                  error={!finalDiagnosis.trim()}
-                  helperText={!finalDiagnosis.trim() ? 'Required before finalising' : ''}
-              />
-            </Grid>
+                <Autocomplete
+                  multiple freeSolo
+                  options={COMMON_DIAGNOSES}
+                  value={splitChips(finalDiagnosis)}
+                  onChange={(_, v) => setFinalDiagnosis(joinChips(v as string[]))}
+                  filterSelectedOptions
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip size="small" variant="filled" color="success"
+                        label={option} {...getTagProps({ index })} />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth size="small"
+                      placeholder="Confirmed diagnosis (required to complete)"
+                      error={!finalDiagnosis.trim()}
+                      helperText={!finalDiagnosis.trim() ? 'Required before finalising' : ''}
+                    />
+                  )}
+                />
+              </Grid>
 
               <Grid item xs={12}><Divider /></Grid>
 
-              {/* Notes + follow-up */}
+              {/* Patient instructions — multi-select chips. Most plans
+                  combine 2–4 short instructions ("Steam inhalation 2–3
+                  times a day" + "Salt-restricted diet" + "Return if
+                  breathlessness"). Chips make this fast and prescription
+                  prints render each chip as a bullet. */}
               <Grid item xs={12} md={8}>
                 <SLabel text="Notes / Instructions for Patient" />
-                <TextField fullWidth multiline rows={3} size="small"
-                  placeholder="Lifestyle advice, diet modifications, activity restrictions..."
-                value={notes}
-                  onChange={(e) => setNotes(e.target.value)} />
-            </Grid>
+                <Autocomplete
+                  multiple freeSolo
+                  options={COMMON_PATIENT_INSTRUCTIONS}
+                  value={splitChips(notes)}
+                  onChange={(_, v) => setNotes(joinChips(v as string[]))}
+                  filterSelectedOptions
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip size="small" variant="outlined"
+                        label={option} {...getTagProps({ index })} />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      fullWidth size="small"
+                      placeholder="Pick a suggestion or type a custom instruction…"
+                    />
+                  )}
+                />
+              </Grid>
               <Grid item xs={12} md={4}>
                 <SLabel text="Follow-up After (days)" />
                 <TextField fullWidth type="number" size="small"
                   placeholder="e.g. 7"
                 value={followUpDays}
                   onChange={(e) => setFollowUpDays(e.target.value)} />
+                {/* Quick-pick chips — saves the doctor a keystroke for the
+                    common follow-up windows (3 / 7 / 14 / 30 days). */}
+                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75, flexWrap: 'wrap' }}>
+                  {FOLLOW_UP_DAYS.map((d) => (
+                    <Chip
+                      key={d}
+                      label={`${d}d`}
+                      size="small"
+                      variant={String(d) === String(followUpDays) ? 'filled' : 'outlined'}
+                      color={String(d) === String(followUpDays) ? 'primary' : 'default'}
+                      onClick={() => setFollowUpDays(String(d))}
+                      sx={{ height: 22, fontSize: 11, cursor: 'pointer' }}
+                    />
+                  ))}
+                </Box>
                 {followUpDays && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
                     Follow-up on:{' '}
                     {new Date(Date.now() + parseInt(followUpDays) * 86400000)
                       .toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </Typography>
                 )}
               </Grid>
+
+              {/* ─── Plan & Disposition ────────────────────────────────────
+                  The doctor's "what next?" decision. Recommending admission
+                  here flips Encounter.admissionRequired = true with a reason,
+                  which surfaces a clear "ADMISSION RECOMMENDED" badge on the
+                  appointment row, patient profile and IPD admit dialog so
+                  whoever picks up the next step (admin / receptionist) sees
+                  it without asking the doctor again.
+
+                  Hidden once the patient is already admitted — at that
+                  point the recommendation is meaningless and confusing. */}
+              {!alreadyAdmitted && (
+                <>
+                  <Grid item xs={12}><Divider /></Grid>
+                  <Grid item xs={12}>
+                    <SLabel text="Disposition" />
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: admissionRequired ? 'warning.main' : 'divider',
+                        bgcolor: admissionRequired ? 'warning.light' : 'transparent',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={admissionRequired}
+                            onChange={(e) => setAdmissionRequired(e.target.checked)}
+                            color="warning"
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant="body2" fontWeight={700}>
+                              Recommend admission
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              The receptionist will see "Admission recommended" on this patient
+                              and can admit them from the appointment list, encounter list, or patient profile.
+                            </Typography>
+                          </Box>
+                        }
+                        sx={{ alignItems: 'flex-start', m: 0 }}
+                      />
+                      {admissionRequired && (
+                        <TextField
+                          fullWidth multiline rows={2} size="small"
+                          sx={{ mt: 1.5 }}
+                          placeholder="Clinical reason for admission (e.g. moderate dehydration needing IV fluids, fever > 102°F unresponsive to OPD treatment)"
+                          value={admissionReason}
+                          onChange={(e) => setAdmissionReason(e.target.value)}
+                          label="Reason for admission"
+                          InputLabelProps={{ shrink: true }}
+                        />
+                      )}
+                    </Box>
+                  </Grid>
+                </>
+              )}
             </Grid>
 
             {encounter?.status !== 'IN_PROGRESS' && encounter?.status !== 'ACTIVE' && (

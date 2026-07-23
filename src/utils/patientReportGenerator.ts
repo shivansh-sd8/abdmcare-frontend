@@ -5,6 +5,7 @@
  */
 import jsPDF from 'jspdf';
 import { differenceInYears, format } from 'date-fns';
+import { pdfToBase64 } from './pdfCommon';
 
 // ─── Public interface ─────────────────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ function formatDateTime(dateStr?: string | null): string {
 
 // ─── Main generator ──────────────────────────────────────────────────────────
 
-export function generatePatientReport(data: PatientReportData): void {
+export function generatePatientReport(data: PatientReportData): string {
   const { hospital, patient, timeline, summary, generatedBy } = data;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
@@ -956,5 +957,7 @@ export function generatePatientReport(data: PatientReportData): void {
   // ── Save ──────────────────────────────────────────────────────────────────
 
   const fileName = `HealthRecord_${patient.uhid}_${format(new Date(), 'ddMMMyyyy')}.pdf`;
+  const base64 = pdfToBase64(doc);
   doc.save(fileName);
+  return base64;
 }

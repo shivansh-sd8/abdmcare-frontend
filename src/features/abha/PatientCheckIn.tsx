@@ -5,12 +5,13 @@ import {
   InputAdornment, IconButton,
 } from '@mui/material';
 import {
-  Search, QrCodeScanner, PersonAdd, CheckCircle, HealthAndSafety,
+  Search, QrCodeScanner, PersonAdd, CheckCircle,
   ContentCopy, Person, Phone, Badge,
 } from '@mui/icons-material';
-import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import abhaService from '../../services/abhaService';
+import { getAbhaErrorMessage } from './abhaErrors';
+import { useInlineNotice } from '../../hooks/useInlineNotice';
 
 type LookupMode = 'abha-number' | 'abha-address' | 'mobile';
 
@@ -20,22 +21,21 @@ const PatientCheckIn: React.FC = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const notice = useInlineNotice();
 
   const handleLookup = async () => {
     if (!query.trim()) return;
     setLoading(true);
     setResult(null);
+    notice.clear();
     try {
       const res: any = await abhaService.lookupPatient(query.trim());
       const data = res?.data || res;
       setResult(data);
-      if (data?.isReturning) {
-        toast.success(`Returning patient: ${data.patient?.firstName} ${data.patient?.lastName}`);
-      } else {
-        toast.info('New patient — not found in this facility');
-      }
+      // The result card below shows RETURNING/NEW status prominently, so no
+      // extra confirmation message is needed here.
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Lookup failed');
+      notice.notify('error', getAbhaErrorMessage(e, 'We couldn’t look up this patient right now. Please check the details and try again.'));
     } finally {
       setLoading(false);
     }
@@ -43,7 +43,7 @@ const PatientCheckIn: React.FC = () => {
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('Copied!');
+    notice.notify('success', 'Copied to clipboard');
   };
 
   const placeholder = mode === 'mobile'
@@ -56,23 +56,24 @@ const PatientCheckIn: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>Patient Check-In</Typography>
+          <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5, letterSpacing: '-0.01em' }}>
+            Patient Check-In
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            Identify new vs returning patients via ABHA (M1 mandatory)
+            Look up a patient by ABHA Number, ABHA Address, or mobile to see whether they're new to this facility.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<QrCodeScanner />}
-            onClick={() => navigate('/app/scan-share')}
-          >
-            Scan QR Instead
-          </Button>
-          <Chip icon={<HealthAndSafety />} label="ABDM V3 M1" color="success" variant="outlined" />
-        </Box>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<QrCodeScanner />}
+          onClick={() => navigate('/app/scan-share')}
+          sx={{ textTransform: 'none', borderRadius: 1.75, fontWeight: 600, flexShrink: 0 }}
+        >
+          Scan QR instead
+        </Button>
       </Box>
 
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -83,7 +84,7 @@ const PatientCheckIn: React.FC = () => {
             size="small"
             exclusive
             value={mode}
-            onChange={(_, v) => { if (v) { setMode(v); setQuery(''); setResult(null); } }}
+            onChange={(_, v) => { if (v) { setMode(v); setQuery(''); setResult(null); notice.clear(); } }}
           >
             <ToggleButton value="abha-number">ABHA Number</ToggleButton>
             <ToggleButton value="abha-address">ABHA Address</ToggleButton>
@@ -113,6 +114,12 @@ const PatientCheckIn: React.FC = () => {
           </Button>
         </Box>
       </Paper>
+
+      {notice.notice && (
+        <Alert severity={notice.notice.severity} onClose={() => notice.clear()} sx={{ mb: 3 }}>
+          {notice.notice.message}
+        </Alert>
+      )}
 
       {result && (
         <Card sx={{ border: '2px solid', borderColor: result.isReturning ? 'success.main' : 'warning.main' }}>

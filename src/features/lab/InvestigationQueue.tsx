@@ -14,12 +14,16 @@ import {
 import { useRolePermissions } from '../../hooks/useRolePermissions';
 import investigationService from '../../services/investigationService';
 import { generateLabReport, LabParameter } from '../../utils/labReportGenerator';
+import documentService from '../../services/documentService';
 import { LAB_TEMPLATES, matchTemplate } from '../../utils/labTestTemplates';
 import { useSelector } from 'react-redux';
 import { format } from 'date-fns';
+import { PageHeader, StatCard } from '../../components/ui';
 
 interface Investigation {
   id: string;
+  patientId?: string;
+  encounterId?: string;
   patient?: { id: string; firstName: string; lastName: string; uhid?: string; age?: string; gender?: string; mobile?: string };
   doctor?: { firstName: string; lastName: string; department?: { name: string } };
   testName: string;
@@ -147,28 +151,36 @@ export default function InvestigationQueue() {
     total:       investigations.length,
   }), [investigations]);
 
+  /**
+   * Open the full "Enter Test Results" dialog (template + parameters +
+   * charge). Extracted so it can be used both from the "Mark Complete"
+   * fast-path on IN_PROGRESS rows and from the manual Advance Status
+   * dropdown when the user jumps straight to COMPLETED — both paths must
+   * collect results and a charge before saving.
+   */
+  const openResultsDialog = (inv: Investigation) => {
+    setSelected(inv);
+    setTechName(authUser ? `${authUser.firstName || ''} ${authUser.lastName || ''}`.trim() : '');
+    setResultParams([emptyParam()]);
+    setSampleType('');
+    setValidatedBy('');
+    setResultNotes(inv.instructions || '');
+    setTestCharge('');
+    const matched = matchTemplate(inv.testName);
+    if (matched) {
+      setSelectedTemplateId(matched.id);
+      setSampleType(matched.sampleType);
+      setResultParams(matched.parameters.map(p => ({ ...p, value: '', flag: 'N' as const })));
+    } else {
+      setSelectedTemplateId('');
+    }
+    setResultsOpen(true);
+  };
+
   const handleAdvance = (inv: Investigation) => {
     const next = STATUS_FLOW[STATUS_FLOW.indexOf(inv.status) + 1];
-    // For "Mark Complete" open the full results entry dialog
     if (inv.status === 'IN_PROGRESS') {
-      setSelected(inv);
-      // Pre-fill tech name from auth user
-      setTechName(authUser ? `${authUser.firstName || ''} ${authUser.lastName || ''}`.trim() : '');
-      setResultParams([emptyParam()]);
-      setSampleType('');
-      setValidatedBy('');
-      setResultNotes(inv.instructions || '');
-      setResultsOpen(true);
-      setTestCharge('');
-      // Auto-match template from test name
-      const matched = matchTemplate(inv.testName);
-      if (matched) {
-        setSelectedTemplateId(matched.id);
-        setSampleType(matched.sampleType);
-        setResultParams(matched.parameters.map(p => ({ ...p, value: '', flag: 'N' as const })));
-      } else {
-        setSelectedTemplateId('');
-      }
+      openResultsDialog(inv);
       return;
     }
     setSelected(inv);
@@ -203,7 +215,7 @@ export default function InvestigationQueue() {
 
   const handleDownloadReport = (inv: Investigation) => {
     const results = inv.results || {};
-    generateLabReport({
+    const base64 = generateLabReport({
       hospital: {
         name:               authUser?.hospitalName || 'Hospital',
         labName:            authUser?.hospitalName ? `${authUser.hospitalName} — Pathology Lab` : 'Pathology Laboratory',
@@ -237,10 +249,26 @@ export default function InvestigationQueue() {
         notes:               results.notes || inv.notes || undefined,
       },
     });
+    if (inv.patientId) {
+      documentService.persistDocument({ patientId: inv.patientId, encounterId: inv.encounterId, type: 'LAB_REPORT', content: base64 }).catch(() => {});
+    }
   };
 
   const handleSaveStatus = async () => {
     if (!selected) return;
+
+    // If the lab tech is jumping straight to COMPLETED from the Advance
+    // Status dropdown (instead of stepping through IN_PROGRESS first),
+    // hand off to the full results dialog so we still collect the
+    // template parameters + the test charge. Otherwise the bill never
+    // gets the line item and the patient receipt can't show the result.
+    if (updateData.status === 'COMPLETED') {
+      const inv = selected;
+      setUpdateOpen(false);
+      openResultsDialog(inv);
+      return;
+    }
+
     setSaving(true);
     try {
       await investigationService.updateInvestigationStatus(selected.id, {
@@ -267,49 +295,40 @@ export default function InvestigationQueue() {
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={800}>
-            {permissions.isLabTechnician ? 'Lab Queue' : 'Lab Investigations'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            {permissions.isLabTechnician
-              ? 'Process pending tests and record results'
-              : 'All lab tests ordered for your hospital'}
-          </Typography>
-        </Box>
-        <Tooltip title="Refresh">
-          <IconButton onClick={fetchAll} disabled={loading}><Refresh /></IconButton>
-        </Tooltip>
-      </Box>
+      <PageHeader
+        title={permissions.isLabTechnician ? 'Lab Queue' : 'Lab Investigations'}
+        subtitle={
+          permissions.isLabTechnician
+            ? 'Process pending tests and record results'
+            : 'All lab tests ordered for your hospital'
+        }
+        icon={<Science />}
+        actions={
+          <Tooltip title="Refresh">
+            <IconButton onClick={fetchAll} disabled={loading}><Refresh /></IconButton>
+          </Tooltip>
+        }
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* Stats row */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { label: 'Awaiting',    value: stats.ordered,    color: '#1565c0', icon: <HourglassEmpty /> },
-          { label: 'In Progress', value: stats.inProgress, color: '#e65100', icon: <PlayCircle /> },
-          { label: 'Completed',   value: stats.completed,  color: '#2e7d32', icon: <CheckCircle /> },
-          { label: 'Total Tests', value: stats.total,      color: '#6a1b9a', icon: <Science /> },
-        ].map(s => (
-          <Grid item xs={6} sm={3} key={s.label}>
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 3,
-              borderColor: alpha(s.color, 0.25), bgcolor: alpha(s.color, 0.04) }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box sx={{ p: 1, borderRadius: 2, bgcolor: s.color, color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {s.icon}
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={500}>{s.label}</Typography>
-                  <Typography variant="h5" fontWeight={800} color={s.color}>{s.value}</Typography>
-                </Box>
-              </Box>
-            </Paper>
-          </Grid>
-        ))}
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={6} sm={3}>
+          <StatCard label="Awaiting" value={String(stats.ordered)} icon={<HourglassEmpty />}
+            tone="info" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <StatCard label="In progress" value={String(stats.inProgress)} icon={<PlayCircle />}
+            tone="warning" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <StatCard label="Completed" value={String(stats.completed)} icon={<CheckCircle />}
+            tone="success" loading={loading} />
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <StatCard label="Total tests" value={String(stats.total)} icon={<Science />}
+            tone="secondary" loading={loading} />
+        </Grid>
       </Grid>
 
       {/* Filters */}

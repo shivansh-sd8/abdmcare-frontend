@@ -27,6 +27,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import appointmentService from '../../services/appointmentService';
+import { PageHeader } from '../../components/ui';
 import patientService from '../../services/patientService';
 import doctorService from '../../services/doctorService';
 import { validate } from '../../utils/validation';
@@ -331,46 +332,18 @@ const ScheduleAppointment: React.FC = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          mb: 3,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          borderRadius: 3,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CalendarToday sx={{ fontSize: 40 }} />
-            <Box>
-              <Typography variant="h4" fontWeight="bold">
-                Schedule Appointment
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                Book a new appointment for a patient
-              </Typography>
-            </Box>
-          </Box>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBack />}
-            onClick={() => navigate('/app/appointments')}
-            sx={{
-              color: 'white',
-              borderColor: 'white',
-              '&:hover': {
-                borderColor: 'white',
-                bgcolor: 'rgba(255,255,255,0.1)',
-              },
-            }}
-          >
+    <Box>
+      <PageHeader
+        title="Schedule Appointment"
+        subtitle="Book a new appointment for a patient"
+        icon={<CalendarToday />}
+        actions={
+          <Button variant="outlined" startIcon={<ArrowBack />}
+            onClick={() => navigate('/app/appointments')}>
             Back
           </Button>
-        </Box>
-      </Paper>
+        }
+      />
 
       <Card sx={{ borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
         <CardContent sx={{ p: 4 }}>

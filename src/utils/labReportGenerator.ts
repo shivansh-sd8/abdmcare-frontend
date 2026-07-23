@@ -4,6 +4,7 @@
  */
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
+import { pdfToBase64 } from './pdfCommon';
 
 export interface LabParameter {
   name: string;
@@ -85,7 +86,7 @@ function flagColor(flag: string): [number, number, number] {
   return GREEN;
 }
 
-export function generateLabReport(data: LabReportData): void {
+export function generateLabReport(data: LabReportData): string {
   const doc  = new jsPDF({ unit: 'mm', format: 'a4' });
   const { hospital, patient, doctor, report } = data;
   let y = 0;
@@ -390,5 +391,7 @@ export function generateLabReport(data: LabReportData): void {
   );
 
   const filename = `LabReport_${patient.uhid}_${report.testName.replace(/\s+/g, '_')}_${format(new Date(), 'ddMMyyyy')}.pdf`;
+  const base64 = pdfToBase64(doc);
   doc.save(filename);
+  return base64;
 }

@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Paper, Tabs, Tab, Grid, Card, CardContent, Chip, Avatar,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Button,
-  Skeleton, Alert, IconButton, Tooltip, alpha, Divider,
+  Skeleton, Alert, IconButton, Tooltip, alpha, Divider, Stack, useTheme,
 } from '@mui/material';
 import {
   Person, LocalHospital, CalendarToday, Phone, Email, ArrowBack,
-  MedicalServices, School, Badge, CurrencyRupee, Groups,
+  MedicalServices, School, Badge, CurrencyRupee, Groups, Edit, Schedule,
+  EventAvailable, EventBusy, Coffee, TrendingUp, AccountBalanceWallet,
+  Receipt, Storefront,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import doctorService from '../../services/doctorService';
 import { toast } from 'react-toastify';
+import DoctorEditDialog from './DoctorEditDialog';
 
 interface TabPanelProps { children?: React.ReactNode; index: number; value: number; }
 const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => (
@@ -22,15 +25,34 @@ const TabPanel: React.FC<TabPanelProps> = ({ children, value, index }) => (
 const fmt = (d: any) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const currency = (n: any) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
 
+const DAY_KEYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
+const DAY_LABELS: Record<string, string> = {
+  MON: 'Mon', TUE: 'Tue', WED: 'Wed', THU: 'Thu', FRI: 'Fri', SAT: 'Sat', SUN: 'Sun',
+};
+
 const DoctorProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const theme = useTheme();
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTab, setEditTab] = useState<0 | 1 | 2>(0);
+  const [scheduleData, setScheduleData] = useState<any>(null);
+
+  // Who is logged in? Used to gate the Edit button.
+  // Admins can edit any doctor in their hospital; super-admins anyone;
+  // a logged-in doctor can edit their own profile + schedule.
+  const currentUser = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
+  }, []);
 
   useEffect(() => {
-    if (id) fetchProfile();
+    if (id) {
+      fetchProfile();
+      fetchSchedule();
+    }
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchProfile = async () => {
@@ -43,6 +65,31 @@ const DoctorProfile: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchSchedule = async () => {
+    try {
+      const res: any = await doctorService.getSchedule(id!);
+      setScheduleData(res.data?.data || res.data);
+    } catch {
+      // schedule is optional — silently degrade
+    }
+  };
+
+  const reloadAll = () => { fetchProfile(); fetchSchedule(); };
+
+  const canEdit = useMemo(() => {
+    if (!data?.doctor) return false;
+    if (currentUser?.role === 'SUPER_ADMIN') return true;
+    if (currentUser?.role === 'ADMIN' && currentUser?.hospitalId === data.doctor.hospitalId) return true;
+    // Doctor editing themselves
+    if (currentUser?.role === 'DOCTOR' && currentUser?.id === data.doctor.userId) return true;
+    return false;
+  }, [data, currentUser]);
+
+  const openEdit = (tabIdx: 0 | 1 | 2 = 0) => {
+    setEditTab(tabIdx);
+    setEditOpen(true);
   };
 
   if (loading) {
@@ -68,20 +115,52 @@ const DoctorProfile: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <IconButton onClick={() => navigate(-1)}><ArrowBack /></IconButton>
         <Avatar sx={{ width: 56, height: 56, bgcolor: '#1976d2', fontSize: 24 }}>
           {doctor.firstName?.charAt(0)}
         </Avatar>
-        <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 220 }}>
           <Typography variant="h5" fontWeight="bold">Dr. {doctor.firstName} {doctor.lastName}</Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
             <Chip icon={<MedicalServices />} label={doctor.specialization} size="small" color="primary" />
             {doctor.qualification && <Chip icon={<School />} label={doctor.qualification} size="small" variant="outlined" />}
             <Chip icon={<Badge />} label={`Reg: ${doctor.registrationNo}`} size="small" variant="outlined" />
             {doctor.hprId && <Chip label={`HPR: ${doctor.hprId}`} size="small" color="success" />}
+            {doctor.isActive === false && <Chip label="Inactive" size="small" color="error" variant="outlined" />}
           </Box>
         </Box>
+        {canEdit && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<CurrencyRupee />}
+              onClick={() => openEdit(1)}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Set fee
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Schedule />}
+              onClick={() => openEdit(2)}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Schedule
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<Edit />}
+              onClick={() => openEdit(0)}
+              sx={{ textTransform: 'none', fontWeight: 700 }}
+            >
+              Edit profile
+            </Button>
+          </Stack>
+        )}
       </Box>
 
       <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
@@ -215,8 +294,18 @@ const DoctorProfile: React.FC = () => {
             </TableContainer>
           </TabPanel>
 
-          {/* Tab 3: Schedule */}
+          {/* Tab 3: Schedule — weekly working-hours grid + appointments */}
           <TabPanel value={tab} index={3}>
+            {/* Working-hours summary */}
+            <ScheduleSummary
+              schedule={scheduleData}
+              canEdit={canEdit}
+              onEdit={() => openEdit(2)}
+            />
+
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 3, mb: 1 }}>
+              Upcoming & past appointments
+            </Typography>
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -253,25 +342,58 @@ const DoctorProfile: React.FC = () => {
             </TableContainer>
           </TabPanel>
 
-          {/* Tab 4: Earnings */}
+          {/* Tab 4: Earnings — consult-only with ancillary breakdown */}
           <TabPanel value={tab} index={4}>
-            <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Alert
+              severity="info"
+              icon={<TrendingUp />}
+              sx={{ mb: 2, borderRadius: 2 }}
+            >
+              <strong>Doctor's earnings = consultation fee only.</strong> Pharmacy, lab and
+              radiology charges that the front desk collects against this doctor's
+              encounters are tracked separately under <em>Ancillary collections</em> below
+              — they belong to the hospital's pharmacy / diagnostics budgets, not the doctor.
+            </Alert>
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={4}>
-                <Card sx={{ textAlign: 'center', background: `linear-gradient(135deg, ${alpha('#1ABC9C', 0.08)} 0%, ${alpha('#1ABC9C', 0.02)} 100%)`, border: `1px solid ${alpha('#1ABC9C', 0.2)}`, borderRadius: 2 }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">Total Earnings</Typography>
-                    <Typography variant="h4" fontWeight="bold" color="#1ABC9C">{currency(summary.totalEarnings)}</Typography>
-                  </CardContent>
-                </Card>
+                <EarningsStatCard
+                  icon={<AccountBalanceWallet />}
+                  label="Doctor's earnings"
+                  hint="Capped consult fee per encounter"
+                  value={currency(summary.totalEarnings)}
+                  color={theme.palette.success.main}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <EarningsStatCard
+                  icon={<Receipt />}
+                  label="Total collected"
+                  hint="All money received against this doctor's encounters"
+                  value={currency(summary.totalCollected ?? summary.totalEarnings)}
+                  color={theme.palette.info.main}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <EarningsStatCard
+                  icon={<Storefront />}
+                  label="Ancillary (pharmacy / lab / scan)"
+                  hint="Belongs to hospital, not doctor"
+                  value={currency(summary.totalAncillary ?? 0)}
+                  color={theme.palette.warning.main}
+                />
               </Grid>
             </Grid>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>Monthly Breakdown</Typography>
-            <TableContainer>
+
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+              Monthly earnings (consultation fees only)
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
               <Table size="small">
-                <TableHead>
+                <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.06) }}>
                   <TableRow>
                     <TableCell>Month</TableCell>
-                    <TableCell align="right">Amount</TableCell>
+                    <TableCell align="right">Doctor's earnings</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -282,7 +404,7 @@ const DoctorProfile: React.FC = () => {
                     </TableRow>
                   ))}
                   {(!earningsSummary || earningsSummary.length === 0) && (
-                    <TableRow><TableCell colSpan={2} align="center"><Typography color="text.secondary">No earnings data</Typography></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={2} align="center"><Typography color="text.secondary">No earnings data yet</Typography></TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -290,9 +412,157 @@ const DoctorProfile: React.FC = () => {
           </TabPanel>
         </Box>
       </Paper>
+
+      {/* Edit profile / fee / schedule dialog */}
+      <DoctorEditDialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        doctor={{ ...doctor, ...(scheduleData || {}) }}
+        initialTab={editTab}
+        onSaved={reloadAll}
+      />
     </Box>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Schedule summary — weekly working-hours card on the Schedule tab.
+// Reads from getSchedule() (workingHours / slotDuration / breakTimes / hospital
+// fallbacks) and renders a clean per-day chip strip.
+// ---------------------------------------------------------------------------
+const ScheduleSummary: React.FC<{
+  schedule: any;
+  canEdit: boolean;
+  onEdit: () => void;
+}> = ({ schedule, canEdit, onEdit }) => {
+  const theme = useTheme();
+  // Unify workingHours shape: accept upper- or lower-cased keys.
+  const wh: Record<string, any> = (schedule?.workingHours || {}) as any;
+  const hospitalHours: Record<string, any> = (schedule?.hospital?.operatingHours || {}) as any;
+
+  const dayInfo = (k: string) => {
+    const item = wh[k] ?? wh[k.toLowerCase()] ?? hospitalHours[k] ?? hospitalHours[k.toLowerCase()];
+    if (!item || typeof item !== 'object') return { open: false, start: '', end: '' };
+    return {
+      open: item.open !== undefined ? !!item.open : !!(item.start && item.end),
+      start: item.start || '',
+      end: item.end || '',
+    };
+  };
+
+  const slot = Number(schedule?.slotDuration) || Number(schedule?.hospital?.defaultSlotDuration) || 15;
+  const maxPerDay = Number(schedule?.maxPatientsPerDay) || 30;
+  const breaks = Array.isArray(schedule?.breakTimes) ? schedule.breakTimes : [];
+
+  const openCount = DAY_KEYS.filter((k) => dayInfo(k).open).length;
+  const totalHours = DAY_KEYS.reduce((acc, k) => {
+    const d = dayInfo(k);
+    if (!d.open || !d.start || !d.end) return acc;
+    const [sh, sm] = d.start.split(':').map(Number);
+    const [eh, em] = d.end.split(':').map(Number);
+    return acc + Math.max(0, (eh + em / 60) - (sh + sm / 60));
+  }, 0);
+
+  return (
+    <Paper variant="outlined" sx={{
+      p: 2, borderRadius: 2,
+      background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.04)} 0%, ${alpha(theme.palette.primary.main, 0.0)} 100%)`,
+    }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" spacing={1.5}>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={800}>Weekly availability</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {openCount} day{openCount === 1 ? '' : 's'} open · {totalHours.toFixed(1)} h / week ·
+            slot {slot} min · max {maxPerDay} patients / day
+          </Typography>
+        </Box>
+        {canEdit && (
+          <Button size="small" variant="outlined" startIcon={<Edit />} onClick={onEdit} sx={{ textTransform: 'none', fontWeight: 700 }}>
+            Edit schedule
+          </Button>
+        )}
+      </Stack>
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+        {DAY_KEYS.map((k) => {
+          const d = dayInfo(k);
+          return (
+            <Paper
+              key={k}
+              variant="outlined"
+              sx={{
+                p: 1, borderRadius: 2, minWidth: 96, textAlign: 'center',
+                borderColor: d.open ? alpha(theme.palette.success.main, 0.4) : 'divider',
+                background: d.open ? alpha(theme.palette.success.main, 0.06) : alpha(theme.palette.text.disabled, 0.04),
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                {DAY_LABELS[k]}
+              </Typography>
+              {d.open ? (
+                <>
+                  <Typography variant="body2" fontWeight={700}>{d.start}</Typography>
+                  <Typography variant="caption" color="text.secondary">to {d.end}</Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.disabled" fontWeight={700}>Closed</Typography>
+              )}
+            </Paper>
+          );
+        })}
+      </Stack>
+
+      {breaks.length > 0 && (
+        <Box sx={{ mt: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Breaks</Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+            {breaks.map((b: any, i: number) => (
+              <Chip
+                key={i}
+                size="small"
+                icon={<Coffee />}
+                label={`${(b.day || 'ALL').toString().toUpperCase()} · ${b.start}–${b.end}${b.label ? ` (${b.label})` : ''}`}
+                variant="outlined"
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </Paper>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Earnings card primitive
+// ---------------------------------------------------------------------------
+const EarningsStatCard: React.FC<{
+  icon: React.ReactElement;
+  label: string;
+  hint?: string;
+  value: string;
+  color: string;
+}> = ({ icon, label, hint, value, color }) => (
+  <Paper variant="outlined" sx={{
+    p: 2, borderRadius: 2, height: '100%',
+    background: `linear-gradient(135deg, ${alpha(color, 0.08)} 0%, ${alpha(color, 0.0)} 100%)`,
+    border: `1px solid ${alpha(color, 0.25)}`,
+  }}>
+    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+      <Box sx={{
+        width: 32, height: 32, borderRadius: 1.5, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        background: alpha(color, 0.18), color,
+      }}>
+        {React.cloneElement(icon, { sx: { fontSize: 18 } })}
+      </Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {label}
+      </Typography>
+    </Stack>
+    <Typography variant="h5" fontWeight={800} sx={{ color }}>{value}</Typography>
+    {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
+  </Paper>
+);
 
 const InfoRow: React.FC<{ icon: React.ReactElement; label: string; value: string }> = ({ icon, label, value }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>

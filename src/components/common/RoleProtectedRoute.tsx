@@ -13,7 +13,7 @@ interface RoleProtectedRouteProps {
 const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({ 
   children, 
   requiredRoles,
-  redirectTo = '/dashboard' 
+  redirectTo = '/app/dashboard'
 }) => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userRole = user.role as UserRole;

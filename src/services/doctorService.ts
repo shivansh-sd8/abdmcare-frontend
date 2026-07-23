@@ -11,6 +11,7 @@ interface CreateDoctorData {
   email?: string;
   consultationFee?: number;
   experience?: number;
+  isActive?: boolean;
 }
 
 class DoctorService {

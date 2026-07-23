@@ -5,6 +5,7 @@ import {
   Tooltip, CircularProgress, Alert, Grid, alpha, Divider,
   Avatar, InputAdornment, Collapse, Table, TableBody, TableCell, TableHead, TableRow,
 } from '@mui/material';
+import { PageHeader, StatCard, EmptyState } from '../../components/ui';
 import {
   Add, Delete, Medication, Print, LocalPharmacy, Search,
   Refresh, ExpandMore, ExpandLess, Person, Close, CheckCircle,
@@ -229,82 +230,74 @@ ${rx.notes ? `<div class="notes"><strong>Notes:</strong> ${rx.notes}</div>` : ''
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" fontWeight={800}>Prescriptions</Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            {permissions.isPharmacist
-              ? 'Review and dispense prescriptions'
-              : permissions.isDoctor
-              ? 'All prescriptions you have issued'
-              : 'All prescriptions in your hospital'}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Tooltip title="Refresh">
-            <IconButton onClick={fetchPrescriptions} disabled={loading}><Refresh /></IconButton>
-          </Tooltip>
-        {permissions.canCreatePrescription && (
-            <Button variant="contained" startIcon={<Add />}
-              onClick={() => {
-                patientService.searchPatients({ limit: 100 } as any).then((r: any) => {
-                  const list = Array.isArray(r.data) ? r.data : r.data?.patients || r.data?.data || [];
-                  setPatients(list);
-                });
-                setCreateOpen(true);
-              }}>
-            New Prescription
-          </Button>
-        )}
-        </Box>
-      </Box>
+      <PageHeader
+        title="Prescriptions"
+        subtitle={
+          permissions.isPharmacist
+            ? 'Review and dispense prescriptions'
+            : permissions.isDoctor
+              ? 'Prescriptions you have issued'
+              : 'All prescriptions in your hospital'
+        }
+        icon={<LocalPharmacy />}
+        actions={
+          <>
+            <Tooltip title="Refresh">
+              <IconButton onClick={fetchPrescriptions} disabled={loading}>
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+            {permissions.canCreatePrescription && (
+              <Button variant="contained" startIcon={<Add />}
+                onClick={() => {
+                  patientService.searchPatients({ limit: 100 } as any).then((r: any) => {
+                    const list = Array.isArray(r.data) ? r.data : r.data?.patients || r.data?.data || [];
+                    setPatients(list);
+                  });
+                  setCreateOpen(true);
+                }}>
+                New
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
-      {/* Stats */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { label: 'Patients',      value: groups.length,     color: '#1a3c6e', icon: <Person /> },
-          { label: 'Prescriptions', value: prescriptions.length, color: '#2e7d32', icon: <LocalPharmacy /> },
-          { label: 'Total Medicines',value: totalMeds,        color: '#6a1b9a', icon: <Medication /> },
-        ].map(s => (
-          <Grid item xs={12} sm={4} key={s.label}>
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 3,
-              borderColor: alpha(s.color, 0.25), bgcolor: alpha(s.color, 0.04) }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Box sx={{ p: 1, borderRadius: 2, bgcolor: s.color, color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {s.icon}
-                </Box>
-              <Box>
-                  <Typography variant="caption" color="text.secondary">{s.label}</Typography>
-                  <Typography variant="h5" fontWeight={800} color={s.color}>{s.value}</Typography>
-                </Box>
-              </Box>
-            </Paper>
+      <Grid container spacing={2.25} sx={{ mb: 2.5 }}>
+        <Grid item xs={4}>
+          <StatCard label="Patients" value={groups.length.toLocaleString()}
+            icon={<Person />} tone="info" loading={loading} />
         </Grid>
-        ))}
+        <Grid item xs={4}>
+          <StatCard label="Prescriptions" value={prescriptions.length.toLocaleString()}
+            icon={<LocalPharmacy />} tone="success" loading={loading} />
+        </Grid>
+        <Grid item xs={4}>
+          <StatCard label="Medicines" value={totalMeds.toLocaleString()}
+            icon={<Medication />} tone="secondary" loading={loading} />
+        </Grid>
       </Grid>
 
-      {/* Search */}
-      <TextField size="small" placeholder="Search patient, medicine, diagnosis, doctor…"
-        value={search} onChange={e => setSearch(e.target.value)}
-        sx={{ mb: 3, minWidth: 320 }}
-        InputProps={{ startAdornment: <InputAdornment position="start"><Search fontSize="small" /></InputAdornment> }}
-      />
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2 }}>
+        <TextField size="small" fullWidth
+          placeholder="Search patient, medicine, diagnosis, doctor…"
+          value={search} onChange={e => setSearch(e.target.value)}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><Search fontSize="small" sx={{ color: 'text.secondary' }} /></InputAdornment>,
+          }}
+        />
+      </Paper>
 
-      {/* Patient groups */}
-        {loading ? (
+      {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
       ) : groups.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
-          <LocalPharmacy sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary">No prescriptions found</Typography>
-          <Typography variant="body2" color="text.disabled" mt={0.5}>
-            Prescriptions will appear here once a doctor completes a consultation.
-          </Typography>
-        </Paper>
+        <EmptyState
+          icon={<LocalPharmacy />}
+          title="No prescriptions"
+          message="Prescriptions will appear here once a doctor completes a consultation."
+        />
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {groups.map(({ patient, prescriptions: rxList }) => {

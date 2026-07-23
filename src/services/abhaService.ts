@@ -91,8 +91,8 @@ class AbhaService {
     return api.post(`${BASE}/login/verify-password`, { scope, abhaNumber, password });
   }
 
-  async loginVerifyUser(abhaNumber: string, txnId: string) {
-    return api.post(`${BASE}/login/verify-user`, { abhaNumber, txnId });
+  async loginVerifyUser(abhaNumber: string, txnId: string, transferToken?: string) {
+    return api.post(`${BASE}/login/verify-user`, { abhaNumber, txnId, transferToken });
   }
 
   async loginSearch(abhaNumber: string) {
@@ -158,8 +158,19 @@ class AbhaService {
   // ══════════════════════════════════════════════════════════════════════════
   // PATIENT LINKING
   // ══════════════════════════════════════════════════════════════════════════
-  async linkToPatient(abhaNumber: string, patientId: string, abhaAddress?: string) {
-    return api.post(`${BASE}/link`, { abhaNumber, patientId, abhaAddress });
+  async linkToPatient(
+    abhaNumber: string,
+    patientId: string,
+    abhaAddress?: string,
+    opts?: { verified?: boolean; profile?: any },
+  ) {
+    return api.post(`${BASE}/link`, {
+      abhaNumber,
+      patientId,
+      abhaAddress,
+      ...(opts?.verified ? { verified: true } : {}),
+      ...(opts?.profile ? { profile: opts.profile } : {}),
+    });
   }
 
   async unlinkFromPatient(abhaNumber: string, patientId: string) {
@@ -184,6 +195,45 @@ class AbhaService {
 
   async profileVerifyOtp(scope: string[], txnId: string, otp: string, xToken: string) {
     return api.post(`${BASE}/profile/verify-otp`, { scope, txnId, otp }, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // M1 (optional): PROFILE MANAGEMENT — Re-KYC, Email, Delete, Deactivate
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /** Send an email verification link to the ABHA-registered email. */
+  async requestEmailVerification(xToken: string) {
+    return api.post(`${BASE}/profile/email-verification`, {}, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  /** Initiate Re-KYC — sends OTP to the linked Aadhaar or mobile. */
+  async requestReKyc(authMethod: 'aadhaar' | 'mobile', xToken: string) {
+    return api.post(`${BASE}/profile/rekyc`, { authMethod }, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  /** Step 1 of ABHA deletion — request OTP on the linked mobile. */
+  async deleteAbhaRequestOtp(xToken: string) {
+    return api.post(`${BASE}/profile/delete/request-otp`, {}, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  /** Step 2 of ABHA deletion — confirm with the OTP. */
+  async deleteAbhaConfirm(txnId: string, otp: string, xToken: string) {
+    return api.post(`${BASE}/profile/delete/confirm`, { txnId, otp }, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  /** Deactivate (suspend) the ABHA account. */
+  async deactivateAbha(xToken: string, reason?: string) {
+    return api.post(`${BASE}/profile/deactivate`, { reason }, { headers: { 'X-token': `Bearer ${xToken}` } });
+  }
+
+  /** Step 1 of reactivation — request OTP for a suspended ABHA number. */
+  async reactivateAbhaRequestOtp(abhaNumber: string) {
+    return api.post(`${BASE}/profile/reactivate/request-otp`, { abhaNumber });
+  }
+
+  /** Step 2 of reactivation — confirm with the OTP. */
+  async reactivateAbhaConfirm(txnId: string, otp: string) {
+    return api.post(`${BASE}/profile/reactivate/confirm`, { txnId, otp });
   }
 
   // ══════════════════════════════════════════════════════════════════════════

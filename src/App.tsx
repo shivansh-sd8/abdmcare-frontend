@@ -5,11 +5,10 @@ import { Box, CircularProgress } from '@mui/material';
 import MainLayout from './components/layouts/MainLayout';
 import PrivateRoute from './components/common/PrivateRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 const Dashboard = React.lazy(() => import('./features/dashboard/Dashboard'));
 const AbhaManagement = React.lazy(() => import('./features/abha/AbhaManagement'));
-const ScanAndShare = React.lazy(() => import('./features/abha/ScanAndShare'));
-const PatientCheckIn = React.lazy(() => import('./features/abha/PatientCheckIn'));
 const PatientList = React.lazy(() => import('./features/patient/PatientList'));
 const PatientRegistration = React.lazy(() => import('./features/patient/PatientRegistration'));
 const PatientProfile = React.lazy(() => import('./features/patient/PatientProfile'));
@@ -22,8 +21,9 @@ const ConsentManagement = React.lazy(() => import('./features/consent/ConsentMan
 const Profile = React.lazy(() => import('./features/profile/Profile'));
 const Settings = React.lazy(() => import('./features/settings/Settings'));
 const Notifications = React.lazy(() => import('./features/notifications/Notifications'));
-const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
+
 const HospitalManagement = React.lazy(() => import('./features/hospital/HospitalManagement'));
+const HospitalPerformance = React.lazy(() => import('./features/hospital/HospitalPerformance'));
 const UserManagement = React.lazy(() => import('./features/user/UserManagement'));
 const PaymentManagement = React.lazy(() => import('./features/receptionist/PaymentManagement'));
 const EncounterList = React.lazy(() => import('./features/doctor/EncounterList'));
@@ -34,12 +34,16 @@ const AdmissionList = React.lazy(() => import('./features/ipd/AdmissionList'));
 const WardManager = React.lazy(() => import('./features/ipd/WardManager'));
 const InvestigationQueue = React.lazy(() => import('./features/lab/InvestigationQueue'));
 const PrescriptionQueue = React.lazy(() => import('./features/pharmacy/PrescriptionQueue'));
+const MedicineList = React.lazy(() => import('./features/pharmacy/MedicineList'));
 const BillingDashboard = React.lazy(() => import('./features/billing/BillingDashboard'));
 const Login = React.lazy(() => import('./features/auth/Login'));
 const ForgotPassword = React.lazy(() => import('./features/auth/ForgotPassword'));
-const SuperAdminSignup = React.lazy(() => import('./features/auth/SuperAdminSignup'));
 const LandingPage = React.lazy(() => import('./pages/LandingPage'));
-const DocumentationPage = React.lazy(() => import('./pages/DocumentationPage'));
+const QueueDisplay = React.lazy(() => import('./features/queue/QueueDisplay'));
+const AuditLogs = React.lazy(() => import('./features/audit/AuditLogs'));
+const AbdmActivity = React.lazy(() => import('./features/abdm/AbdmActivity'));
+const CompliancePack = React.lazy(() => import('./features/compliance/CompliancePack'));
+const HospitalReports = React.lazy(() => import('./features/reports/HospitalReports'));
 
 const PageLoader = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
@@ -47,16 +51,25 @@ const PageLoader = () => (
   </Box>
 );
 
+const ContentLoader = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+    <CircularProgress size={32} />
+  </Box>
+);
+
 const App: React.FC = () => {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/documentation" element={<DocumentationPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/signup" element={<SuperAdminSignup />} />
-        <Route path="/super-admin-signup" element={<SuperAdminSignup />} />
+        <Route path="/" element={<Suspense fallback={<PageLoader />}><LandingPage /></Suspense>} />
+        {/* Public /documentation has been retired; the tech pack now lives behind login at /app/compliance. */}
+        <Route path="/documentation" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+        <Route path="/forgot-password" element={<Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense>} />
+        {/* Legacy signup paths now bounce to /login. Account creation is admin-only. */}
+        <Route path="/signup" element={<Navigate to="/login" replace />} />
+        <Route path="/super-admin-signup" element={<Navigate to="/login" replace />} />
         
         <Route
           path="/app"
@@ -103,7 +116,7 @@ const App: React.FC = () => {
             <Route 
               path="patients/:id" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN']}>
                   <PatientProfile />
                 </RoleProtectedRoute>
               } 
@@ -172,7 +185,7 @@ const App: React.FC = () => {
             <Route
               path="ehr"
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_TECHNICIAN']}>
                   <EHRList />
                 </RoleProtectedRoute>
               }
@@ -199,7 +212,7 @@ const App: React.FC = () => {
             <Route 
               path="investigations" 
               element={
-                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN', 'RADIOLOGIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'LAB_TECHNICIAN']}>
                   <InvestigationQueue />
                 </RoleProtectedRoute>
               } 
@@ -213,27 +226,68 @@ const App: React.FC = () => {
                 </RoleProtectedRoute>
               } 
             />
+            <Route 
+              path="pharmacy/medicines" 
+              element={
+                <RoleProtectedRoute requiredRoles={['PHARMACIST', 'SUPER_ADMIN', 'ADMIN']}>
+                  <MedicineList />
+                </RoleProtectedRoute>
+              } 
+            />
             
             <Route 
               path="billing" 
               element={
-                <RoleProtectedRoute requiredRoles={['BILLING_STAFF', 'SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'RECEPTIONIST']}>
                   <BillingDashboard />
                 </RoleProtectedRoute>
               } 
             />
             
+            <Route
+              path="queue"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST']}>
+                  <QueueDisplay />
+                </RoleProtectedRoute>
+              }
+            />
+
             <Route path="profile" element={<Profile />} />
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
             
-            <Route 
-              path="audit-logs" 
+            <Route
+              path="audit-logs"
               element={
                 <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
                   <AuditLogs />
                 </RoleProtectedRoute>
-              } 
+              }
+            />
+            <Route
+              path="abdm-activity"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <AbdmActivity />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="compliance"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <CompliancePack />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <HospitalReports />
+                </RoleProtectedRoute>
+              }
             />
             
             <Route 
@@ -243,6 +297,15 @@ const App: React.FC = () => {
                   <HospitalManagement />
                 </RoleProtectedRoute>
               } 
+            />
+
+            <Route
+              path="hospitals/:id/performance"
+              element={
+                <RoleProtectedRoute requiredRoles={['SUPER_ADMIN', 'ADMIN']}>
+                  <HospitalPerformance />
+                </RoleProtectedRoute>
+              }
             />
             
             <Route 
@@ -279,6 +342,7 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 };
 

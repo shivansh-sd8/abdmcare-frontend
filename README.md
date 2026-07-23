@@ -1,6 +1,6 @@
-# MediSync ABDM - Frontend
+# AbhaAyushman ABDM - Frontend
 
-Production-grade React + TypeScript frontend for MediSync ABDM Hospital Information Management System.
+Production-grade React + TypeScript frontend for AbhaAyushman ABDM Hospital Information Management System.
 
 ## Tech Stack
 
@@ -116,7 +116,7 @@ src/
 ```env
 REACT_APP_API_BASE_URL=http://localhost:3000
 REACT_APP_ENV=development
-REACT_APP_NAME=MediSync ABDM
+REACT_APP_NAME=AbhaAyushman ABDM
 REACT_APP_VERSION=1.0.0
 ```
 

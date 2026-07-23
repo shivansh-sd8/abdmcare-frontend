@@ -20,9 +20,11 @@ import {
   Phone,
   Badge as BadgeIcon,
   LocationOn,
+  AccountCircle,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import { PageHeader } from '../../components/ui';
 
 const Profile: React.FC = () => {
   const [editMode, setEditMode] = useState(false);
@@ -85,47 +87,27 @@ const Profile: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        mb: 4,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            My Profile
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage your personal information and preferences
-          </Typography>
-        </Box>
-        {!editMode ? (
-          <Button
-            variant="contained"
-            startIcon={<Edit />}
-            onClick={() => setEditMode(true)}
-          >
-            Edit Profile
-          </Button>
-        ) : (
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<Cancel />}
-              onClick={handleCancel}
-            >
-              Cancel
+      <PageHeader
+        title="My Profile"
+        subtitle="Manage your personal information and preferences"
+        icon={<AccountCircle />}
+        actions={
+          !editMode ? (
+            <Button variant="contained" startIcon={<Edit />} onClick={() => setEditMode(true)}>
+              Edit profile
             </Button>
-            <Button
-              variant="contained"
-              startIcon={<Save />}
-              onClick={handleSave}
-            >
-              Save Changes
-            </Button>
-          </Box>
-        )}
-      </Box>
+          ) : (
+            <>
+              <Button variant="outlined" startIcon={<Cancel />} onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button variant="contained" startIcon={<Save />} onClick={handleSave}>
+                Save
+              </Button>
+            </>
+          )
+        }
+      />
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>

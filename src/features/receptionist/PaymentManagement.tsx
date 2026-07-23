@@ -28,7 +28,9 @@ import {
 import { toast } from 'react-toastify';
 import paymentService from '../../services/paymentService';
 import { generateAdvanceSlip } from '../../utils/advanceSlipGenerator';
+import documentService from '../../services/documentService';
 import { useSelector } from 'react-redux';
+import { PageHeader } from '../../components/ui';
 
 const PaymentManagement: React.FC = () => {
   const authUser = useSelector((state: any) => state.auth?.user);
@@ -92,9 +94,9 @@ const PaymentManagement: React.FC = () => {
 
   const handlePrintReceipt = (payment: any) => {
     try {
-      generateAdvanceSlip({
+      const base64 = generateAdvanceSlip({
         hospital: {
-          name: authUser?.hospitalName || 'MediSync Hospital',
+          name: authUser?.hospitalName || 'AbhaAyushman Hospital',
         },
         patient: {
           name: `${payment.patient?.firstName ?? ''} ${payment.patient?.lastName ?? ''}`.trim(),
@@ -112,6 +114,9 @@ const PaymentManagement: React.FC = () => {
         },
         generatedBy: authUser?.name,
       });
+      if (payment.patientId) {
+        documentService.persistDocument({ patientId: payment.patientId, type: 'ADVANCE_SLIP', content: base64 }).catch(() => {});
+      }
     } catch {
       toast.error('Failed to generate receipt');
     }
@@ -188,6 +193,35 @@ const PaymentManagement: React.FC = () => {
       width: 200,
     },
     {
+      field: 'collectedBy',
+      headerName: 'Collected by',
+      width: 180,
+      // The DataGrid sorts/filters off `value`, so we expose a clean string
+      // there; the renderer adds the role chip on top of that name.
+      valueGetter: (params: any) =>
+        params.row.collectedBy
+          ? `${params.row.collectedBy.firstName} ${params.row.collectedBy.lastName}`.trim()
+          : '—',
+      renderCell: (params: any) => {
+        const u = params.row.collectedBy;
+        if (!u) {
+          return (
+            <Typography variant="caption" color="text.secondary">—</Typography>
+          );
+        }
+        return (
+          <Box>
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {u.firstName} {u.lastName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {u.role}
+            </Typography>
+          </Box>
+        );
+      },
+    },
+    {
       field: 'createdAt',
       headerName: 'Date',
       width: 150,
@@ -227,31 +261,25 @@ const PaymentManagement: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PaymentIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-          <Box>
-            <Typography variant="h4" fontWeight="bold">
-              Payment Management
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Manage patient payments and receipts
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton onClick={fetchPayments} color="primary">
-          <Refresh />
-        </IconButton>
-      </Box>
+      <PageHeader
+        title="Payment Management"
+        subtitle="Manage patient payments and receipts"
+        icon={<PaymentIcon />}
+        actions={
+          <IconButton onClick={fetchPayments} color="primary">
+            <Refresh />
+          </IconButton>
+        }
+      />
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Grid container spacing={2}>
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 2 }}>
+        <Grid container spacing={1.5}>
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Status Filter</InputLabel>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
               <Select
                 value={statusFilter}
-                label="Status Filter"
+                label="Status"
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <MenuItem value="">All</MenuItem>
@@ -264,7 +292,7 @@ const PaymentManagement: React.FC = () => {
         </Grid>
       </Paper>
 
-      <Paper sx={{ height: 600 }}>
+      <Paper variant="outlined" sx={{ height: 600, borderRadius: 2, overflow: 'hidden' }}>
         <DataGrid
           rows={payments}
           columns={columns}
@@ -278,6 +306,10 @@ const PaymentManagement: React.FC = () => {
           }}
           pageSizeOptions={[10, 25, 50, 100]}
           disableRowSelectionOnClick
+          sx={{
+            border: 0,
+            '& .MuiDataGrid-columnHeaders': { bgcolor: 'action.hover', fontWeight: 600 },
+          }}
         />
       </Paper>
 

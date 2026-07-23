@@ -26,9 +26,11 @@ import {
   Storage,
   Save,
   Lock,
+  SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import { PageHeader } from '../../components/ui';
 
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState({
@@ -92,28 +94,16 @@ const Settings: React.FC = () => {
 
   return (
     <Box>
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        mb: 4,
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight="bold" sx={{ mb: 0.5 }}>
-            Settings
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage your application preferences and configurations
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Save />}
-          onClick={handleSave}
-        >
-          Save Changes
-        </Button>
-      </Box>
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your application preferences and configurations"
+        icon={<SettingsIcon />}
+        actions={
+          <Button variant="contained" startIcon={<Save />} onClick={handleSave}>
+            Save changes
+          </Button>
+        }
+      />
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>

@@ -4,6 +4,12 @@
  */
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
+import {
+  M, PW, CW, C, rgb, pdfToBase64,
+  drawHeaderBand, drawControlStrip, sectionBand,
+  drawInfoTable, drawBillingSummaryRow, drawFooter,
+  formatDateTime,
+} from './pdfCommon';
 
 export interface GatePassData {
   hospital: {
@@ -12,6 +18,7 @@ export interface GatePassData {
     city?: string;
     state?: string;
     phone?: string;
+    email?: string;
   };
   patient: {
     name: string;
@@ -38,120 +45,80 @@ export interface GatePassData {
     totalPaid: number;
     paymentStatus: string;
   };
+  generatedBy?: string;
 }
 
-export function generateGatePass(data: GatePassData): void {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 15;
+export function generateGatePass(data: GatePassData): string {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  let y: number;
+  const cx = M + CW / 2;
 
-  // Hospital Header
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(data.hospital.name, pageWidth / 2, y, { align: 'center' });
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const addrParts = [data.hospital.addressLine1, data.hospital.city, data.hospital.state].filter(Boolean);
-  if (addrParts.length) {
-    doc.text(addrParts.join(', '), pageWidth / 2, y, { align: 'center' });
-    y += 4;
-  }
-  if (data.hospital.phone) {
-    doc.text(`Phone: ${data.hospital.phone}`, pageWidth / 2, y, { align: 'center' });
-    y += 4;
-  }
+  // ── Header band ─────────────────────────────────────────────────────
+  y = drawHeaderBand(doc, data.hospital, 'Gate Pass', 'Patient Clearance');
 
-  // Title with border
-  y += 6;
-  doc.setDrawColor(39, 174, 96);
-  doc.setLineWidth(1);
-  doc.line(15, y, pageWidth - 15, y);
-  y += 8;
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(39, 174, 96);
-  doc.text('GATE PASS', pageWidth / 2, y, { align: 'center' });
-  y += 4;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Patient Clearance for Departure', pageWidth / 2, y, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 4;
-  doc.line(15, y, pageWidth - 15, y);
-  y += 10;
-
-  const addRow = (label: string, value: string, xLabel = 20, xValue = 75) => {
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.text(label, xLabel, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text(value || '—', xValue, y);
-    y += 7;
-  };
-
-  // Patient Info
-  addRow('Patient Name:', data.patient.name);
-  addRow('UHID:', data.patient.uhid);
-  if (data.patient.gender || data.patient.age) {
-    addRow('Gender / Age:', `${data.patient.gender || '—'} / ${data.patient.age || '—'}`);
-  }
-  if (data.patient.mobile) addRow('Contact:', data.patient.mobile);
-
+  // ── Control strip ───────────────────────────────────────────────────
+  y = drawControlStrip(
+    doc, y,
+    `Admission No: ${data.admission.admissionNumber}`,
+    `Discharged: ${formatDateTime(data.admission.dischargedAt)}`,
+  );
   y += 4;
 
-  // Admission Info
-  addRow('Admission No:', data.admission.admissionNumber);
-  addRow('Ward / Bed:', `${data.admission.wardName}${data.admission.bedNumber ? ` / Bed ${data.admission.bedNumber}` : ''}`);
-  addRow('Admitted On:', format(new Date(data.admission.admittedAt), 'dd MMM yyyy, hh:mm a'));
-  addRow('Discharged On:', format(new Date(data.admission.dischargedAt), 'dd MMM yyyy, hh:mm a'));
-  addRow('Duration:', `${data.admission.days} day${data.admission.days > 1 ? 's' : ''}`);
-  if (data.admission.diagnosis) addRow('Diagnosis:', data.admission.diagnosis);
-  if (data.doctor) addRow('Treating Doctor:', data.doctor.name);
+  // ── Patient Information ─────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Patient Information');
+  y = drawInfoTable(doc, y, [
+    ['Name', data.patient.name || '—', 'UHID', data.patient.uhid || '—'],
+    ['Age / Gender', `${data.patient.age || '—'} / ${data.patient.gender || '—'}`, 'Contact', data.patient.mobile || '—'],
+  ]);
 
-  y += 4;
+  // ── Admission Details ───────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Admission Details');
+  y = drawInfoTable(doc, y, [
+    ['Ward / Bed', `${data.admission.wardName}${data.admission.bedNumber ? ` / Bed ${data.admission.bedNumber}` : ''}`, 'Duration', `${data.admission.days} day${data.admission.days > 1 ? 's' : ''}`],
+    ['Admitted On', formatDateTime(data.admission.admittedAt), 'Discharged On', formatDateTime(data.admission.dischargedAt)],
+    ['Diagnosis', data.admission.diagnosis || '—', 'Doctor', data.doctor ? data.doctor.name : '—'],
+  ]);
 
-  // Payment Status
-  addRow('Total Bill:', `Rs. ${data.payment.totalAmount.toLocaleString('en-IN')}`);
-  addRow('Total Paid:', `Rs. ${data.payment.totalPaid.toLocaleString('en-IN')}`);
+  // ── Payment Status ──────────────────────────────────────────────────
+  y = sectionBand(doc, y, 'Payment Status', C.amber);
   const balance = Math.max(0, data.payment.totalAmount - data.payment.totalPaid);
-  addRow('Balance Due:', balance > 0 ? `Rs. ${balance.toLocaleString('en-IN')}` : 'NIL');
-  addRow('Payment Status:', data.payment.paymentStatus);
+  y = drawBillingSummaryRow(doc, y, 'Total Bill', `₹${data.payment.totalAmount.toLocaleString('en-IN')}`, false);
+  y = drawBillingSummaryRow(doc, y, 'Total Paid', `₹${data.payment.totalPaid.toLocaleString('en-IN')}`, false);
+  y = drawBillingSummaryRow(doc, y, 'Balance Due', balance > 0 ? `₹${balance.toLocaleString('en-IN')}` : 'NIL', true);
+  y = drawBillingSummaryRow(doc, y, 'Payment Status', data.payment.paymentStatus, false);
+  y += 6;
 
-  y += 10;
-
-  // Clearance Box
-  doc.setDrawColor(39, 174, 96);
+  // ── Clearance box ───────────────────────────────────────────────────
+  rgb(doc, C.green, 'draw');
+  doc.setLineWidth(0.8);
   doc.setFillColor(236, 253, 245);
-  doc.roundedRect(20, y, pageWidth - 40, 25, 3, 3, 'FD');
-  y += 10;
-  doc.setFontSize(13);
+  doc.roundedRect(M, y, CW, 22, 2, 2, 'FD');
+  rgb(doc, C.green, 'text');
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(39, 174, 96);
-  doc.text('PATIENT IS CLEARED FOR DEPARTURE', pageWidth / 2, y, { align: 'center' });
-  y += 7;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Issued on ${format(new Date(), 'dd MMM yyyy at hh:mm a')}`, pageWidth / 2, y, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
-  y += 20;
-
-  // Signature lines
-  doc.setDrawColor(150, 150, 150);
-  doc.line(20, y, 80, y);
-  doc.line(pageWidth - 80, y, pageWidth - 20, y);
-  y += 5;
-  doc.setFontSize(9);
-  doc.text('Authorized Signature', 30, y);
-  doc.text('Security Gate', pageWidth - 65, y);
-
-  // Footer
-  y += 15;
+  doc.text('PATIENT IS CLEARED FOR DEPARTURE', cx, y + 10, { align: 'center' });
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(130, 130, 130);
-  doc.text('This is a computer-generated gate pass. No signature required.', pageWidth / 2, y, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  rgb(doc, C.txtSec, 'text');
+  doc.text(`Issued on ${format(new Date(), 'dd MMM yyyy \'at\' hh:mm a')}`, cx, y + 17, { align: 'center' });
+  y += 28;
 
+  // ── Signature lines ─────────────────────────────────────────────────
+  rgb(doc, C.fgray, 'draw');
+  doc.setLineWidth(0.3);
+  doc.line(M, y, M + 60, y);
+  doc.line(PW - M - 60, y, PW - M, y);
+  y += 4;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  rgb(doc, C.txtSec, 'text');
+  doc.text('Authorised Signature', M + 10, y);
+  doc.text('Security Gate', PW - M - 45, y);
+
+  // ── Footer ──────────────────────────────────────────────────────────
+  drawFooter(doc, data.generatedBy);
+
+  const base64 = pdfToBase64(doc);
   doc.save(`Gate_Pass_${data.admission.admissionNumber}.pdf`);
+  return base64;
 }

@@ -1,7 +1,7 @@
 {
-  "name": "medisync-abdm-frontend",
+  "name": "abhaayushman-abdm-frontend",
   "version": "1.0.0",
-  "description": "MediSync ABDM - Frontend Application",
+  "description": "AbhaAyushman ABDM - Frontend Application",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,scss}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,scss}\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
@@ -22,13 +24,16 @@
     "@mui/x-date-pickers": "^6.19.4",
     "@reduxjs/toolkit": "^2.1.0",
     "@tanstack/react-query": "^5.17.19",
+    "@types/dompurify": "^3.0.5",
     "ajv": "^8.18.0",
     "axios": "^1.6.5",
     "date-fns": "^3.2.0",
+    "dompurify": "^3.4.10",
     "formik": "^2.4.5",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "jsqr": "^1.4.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.49.3",
@@ -39,6 +44,8 @@
     "yup": "^1.3.3"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
@@ -46,9 +53,11 @@
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^4.2.1",
     "eslint": "^8.56.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.2.4",
     "typescript": "^5.3.3",
-    "vite": "^5.1.0"
+    "vite": "^5.1.0",
+    "vitest": "^4.1.7"
   },
   "browserslist": {
     "production": [
