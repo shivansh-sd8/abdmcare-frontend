@@ -32,6 +32,7 @@ import {
   PictureAsPdf,
   Image as ImageIcon,
   OpenInNew,
+  ReceiptLong,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
@@ -50,6 +51,16 @@ interface ParsedFHIRData {
   procedures?: Array<{ code: string; display: string; status: string; date?: string }>;
   immunizations?: Array<{ code: string; display: string; status: string; date?: string }>;
   allergies?: Array<{ code: string; display: string; criticality?: string; reaction?: string }>;
+  invoices?: Array<{
+    invoiceNumber: string;
+    status: string;
+    totalAmount: number;
+    currency: string;
+    date: string;
+    description?: string;
+    paymentTerms?: string;
+    lineItems: Array<{ label: string; amount: number; currency: string }>;
+  }>;
   narrative?: string;
   sections?: Array<{ title: string; html: string }>;
   documents?: Array<{
@@ -336,6 +347,7 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                           {(p.immunizations?.length ?? 0) > 0 && <SectionChip label="Immunizations" count={p.immunizations!.length} color="#3498DB" />}
                           {(p.allergies?.length ?? 0) > 0 && <SectionChip label="Allergies" count={p.allergies!.length} color="#E67E22" />}
                           {(p.documents?.length ?? 0) > 0 && <SectionChip label="Attachments" count={p.documents!.length} color="#34495E" />}
+                          {(p.invoices?.length ?? 0) > 0 && <SectionChip label="Invoices" count={p.invoices!.length} color="#16A085" />}
                         </Box>
                       </Box>
                     </AccordionSummary>
@@ -451,6 +463,57 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                               );
                             })}
                           </Stack>
+                        </Box>
+                      )}
+
+                      {/* Invoices (FHIR Invoice / NRCeS InvoiceRecord) — billing
+                          received from the HIP. Rendered always (like attachments)
+                          since InvoiceRecord composition narratives are often thin. */}
+                      {(p.invoices?.length ?? 0) > 0 && (
+                        <Box sx={{ mb: 2 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <ReceiptLong sx={{ fontSize: 18, color: '#16A085' }} />
+                            <Typography variant="subtitle2" fontWeight={600}>Invoices</Typography>
+                          </Box>
+                          {p.invoices!.map((inv, i) => (
+                            <Box key={i} sx={{ ml: 3.5, mb: 1 }}>
+                              <Typography variant="body2">
+                                <strong>{inv.currency} {inv.totalAmount.toLocaleString('en-IN')}</strong>
+                                {inv.description && (
+                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                    {inv.description}
+                                  </Typography>
+                                )}
+                                {inv.status && (
+                                  <Chip label={inv.status} size="small" sx={{ ml: 1, height: 20, fontSize: 11 }} />
+                                )}
+                                {inv.date && (
+                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                    ({formatDate(inv.date)})
+                                  </Typography>
+                                )}
+                              </Typography>
+                              {inv.invoiceNumber && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace' }}>
+                                  #{inv.invoiceNumber}
+                                </Typography>
+                              )}
+                              {inv.lineItems?.length > 0 && (
+                                <Box sx={{ ml: 1, mt: 0.5 }}>
+                                  {inv.lineItems.map((li, j) => (
+                                    <Typography key={j} variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                      • {li.label}: {li.currency} {li.amount.toLocaleString('en-IN')}
+                                    </Typography>
+                                  ))}
+                                </Box>
+                              )}
+                              {inv.paymentTerms && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                  {inv.paymentTerms}
+                                </Typography>
+                              )}
+                            </Box>
+                          ))}
                         </Box>
                       )}
                       {/* Per-resource structured fallback view.
