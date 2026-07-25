@@ -453,15 +453,22 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                           </Stack>
                         </Box>
                       )}
-                      {/* Per-resource structured fallback view.
-                          Only render this when the document has NO narrative
-                          sections — otherwise we'd show the same data twice
-                          (once as a section table above, once as a chip list
-                          here). Legacy bundles from older HIPs that don't
-                          emit Composition.section[].text still need this
-                          fallback so we render meaningful content. */}
-                      {(!p.sections || p.sections.length === 0) && !p.narrative && (
-                        <>
+                      {/* Structured data tables — ALWAYS rendered so nothing
+                          the HIP sent is hidden. Previously these were shown
+                          only when the bundle had NO narrative/sections, which
+                          silently dropped every diagnosis/medication/observation
+                          for the (common) case where a Composition narrative
+                          exists. When a narrative/section view is also present a
+                          divider separates the structured extract that follows. */}
+                      {(p.narrative || (p.sections?.length ?? 0) > 0) &&
+                        (p.conditions.length > 0 || p.medications.length > 0 ||
+                          p.observations.length > 0 || p.reports.length > 0 ||
+                          (p.procedures?.length ?? 0) > 0 || (p.immunizations?.length ?? 0) > 0 ||
+                          (p.allergies?.length ?? 0) > 0) && (
+                        <Divider sx={{ my: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary">Structured data</Typography>
+                        </Divider>
+                      )}
                       {p.conditions.length > 0 && (
                         <Box sx={{ mb: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -606,8 +613,6 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                             </Box>
                           ))}
                         </Box>
-                      )}
-                        </>
                       )}
 
                       {p.encounters.length > 0 && (
