@@ -81,6 +81,77 @@ interface FederatedRecordsProps {
   patientId: string;
 }
 
+// Decode a base64 payload into a Blob via a byte loop (no String.fromCharCode
+// spread, which overflows the call stack on large PDFs/DOCs).
+function base64ToBlob(base64: string, contentType: string): Blob {
+  const clean = base64.replace(/\s/g, '');
+  const byteChars = atob(clean);
+  const bytes = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+  // Cast to BlobPart: Uint8Array is a valid BlobPart at runtime; the cast just
+  // sidesteps the TS 5.7 lib.dom ArrayBufferLike/SharedArrayBuffer variance.
+  return new Blob([bytes as unknown as BlobPart], { type: contentType || 'application/octet-stream' });
+}
+
+function extensionFor(contentType: string): string {
+  if (/pdf/i.test(contentType)) return 'pdf';
+  if (/png/i.test(contentType)) return 'png';
+  if (/jpe?g/i.test(contentType)) return 'jpg';
+  if (/gif/i.test(contentType)) return 'gif';
+  if (/officedocument\.wordprocessingml/i.test(contentType)) return 'docx';
+  if (/msword/i.test(contentType)) return 'doc';
+  if (/officedocument\.spreadsheetml/i.test(contentType)) return 'xlsx';
+  if (/ms-?excel/i.test(contentType)) return 'xls';
+  if (/html/i.test(contentType)) return 'html';
+  if (/plain/i.test(contentType)) return 'txt';
+  if (/xml/i.test(contentType)) return 'xml';
+  return 'bin';
+}
+
+function triggerDownload(objectUrl: string, doc: { title: string; contentType: string }): void {
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  const safe = (doc.title || 'document').replace(/[^\w.\-]+/g, '_');
+  a.download = /\.[a-z0-9]{1,5}$/i.test(safe) ? safe : `${safe}.${extensionFor(doc.contentType)}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Open an attachment robustly across data types. External http(s) URLs open
+// directly. Inline base64 is turned into a Blob object URL — Chrome BLOCKS
+// top-level navigation to `data:` URLs (so `window.open('data:…pdf')` yields a
+// blank tab), whereas a blob: URL renders PDFs/images/text in the browser
+// viewer. Non-viewable types (DOC/DOCX/XLS/unknown) are downloaded instead.
+function openAttachment(doc: {
+  title: string;
+  contentType: string;
+  url?: string;
+  data?: string;
+}): { ok: boolean; reason?: string } {
+  if (doc.url && /^https?:\/\//i.test(doc.url)) {
+    window.open(doc.url, '_blank', 'noopener');
+    return { ok: true };
+  }
+  if (!doc.data) return { ok: false, reason: 'no-data' };
+  try {
+    const blob = base64ToBlob(doc.data, doc.contentType);
+    const objectUrl = URL.createObjectURL(blob);
+    const viewable = /pdf|^image\/|text\/|html|xml/i.test(doc.contentType);
+    if (viewable) {
+      const win = window.open(objectUrl, '_blank', 'noopener');
+      if (!win) triggerDownload(objectUrl, doc); // popup blocked → download
+    } else {
+      triggerDownload(objectUrl, doc); // DOC/DOCX/XLS/unknown → download
+    }
+    // Give the new tab time to load before releasing the blob.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'decode-failed' };
+  }
+}
+
 function formatDate(dateStr?: string): string {
   if (!dateStr) return '—';
   try {
@@ -421,15 +492,14 @@ const FederatedRecords: React.FC<FederatedRecordsProps> = ({ patientId }) => {
                               const isPdf = /pdf/i.test(doc.contentType);
                               const isImg = /^image\//i.test(doc.contentType);
                               const onOpen = () => {
-                                let href: string | undefined = doc.url;
-                                if (!href && doc.data) {
-                                  href = `data:${doc.contentType};base64,${doc.data}`;
+                                const res = openAttachment(doc);
+                                if (!res.ok) {
+                                  toast.warning(
+                                    res.reason === 'no-data'
+                                      ? 'This attachment has no inline data or URL.'
+                                      : 'Could not open this attachment (unreadable data).',
+                                  );
                                 }
-                                if (!href) {
-                                  toast.warning('This attachment has no inline data or URL.');
-                                  return;
-                                }
-                                window.open(href, '_blank', 'noopener');
                               };
                               const sizeKb = doc.size ? `${Math.round(doc.size / 1024)} KB` : '';
                               return (
